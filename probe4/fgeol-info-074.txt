@@ -1,0 +1,66 @@
+INFO: Open of `g074/GEO050K_HARM_074_S_FGEOL_2154.shp'
+      using driver `ESRI Shapefile' successful.
+
+Layer name: GEO050K_HARM_074_S_FGEOL_2154
+Geometry: Polygon
+Feature Count: 16941
+Extent: (916985.985794, 6514268.816096) - (1013349.701925, 6596523.099118)
+Layer SRS WKT:
+PROJCRS["RGF93 Lambert 93",
+    BASEGEOGCRS["RGF93 geographiques (dms)",
+        DATUM["Reseau Geodesique Francais 1993 v1",
+            ELLIPSOID["GRS 1980",6378137,298.257222101,
+                LENGTHUNIT["metre",1]]],
+        PRIMEM["Greenwich",0,
+            ANGLEUNIT["degree",0.0174532925199433]],
+        ID["IGNF","RGF93G"]],
+    CONVERSION["LAMBERT-93",
+        METHOD["Lambert Conic Conformal (2SP)",
+            ID["EPSG",9802]],
+        PARAMETER["Latitude of false origin",46.5,
+            ANGLEUNIT["degree",0.0174532925199433],
+            ID["EPSG",8821]],
+        PARAMETER["Longitude of false origin",3,
+            ANGLEUNIT["degree",0.0174532925199433],
+            ID["EPSG",8822]],
+        PARAMETER["Latitude of 1st standard parallel",44,
+            ANGLEUNIT["degree",0.0174532925199433],
+            ID["EPSG",8823]],
+        PARAMETER["Latitude of 2nd standard parallel",49,
+            ANGLEUNIT["degree",0.0174532925199433],
+            ID["EPSG",8824]],
+        PARAMETER["Easting at false origin",700000,
+            LENGTHUNIT["metre",1],
+            ID["EPSG",8826]],
+        PARAMETER["Northing at false origin",6600000,
+            LENGTHUNIT["metre",1],
+            ID["EPSG",8827]]],
+    CS[Cartesian,2],
+        AXIS["easting (X)",east,
+            ORDER[1],
+            LENGTHUNIT["metre",1]],
+        AXIS["northing (Y)",north,
+            ORDER[2],
+            LENGTHUNIT["metre",1]],
+    USAGE[
+        SCOPE["NATIONALE A CARACTERE LEGAL"],
+        AREA["FRANCE METROPOLITAINE (CORSE COMPRISE)"],
+        BBOX[41,-5.5,52,10]],
+    ID["IGNF","LAMB93"]]
+Data axis to CRS axis mapping: 1,2
+MI_PRINX: Real (24.15)
+CARTE: Integer (4.0)
+CODE: Integer (4.0)
+CODE_LEG: Integer (4.0)
+NOTATION: String (50.0)
+DESCR: String (254.0)
+C_FOND: Integer64 (10.0)
+M_FOND: Integer64 (10.0)
+J_FOND: Integer64 (10.0)
+N_FOND: Integer64 (10.0)
+NOM_SYMB: String (28.0)
+C_SYMB: Integer64 (10.0)
+M_SYMB: Integer64 (10.0)
+J_SYMB: Integer64 (10.0)
+N_SYMB: Integer64 (10.0)
+ROT_SYMB: Integer (3.0)

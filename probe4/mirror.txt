@@ -1,0 +1,22 @@
+http://data.cquest.org/brgm/bd_charm_50/2019/ -> 200 11326
+BASE=http://data.cquest.org/brgm/bd_charm_50/2019/
+074 -> fichier: GEO050K_HARM_074.zip
+http://data.cquest.org/brgm/bd_charm_50/2019/GEO050K_HARM_074.zip -> 200 48076056
+074 SHP=g074/GEO050K_HARM_074_S_FGEOL_2154.shp
+073 -> fichier: GEO050K_HARM_073.zip
+http://data.cquest.org/brgm/bd_charm_50/2019/GEO050K_HARM_073.zip -> 200 72987871
+073 SHP=g073/GEO050K_HARM_073_S_FGEOL_2154.shp
+total 8504
+drwxr-xr-x  2 runner runner    4096 Oct 31 08:16 .
+drwxr-xr-x 13 runner runner    4096 Oct 31 08:15 ..
+-rw-r--r--  1 runner runner 5410183 Oct 31 08:15 fgeol-073.geojsonl.gz
+-rw-r--r--  1 runner runner 3242048 Oct 31 08:15 fgeol-074.geojsonl.gz
+-rw-r--r--  1 runner runner    2288 Oct 31 08:15 fgeol-info-073.txt
+-rw-r--r--  1 runner runner    2288 Oct 31 08:15 fgeol-info-074.txt
+-rw-r--r--  1 runner runner    1511 Oct 31 08:15 files-073.txt
+-rw-r--r--  1 runner runner    1511 Oct 31 08:15 files-074.txt
+-rw-r--r--  1 runner runner   11326 Oct 31 08:15 listing.html
+-rw-r--r--  1 runner runner    1895 Oct 31 08:15 listing.txt
+-rw-r--r--  1 runner runner     442 Oct 31 08:15 mirror.txt
+-rw-r--r--  1 runner runner    2970 Oct 31 08:15 zip-073.txt
+-rw-r--r--  1 runner runner    2970 Oct 31 08:15 zip-074.txt
