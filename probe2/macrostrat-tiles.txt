@@ -1,0 +1,4 @@
+HTTP/2 200 
+access-control-allow-origin: *
+access-control-expose-headers: X-Macrostrat-Sources, X-Tile-Cache
+content-type: application/x-protobuf
