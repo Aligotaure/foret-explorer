@@ -1,5 +1,8 @@
 # Publie la carte sur GitHub Pages à chaque push sur main :
 # https://aligotaure.github.io/foret-explorer/
+#
+# Avant le build, construit les tuiles « nature du sol » à partir des cartes géologiques du BRGM
+# (scripts/geologie/construire.sh) : elles sont servies par GitHub Pages avec le site.
 name: Publication GitHub Pages
 
 on:
@@ -24,6 +27,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Installer GDAL
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
+      - name: Cartes géologiques BRGM en cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/geologie/*.zip
+          key: geologie-brgm-${{ hashFiles('scripts/geologie/construire.sh') }}
+      - name: Construire les tuiles « nature du sol »
+        run: bash scripts/geologie/construire.sh
       - name: Installer les dépendances
         run: npm install --no-audit --no-fund
         env:

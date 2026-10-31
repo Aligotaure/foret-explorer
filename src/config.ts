@@ -44,10 +44,43 @@ export const ATTRIBUTION = {
   planIgn: `${IGN} – Plan IGN`,
   ortho: `${IGN} – Photographies aériennes`,
   bdForet: `${IGN} – BD Forêt® V2 (Licence Ouverte Etalab 2.0)`,
+  geologie: '© <a href="https://www.brgm.fr/" target="_blank" rel="noopener">BRGM</a> – carte géologique 1/50 000 harmonisée',
+  meteo: 'Météo <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0)',
 } as const;
 
 /** Autocomplétion d'adresses et de lieux-dits (Géoplateforme). */
 export const GEOCODING_COMPLETION_URL = `${GEOPF}/geocodage/completion`;
+
+/** Altitude d'un point (RGE ALTI, Géoplateforme) : `?lon=…&lat=…&resource=ign_rge_alti_wld`. */
+export const ALTITUDE_URL = `${GEOPF}/altimetrie/1.0/calcul/alti/rest/elevation.json`;
+
+/** Polices des étiquettes (servies par la Géoplateforme). */
+export const GLYPHS_URL = `${GEOPF}/annexes/ressources/vectorTiles/fonts/{fontstack}/{range}.pbf`;
+export const LABEL_FONT = 'Source Sans Pro Regular';
+
+/** Météo : Open-Meteo (gratuit, sans clé, usage non commercial). */
+export const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
+/** Nombre de jours passés analysés pour la pousse. */
+export const PAST_DAYS = 20;
+/** Zoom minimal pour afficher la grille météo (au-delà, trop de cellules). */
+export const WEATHER_MIN_ZOOM = 8;
+
+/**
+ * Tuiles de géologie simplifiée, produites par `scripts/geologie/` et publiées avec le site.
+ * En développement, on lit celles du site en ligne (GitHub Pages autorise le CORS).
+ */
+export const GEOLOGY_TILES_BASE = import.meta.env.DEV
+  ? 'https://aligotaure.github.io/foret-explorer/data/geologie/'
+  : new URL('data/geologie/', document.baseURI).href;
+
+export const GEOLOGY = {
+  sourceLayer: 'geologie',
+  minZoom: 9,
+  maxZoom: 13,
+  /** Emprise couverte : Savoie et Haute-Savoie (ouest, sud, est, nord). */
+  bounds: [5.6, 45.0, 7.25, 46.45] as [number, number, number, number],
+  coverage: 'Haute-Savoie et Savoie',
+} as const;
 
 /** Vue initiale : entre Annecy, le Parmelan et Thônes. */
 export const INITIAL_VIEW = {

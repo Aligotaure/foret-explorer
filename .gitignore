@@ -2,5 +2,8 @@ node_modules/
 dist/
 .vite/
 tests/e2e/shots/
+# Tuiles de géologie et téléchargements BRGM : produits par scripts/geologie/construire.sh
+.cache/
+public/data/
 *.log
 .DS_Store

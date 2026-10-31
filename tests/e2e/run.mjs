@@ -75,11 +75,8 @@ async function desktopTests(browser, base) {
   check('couleur pilotée par code_tfv', fillColor.startsWith('["match",["get","code_tfv"]'));
   await page.screenshot({ path: `${OUT}01-bureau.png` });
 
-  const layout = await page.evaluate(() => ({
-    panelBottom: Math.round(document.getElementById('legend').getBoundingClientRect().bottom),
-    baseBottom: Math.round(document.querySelectorAll('.layer__header')[1].getBoundingClientRect().bottom),
-  }));
-  check('section « Plan IGN » visible sans défiler', layout.baseBottom <= layout.panelBottom, JSON.stringify(layout));
+  const sections = await page.evaluate(() => [...document.querySelectorAll('#legend .layer__title')].map((t) => t.textContent));
+  check('légende : 5 sections', sections.length === 5 && sections[0] === 'Je cherche…', sections.join(' | '));
 
   // Comptages
   const counts = await page.evaluate(() =>
@@ -139,7 +136,7 @@ async function desktopTests(browser, base) {
   check('« présents » : seuls les types de la zone', visibleRows.length === 5 && visibleRows.includes('LA4'), visibleRows.join(', '));
   await page.getByText('Seulement les types présents dans la zone').click();
 
-  // Clic sur un polygone : bulle + surbrillance
+  // Clic sur un polygone : bilan du coin + surbrillance
   const target = await page.evaluate(() => {
     for (const f of window.map.queryRenderedFeatures({ layers: ['bdforet-fill'] })) {
       if (f.properties.code_tfv !== 'FF1G01-01') continue;
@@ -147,29 +144,77 @@ async function desktopTests(browser, base) {
       const lng = ring.reduce((s, p) => s + p[0], 0) / ring.length;
       const lat = ring.reduce((s, p) => s + p[1], 0) / ring.length;
       const pt = window.map.project([lng, lat]);
-      if (pt.x > 420 && pt.x < 1360 && pt.y > 90 && pt.y < 840) return { x: pt.x, y: pt.y, id: f.properties.id };
+      if (pt.x > 420 && pt.x < 1000 && pt.y > 90 && pt.y < 840) return { x: pt.x, y: pt.y, id: f.properties.id };
     }
     return null;
   });
   if (target) {
     await page.mouse.click(target.x, target.y);
-    await page.waitForSelector('.forest-popup', { timeout: 5000 });
-    const popup = await page.evaluate(() => ({
-      title: document.querySelector('.forest-popup__title strong')?.textContent,
-      props: document.querySelector('.forest-popup__props')?.textContent,
+    await page.waitForSelector('#spot .verdict', { timeout: 10000 });
+    const spot = await page.evaluate(() => ({
+      rows: [...document.querySelectorAll('#spot .spot__row')].map((r) => r.textContent.replace(/\s+/g, ' ').trim()),
+      verdicts: [...document.querySelectorAll('#spot .verdict strong')].map((x) => x.textContent),
+      summary: document.querySelector('#spot .spot__summary')?.textContent,
+      bars: document.querySelectorAll('#spot .rain-chart__bar').length,
       highlight: JSON.stringify(window.map.getFilter('bdforet-highlight')),
     }));
-    check('bulle : libellé du type', popup.title === 'Forêt fermée de chênes décidus purs', popup.title);
-    check('bulle : essence et code', /Chênes décidus/.test(popup.props) && /FF1G01-01/.test(popup.props));
-    check('surbrillance du polygone cliqué', popup.highlight === JSON.stringify(['==', ['get', 'id'], target.id]), popup.highlight);
-    await page.screenshot({ path: `${OUT}03-bureau-bulle.png` });
-    await page.locator('.forest-popup .maplibregl-popup-close-button').click();
-    await page.waitForTimeout(300);
-    const cleared = await page.evaluate(() => JSON.stringify(window.map.getFilter('bdforet-highlight')));
-    check('fermeture de la bulle → surbrillance effacée', cleared.includes('__aucun__'), cleared);
+    check('bilan : type de forêt du point', spot.rows[0]?.includes('Forêt fermée de chênes décidus purs'), spot.rows[0]);
+    check('bilan : nature du sol', /Calcaires et dolomies|Moraines et dépôts glaciaires/.test(spot.rows[1] ?? ''), spot.rows[1]);
+    check('bilan : altitude IGN', /^Altitude\s*930 m$/.test(spot.rows[2] ?? ''), spot.rows[2]);
+    check('bilan : pluie des 20 jours', /mm de pluie/.test(spot.summary ?? '') && spot.bars >= 8, `${spot.summary} (${spot.bars} barres)`);
+    check('bilan : un verdict par champignon', spot.verdicts.length === 4, spot.verdicts.join(', '));
+    check('surbrillance du polygone cliqué', spot.highlight === JSON.stringify(['==', ['get', 'id'], target.id]), spot.highlight);
+    await page.screenshot({ path: `${OUT}03-bureau-bilan.png` });
+    await page.locator('#spot .panel__close').click();
+    const cleared = await page.evaluate(() => ({ hidden: document.getElementById('spot').hidden, f: JSON.stringify(window.map.getFilter('bdforet-highlight')) }));
+    check('fermeture du bilan → surbrillance effacée', cleared.hidden && cleared.f.includes('__aucun__'), JSON.stringify(cleared));
   } else {
     check('clic sur un polygone de chênes', false, 'aucun polygone visible');
   }
+
+  // « Je cherche… » : cèpes → forêts hôtes + indice météo
+  await page.getByRole('button', { name: 'Cèpes', exact: true }).click();
+  await page.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 0, null, { timeout: 15000 });
+  await idle(page);
+  const cepes = await page.evaluate(() => ({
+    mushroom: window.store.state.mushroom,
+    mode: window.store.state.weatherMode,
+    filter: JSON.stringify(window.map.getFilter('bdforet-fill')),
+    visible: window.map.getLayoutProperty('meteo-cellules', 'visibility'),
+    fill: JSON.stringify(window.map.getPaintProperty('meteo-cellules', 'fill-color')),
+    levels: [...new Set(window.map.querySourceFeatures('meteo').map((f) => f.properties.l_cepe))].sort(),
+    status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cellules/.test(t)),
+  }));
+  check('Je cherche cèpes → forêts hôtes seulement', cepes.filter.includes('FF1-09-09') && !cepes.filter.includes('FF1-14-14'), cepes.filter.slice(0, 80));
+  check('Je cherche cèpes → grille « indice » visible', cepes.mode === 'indice' && cepes.visible === 'visible' && cepes.fill.includes('l_cepe'), `${cepes.mode} ${cepes.visible}`);
+  check('grille météo calculée', cepes.levels.length > 0 && cepes.levels.every((l) => l >= 0 && l <= 3), `niveaux ${cepes.levels.join(',')}`);
+  check('requêtes Open-Meteo groupées (20 jours passés)', log.meteo.length >= 1 && log.meteo.every((q) => q.includes('past_days=20')), `${log.meteo.length} requête(s)`);
+  check('état de la grille dans la légende', Boolean(cepes.status), cepes.status);
+  await page.screenshot({ path: `${OUT}04-bureau-cepes.png` });
+
+  // Grille en mode pluie
+  await page.getByText('Pluie cumulée', { exact: true }).click();
+  const rain = await page.evaluate(() => ({
+    fill: JSON.stringify(window.map.getPaintProperty('meteo-cellules', 'fill-color')),
+    text: JSON.stringify(window.map.getLayoutProperty('meteo-etiquettes', 'text-field')),
+  }));
+  check('mode pluie : couleurs et étiquettes en mm', rain.fill.startsWith('["step",["get","rain20"]') && rain.text.includes('rain20'), rain.text);
+
+  // Nature du sol
+  await page.getByRole('switch', { name: 'Afficher la nature du sol' }).check();
+  await idle(page);
+  const soil = await page.evaluate(() => ({
+    visible: window.map.getLayoutProperty('geologie-motifs', 'visibility'),
+    pattern: window.map.hasImage('sol-calcaire') && window.map.hasImage('sol-moraine'),
+    rows: document.querySelectorAll('.soil-item').length,
+    favored: [...document.querySelectorAll('.soil-item.is-favored')].map((li) => li.dataset.soil),
+  }));
+  check('nature du sol : couche et motifs', soil.visible === 'visible' && soil.pattern, JSON.stringify(soil));
+  check('nature du sol : 7 types, sols favorables aux cèpes repérés', soil.rows === 7 && soil.favored.includes('gres') && !soil.favored.includes('calcaire'), soil.favored.join(','));
+  check('tuiles de géologie demandées', log.geologie.length > 0, log.geologie.slice(0, 2).join(', '));
+  await page.screenshot({ path: `${OUT}05-bureau-sol.png` });
+  await page.getByRole('switch', { name: 'Afficher la nature du sol' }).uncheck();
+  await page.getByRole('switch', { name: 'Afficher la grille météo' }).uncheck();
 
   // Opacité, fond de carte
   await page.locator('.opacity input').fill('40');
@@ -211,7 +256,7 @@ async function desktopTests(browser, base) {
   check('zoom 9 : bandeau, note, pastilles masquées', lowZoom.hint && lowZoom.note && lowZoom.countsHidden, JSON.stringify(lowZoom));
   // Tuiles raster de 256 px : MapLibre charge le niveau z+1 (ici 10) pour un zoom carte de 9.
   check('zoom 9 : aperçu raster BD Forêt (PM_6_16)', log.wmts.some((w) => w.startsWith('LANDCOVER.FORESTINVENTORY.V2|PM_6_16|10')));
-  await page.screenshot({ path: `${OUT}04-bureau-zoom9.png` });
+  await page.screenshot({ path: `${OUT}06-bureau-zoom9.png` });
   await page.locator('.zoom-hint__btn').click();
   await page.waitForTimeout(800);
   check('bouton « Zoomer ici »', (await page.evaluate(() => window.map.getZoom())) >= 10);
@@ -222,7 +267,7 @@ async function desktopTests(browser, base) {
   await page.reload();
   await waitForMap(page);
   const persisted = await page.evaluate(() => ({
-    pressed: document.querySelector('.chip[aria-pressed="true"]')?.textContent,
+    pressed: document.querySelector('.chip:not(.chip--mushroom)[aria-pressed="true"]')?.textContent,
     filterHasFO2: JSON.stringify(window.map.getFilter('bdforet-fill')).includes('FO2'),
   }));
   check('sélection conservée après rechargement', persisted.pressed === 'Conifères' && persisted.filterHasFO2, JSON.stringify(persisted));
@@ -244,10 +289,19 @@ async function mobileTests(browser, base) {
     toggleWidth: Math.round(document.getElementById('legend-toggle').getBoundingClientRect().width),
   }));
   check('mobile : recherche sans chevauchement', topbar.searchRight <= topbar.toolbarLeft - 4 && topbar.toggleWidth === 46, JSON.stringify(topbar));
-  await page.screenshot({ path: `${OUT}05-mobile-carte.png` });
+  await page.screenshot({ path: `${OUT}07-mobile-carte.png` });
   await page.locator('#legend-toggle').tap();
   await page.waitForTimeout(300);
-  await page.screenshot({ path: `${OUT}06-mobile-legende.png` });
+  await page.screenshot({ path: `${OUT}08-mobile-legende.png` });
+  await page.locator('#legend .panel__close').tap();
+  await page.touchscreen.tap(200, 300);
+  await page.waitForSelector('#spot .verdict', { timeout: 10000 });
+  const sheet = await page.evaluate(() => {
+    const r = document.getElementById('spot').getBoundingClientRect();
+    return { bottom: Math.round(r.bottom), width: Math.round(r.width), legendHidden: document.getElementById('legend').hidden };
+  });
+  check('mobile : bilan en tiroir bas', sheet.bottom >= 840 && sheet.width === 390 && sheet.legendHidden, JSON.stringify(sheet));
+  await page.screenshot({ path: `${OUT}09-mobile-bilan.png` });
   check('mobile : pas de défilement horizontal', !(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)));
   await context.close();
 }

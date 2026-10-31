@@ -4,19 +4,12 @@ import maplibregl from 'maplibre-gl';
 import { BDFORET, INITIAL_VIEW, MAP_MAX_ZOOM, MAP_MIN_ZOOM } from './config';
 import { countClasses } from './counts';
 import { byId, h, toast } from './dom';
+import { registerSoilPatterns } from './geology';
 import { LegendPanel } from './legend';
-import {
-  LAYERS,
-  SOURCES,
-  applyBasemap,
-  applyOpacity,
-  applySelection,
-  applyState,
-  buildStyle,
-  setHighlight,
-} from './mapStyle';
-import { forestPopupContent } from './popup';
+import { LAYERS, SOURCES, applyBasemap, applyGeology, applyOpacity, applySelection, applyState, buildStyle } from './mapStyle';
+import { MeteoLayer } from './meteoLayer';
 import { initSearch } from './search';
+import { SpotPanel } from './spot';
 import { Store, loadInitialState, persistState } from './state';
 import { initLegendToggle, initToolbar } from './toolbar';
 
@@ -49,14 +42,21 @@ if (!wideScreen) {
     document.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show'),
   );
 }
+registerSoilPatterns(map);
 
 // ── Interface ─────────────────────────────────────────────────────────────────
 const app = byId('app');
-const legend = new LegendPanel(byId('legend'), store);
+const meteo = new MeteoLayer(map, store);
+const legend = new LegendPanel(byId('legend'), store, meteo);
+const spot = new SpotPanel(byId('spot'), map, store);
 initLegendToggle(store);
 initToolbar(map, store);
 initSearch(byId<HTMLFormElement>('search'), map);
-store.subscribe((state) => app.classList.toggle('legend-open', state.legendOpen));
+store.subscribe((state, prev) => {
+  app.classList.toggle('legend-open', state.legendOpen);
+  // Sur mobile, un seul tiroir à la fois : ouvrir la légende ferme le bilan.
+  if (!wideScreen && state.legendOpen && !prev.legendOpen) spot.close();
+});
 app.classList.toggle('legend-open', store.state.legendOpen);
 
 // Bandeau « Zoomez pour filtrer » sous le zoom des tuiles vectorielles.
@@ -75,34 +75,23 @@ updateZoomUi();
 // ── Liaison état → carte ──────────────────────────────────────────────────────
 map.on('load', () => {
   applyState(map, store.state); // l'état a pu changer pendant le chargement du style
+  meteo.applyMode();
   store.subscribe((state, prev) => {
     if (state.selected !== prev.selected) applySelection(map, state.selected);
     if (state.opacity !== prev.opacity) applyOpacity(map, state.opacity);
     if (state.basemap !== prev.basemap) applyBasemap(map, state.basemap);
+    if (state.geology !== prev.geology) applyGeology(map, state.geology);
+    if (state.weatherMode !== prev.weatherMode || state.mushroom !== prev.mushroom) meteo.applyMode();
   });
 });
+map.on('moveend', () => {
+  if (store.state.weatherMode !== 'off') meteo.refresh();
+});
 
-// ── Clic sur un polygone : bulle d'information + surbrillance ──────────────────
-let popup: maplibregl.Popup | null = null;
-
-map.on('click', LAYERS.fill, (event) => {
-  const feature = event.features?.[0];
-  if (!feature) return;
-  const props = (feature.properties ?? {}) as Record<string, unknown>;
-
-  popup?.remove(); // déclenche « close » et efface l'ancienne surbrillance
-  setHighlight(map, typeof props['id'] === 'string' ? props['id'] : null);
-
-  const current = new maplibregl.Popup({ className: 'forest-popup', maxWidth: '320px', focusAfterOpen: false })
-    .setLngLat(event.lngLat)
-    .setDOMContent(forestPopupContent(props, event.lngLat))
-    .addTo(map);
-  current.on('close', () => {
-    if (popup !== current) return;
-    popup = null;
-    setHighlight(map, null);
-  });
-  popup = current;
+// ── Clic sur la carte : bilan du coin (forêt, sol, altitude, météo, champignons) ─
+map.on('click', (event) => {
+  if (!wideScreen) store.update({ legendOpen: false });
+  void spot.open(event.lngLat, event.point);
 });
 map.on('mouseenter', LAYERS.fill, () => {
   map.getCanvas().style.cursor = 'pointer';
@@ -126,15 +115,15 @@ map.on('idle', () => {
 });
 
 // ── Erreurs réseau ─────────────────────────────────────────────────────────────
-let tileErrorShown = false;
+const shownErrors = new Set<string>();
 map.on('error', (event) => {
   const sourceId = (event as { sourceId?: string }).sourceId;
   console.warn('[carte]', sourceId ?? '', event.error?.message ?? event.error);
-  if (sourceId === SOURCES.bdForet && !tileErrorShown) {
-    tileErrorShown = true;
+  if (sourceId === SOURCES.bdForet && !shownErrors.has(sourceId)) {
+    shownErrors.add(sourceId);
     toast('La BD Forêt ne répond pas pour le moment (réseau ou service IGN).', 5000);
   }
 });
 
-// En développement, `map` et `store` sont accessibles depuis la console du navigateur.
-if (import.meta.env.DEV) Object.assign(window, { map, store });
+// En développement, `map`, `store` et `spot` sont accessibles depuis la console du navigateur.
+if (import.meta.env.DEV) Object.assign(window, { map, store, spot });
