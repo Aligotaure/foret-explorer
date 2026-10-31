@@ -1,4 +1,4 @@
-# Sonde temporaire n°5 : test de la chaîne de construction des tuiles de géologie.
+# Sonde temporaire n°5b : test de la chaîne de construction des tuiles de géologie.
 name: Sonde des sources de données
 
 on:
@@ -19,9 +19,10 @@ jobs:
       - name: Construire les tuiles de géologie
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
-          /usr/bin/time -v bash scripts/geologie/construire.sh 2>&1 | tail -40 > construire.log || true
+          bash -x scripts/geologie/construire.sh > construire.txt 2>&1 || echo "ÉCHEC code $?" >> construire.txt
+          ogrinfo -so .cache/geologie/tout.geojsonl >> construire.txt 2>&1 || true
           mkdir -p probe5
-          cp construire.log probe5/
+          cp construire.txt probe5/
           cp .cache/geologie/rapport-*.json probe5/ || true
           cp public/data/geologie/info.json public/data/geologie/metadata.json probe5/ || true
           (cd public/data/geologie && find . -name '*.pbf' | awk -F/ '{print $2}' | sort | uniq -c) > probe5/tuiles-par-zoom.txt || true
