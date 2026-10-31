@@ -1,0 +1,111 @@
+{
+  "formations": 16941,
+  "conservees": 16608,
+  "sols": {
+    "moraine": {
+      "polygones": 1344,
+      "km2": 1864.8,
+      "exemples": [
+        "1779.6 km² — Dépots glaciaires (moraines) ancients (argiles, sables, galets, cailloux, blocs), localement à argiles dominantes - Würm",
+        "20.9 km² — Dépots morainiques caillouteux, conglomérats et graviers de progression  - Würm à post-Würm",
+        "17.1 km² — Dépots glaciaires (moraines) historiques (récents à actuels)",
+        "16.4 km² — Dépôts (alluvions) fluvioglaciaires indifférenciés - Würm indifférencié",
+        "13.6 km² — Plateau morainique (Annemasse, Archamps) - Würmien",
+        "7.9 km² — Moraine aplanie par écoulement fluvio-glaciaire, matériel glaciaire remanié superficiellement, formant une surface d' al",
+        "3.4 km² — Dépôts morainiques sur molasse indifférenciée de l'Oligocène sup - Miocène",
+        "2 km² — Alluvions fluvio-glaciaires indifférenciées - Würm ancien"
+      ]
+    },
+    "calcaire": {
+      "polygones": 6611,
+      "km2": 919.6,
+      "exemples": [
+        "201.1 km² — Facies Urgonien: grès et conglomérat (assise détritique terminale), calcaires massifs clairs, calcaires - schistes noirs",
+        "123.3 km² — Calcaires gréseux et siliceux (parfois calcaires\"à miches\" (Massif des Bornes, Massif des Aravis)) à patine brune, calca",
+        "44.9 km² — \"Couches rouges\" : calcaires argileux et marnes blancs, rouges ou roses (Nappe des PréAlpes médianes) (Môle, Brasses, Mi",
+        "44 km² — Brèche supérieure: alternances de brèches à éléments dolomitiques et de calcaires (Nappe de la Brèche), calcaires à sile",
+        "43.5 km² — Calcaires blancs, massifs, oolithiques (Nappe des PréAlpes médianes) (Môle, Brasses, Miribel) - Oxfordien moy. à Berrias",
+        "42.3 km² — Calcaires massifs urgoniens (à rudistes, polypieds) - Hauterivien sup. à Barrémien inf. (voire Bédoulien p.p.)",
+        "41.2 km² — Calcaires lithographiques clairs à foraminifères planctoniques (Massif des Bornes, Massif des Aravis), Calcaires sublith",
+        "39.9 km² — Calcaire blanc à nummulites, formation grise: grès et calcaires gréseux, formation brune: calcaires argilo-gréseux et ma"
+      ]
+    },
+    "eboulis": {
+      "polygones": 2726,
+      "km2": 594,
+      "exemples": [
+        "312.8 km² — Eboulis,  éboulis ruisselés, éboulis à gros blocs, éboulis stabilisés anciens, écroulements à très gros blocs, éboulemen",
+        "99.3 km² — Cônes de déjection ou d'épandage (vifs ou stabilisés) - post-Würm",
+        "41.7 km² — Cônes d'éboulis, cônes d'éboulement",
+        "36.1 km² — Eboulis de gravité actifs, éboulis vifs",
+        "36 km² — Glissements de terrain indiférenciés (terrains glissés en masse ou en coulées, stabilisés)",
+        "30.9 km² — Complexe de versant ceinturant les massifs (Voirons, pointe des Brasses, pointe de Miribel) (formations de versants)",
+        "28.9 km² — Colluvions (argiles, limons, sables, graviers, cailloux), éboulis et moraines remaniées",
+        "4 km² — Cônes de déjection de retrait (terrasses marginales) - Würm"
+      ]
+    },
+    "marne": {
+      "polygones": 2837,
+      "km2": 435.5,
+      "exemples": [
+        "68.6 km² — Schistes argilo-siliceux, à nodules, calcaires gris mylonitisés et schistes noduleux (Zone externe, terrains subalpins) ",
+        "51.7 km² — Flysch à Helminthoïdes (Senonien), flysch gréso-calcaire (\"poudingues de Colérin\") (Série du Biot, Nappe des Dranses) à ",
+        "50.3 km² — Dépôts glacio-lacustres würmiens, faciès de fond : argiles et silts lités - Würm",
+        "38.1 km² — Marnes beiges et calc. à Cancellophycus, calc. argileux et siliceux, marnes jaunes (Nappe des PréAlpes médianes), calc. ",
+        "30.9 km² — Dépôts glaciolacustres indifférenciés - Würm indifférencié",
+        "25.3 km² — Formation marno-gréso-micacée (Schistes marno-gréso-micacés), matrice des flyschs à olistholites (à blocs) - Bartonien -",
+        "22.5 km² — Marnes à foraminifères, marnes nummulitiques, marnes (et schistes) à Meletta (Zone externe, terrains subalpins), facies ",
+        "16.7 km² — Schistes inférieurs: schistes calcaires gris ou marneux - Calcaires massifs, spathiques (en barres, surtout à la base de"
+      ]
+    },
+    "gres": {
+      "polygones": 1683,
+      "km2": 233.6,
+      "exemples": [
+        "59.9 km² — Molasse gréseuse, glauconieuse et séries marneuses intercalées, molasse sableuse à lentilles marneuses et ligniteuses (H",
+        "42.4 km² — Grès de Taveyanne (Zone externe, terrains subalpins) - Priabonien à Oligocène basal",
+        "41.3 km² — Terrasses lémaniques fluviolacustres de \"Thonon-les-Bains\" - Graviers, sables et conglomérats - Dolines périglaciaires -",
+        "21.2 km² — Molasse rouge d'eau douce et lacustre, calcaires lacustres - Rupélien sup. à Chattien",
+        "18.3 km² — Grès molassique gris à verdâtre, grossier, à intercalations marneuses, molasse bariolée, parfois gypseuse, molasse grése",
+        "6.5 km² — Terasses lémaniques indiférenciées (niveaux 3-10-30 m)",
+        "5.7 km² — Molasses des synclinaux du Jura, molasse argileuse et gréseuse du bassin de Genève - Oligocène sup. à Miocène",
+        "5.5 km² — Schistes noirs et grès à anthracite  - Westphalien à Stéphanien"
+      ]
+    },
+    "humide": {
+      "polygones": 543,
+      "km2": 192.4,
+      "exemples": [
+        "130.4 km² — Alluvions récentes de fond de vallées: sables et graviers",
+        "16.3 km² — Dépôts lacustres (cailloutis, sables, argiles et tourbes)",
+        "15.5 km² — Alluvions torentielles indifférenciées, cône d'alluvions, cônes de déjection torrentiel (et d'avalanche) - Holocène",
+        "9.3 km² — Tourbières",
+        "8.9 km² — Alluvions anciennes  : sables et graviers",
+        "4 km² — Dépôts palustres (limons, tourbes, argiles, craie lacustre), marais",
+        "2.2 km² — Alluvions fluviatiles récentes, niveaux supérieurs (basses terrasses supérieures), terrasses emboîtées",
+        "1.5 km² — Alluvions marécageuses"
+      ]
+    },
+    "cristallin": {
+      "polygones": 864,
+      "km2": 180.1,
+      "exemples": [
+        "41.9 km² — Zone externe, Massif du Mont-Blanc : Gneiss et micaschistes indifférenciés (plus ou moins transformés en mylonitoschiste",
+        "33.5 km² — Granite du Mont Blanc (parfois à enclaves) - Paléozoïque",
+        "23.4 km² — Blastomylonites probables (Gneiss à grain fin, leptynites), blastomylonites de gneiss migmatitiques (région de Chamonix)",
+        "21.6 km² — Paragneiss migmatiques mylonitisés (\"Micaschistes de Feissons-sur-Isère\"), gneiss et migmatites indifférenciés, \"Gneiss ",
+        "11.6 km² — Lentilles de gneiss oeillés (Paragneiss migmatitiques et amphibolites (Massif de Belledonne)), gneiss granitoïdes, souve",
+        "9.7 km² — Migmatites (Massifs du Mont Blanc et des Aiguilles Rouges) - Paléozoïque inférieur ?",
+        "9.5 km² — Chloritoschistes, schistes quartzeux, schistes ocellaires = \"Schistes verts\", phyllades sombres, séricitoschistes - Dina",
+        "7.4 km² — Mylonitoschistes de granites (région de Chamonix)"
+      ]
+    }
+  },
+  "nonClassees": [
+    "117.4 km² — Gl-Ne | Neiges et Glaces, Névés",
+    "26.2 km² — hydro | Réseau hydrologique",
+    "6.2 km² — t | Trias indifférencié",
+    "2.3 km² — X | Remblais, dépôts anthropiques",
+    "1.7 km² — n1-2(2) | Formations de Pierre-Châtel, Vions, Chambotte indifférenciées - Berriasien à Valanginien inf."
+  ]
+}

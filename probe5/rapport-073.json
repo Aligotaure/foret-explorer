@@ -1,0 +1,111 @@
+{
+  "formations": 26921,
+  "conservees": 26569,
+  "sols": {
+    "moraine": {
+      "polygones": 2109,
+      "km2": 1533.3,
+      "exemples": [
+        "1289 km² — Dépôts glaciaires (moraines) principalement du Würm, localement plus tardifs (?) ou plus récents. Dépôts fluvio-glaciair",
+        "109.5 km² — Dépôts glaciaires (moraines) tardi-würmiens à historiques",
+        "95.1 km² — Dépôts glaciaires (moraines) historiques (récentes à actuelles)",
+        "30.3 km² — Alluvions anciennes interglaciaires (glacio-lacustres à fluvio-glaciaires) entre Riss et Würm ou intra Würm",
+        "6.5 km² — Moraine à ciment de cargneule ou constituée de cargneule reconstituée",
+        "1.9 km² — Alluvions fluvio-glaciaires würmiennes et récentes",
+        "0.5 km² — Formation glaciaire à très gros blocs (St-Colomban les Villards)",
+        "0.5 km² — Moraines rissiennes."
+      ]
+    },
+    "eboulis": {
+      "polygones": 5022,
+      "km2": 1194.8,
+      "exemples": [
+        "591.4 km² — Eboulis actuels à anciens (âge non précisé), localement cônes d'avalanches et éboulis mêlés à moraines.",
+        "116.6 km² — Cônes torrentiels de déjection (d'épandage) post-würmiens à actuels (actifs) ou sans âge précisé",
+        "100.6 km² — Eboulis vifs actuels",
+        "65.7 km² — Eboulis, glissements et moraines mêlés, indifférenciés",
+        "59.2 km² — Glissements (terrains glissés) prédominants d'âge non précisé +/- éboulis, formations de versant et moraines mélés ; voi",
+        "43.6 km² — Cônes mixtes d'éboulis, de déjection et/ou d'avalanches (+/- remaniement par ruissellement), Würm à Actuel ou d'âge indé",
+        "41.1 km² — Dépôts de versants composites (localement glissés) : colluvions, éboulis et moraines remaniés",
+        "39.8 km² — Eboulis stabilisés anciens würmiens à post-würmiens (?)"
+      ]
+    },
+    "calcaire": {
+      "polygones": 8574,
+      "km2": 949.6,
+      "exemples": [
+        "110 km² — Calcaires et marnes gréseux, calcaires siliceux, schistes. Bajocien - Bathonien",
+        "80.8 km² — Calcaires massifs à patine claire de faciès ugonien non différenciés, parfois calcaires à silex. Barrémien - Aptien infé",
+        "45.2 km² — Cargneules de la Zone briançonnaise et de la Nappe des gypses",
+        "41.5 km² — Calcaires, schistes et marnes ou marno-calcaires. Berriasien",
+        "36.9 km² — Marbres phylliteux massifs : calcaires marbreux orangés (\"Schistes lustrés\"). Crétacé sup. basal",
+        "30.5 km² — Gypses (anhydrites en profondeur) à éléments et éventuellement intecalations de schistes et dolomies. Carnien à Norien",
+        "27.6 km² — Calcaires (à silex) et dolomies, alternance de calcaires et de dolomies (\"Calcaires rubanés\"), brèches. Anisien moyen à ",
+        "26.8 km² — Calcaires marneux et calcaires lithographiques. Oxfordien moyen - Kimmeridgien inf."
+      ]
+    },
+    "marne": {
+      "polygones": 4012,
+      "km2": 741.3,
+      "exemples": [
+        "161.9 km² — Calcschistes gris, marbres impurs (\"Schistes lustrés\" indifférenciés). Crétacé sup. basal",
+        "126.9 km² — Schistes silico-alumineux (ou argilo-silicieux) à nodules très durs siliceux et pyriteux.Toarcien sup. à Bajocien basal ",
+        "60.6 km² — Marnes et marno-calcaires à miches, calcaires silicieux très durs à spicules. Hauterivien",
+        "42.3 km² — Flysch de Tarentaise s.s. (\"Couches de St-christophe\") : schistes, calcschistes et calcaires en alternance (Unités de Mo",
+        "34.5 km² — Schistes noirs (\"black shales\") ou versicolores et carbonates impurs, bancs manganésifères (\"Schistes lustrés\"). Crétacé",
+        "24.8 km² — Calcschistes (\"Schistes lustrés\") indifférenciés éventuellement à prasinites. Crétacé",
+        "24.4 km² — Terres noires = schistes marneux à miches et nodules siliceux et/ou pyriteux très durs. Rares petits bancs de calcaire n",
+        "22.1 km² — Marnes et calcaires marneux sombres à ammonites pyriteuses et calpionelles. Berriasien - Valanginien"
+      ]
+    },
+    "gres": {
+      "polygones": 4115,
+      "km2": 633.4,
+      "exemples": [
+        "167.9 km² — Conglomérats, grès (et arkoses) micacés, schistes (pélites : siltites), charbon (anthracite) : Houiller productif indiff",
+        "68.1 km² — Molasse sableuse  (= sables siliceux de Pont-de-Beauvoisin). Miocène moyen",
+        "52.2 km² — Quartzites. Trias inférieur",
+        "52 km² — Schistes gris à bancs de quartzites albitiques, micaschistes indifférenciés, schistes noirs charbonneux (\"Complexe schis",
+        "47.1 km² — Molasse calcaire, gréseuse et glauconieuse. Localement Conglomérat à la base, intercalations marneuses. Burdigalien (sup",
+        "34.7 km² — Conglomérats clairs, grès, arkoses et pélites versicolores, localement calcaires (Assises de Roche-Château et de Courche",
+        "28.3 km² — Groupe d'Ambin indifférencié : conglomérats, quartzites conglomératiques, micaschistes quartzeux, gneiss oeillés à albit",
+        "22.3 km² — Houiller \"productif\" non différencié. Namurien à Stéphanien inférieur."
+      ]
+    },
+    "cristallin": {
+      "polygones": 2301,
+      "km2": 633.3,
+      "exemples": [
+        "221.1 km² — Micaschistes sériciteux, chloriteux (chloritoschistes), quartzeux, et/ou albitiques (micaschistes ocellaires) (\"Série sa",
+        "42.2 km² — Granites souvent porphyroïdes +/- déformés, pour partie gneissiques (gneiss oeillés), parfois migmatitiques (Massif de B",
+        "37.9 km² — Chloritoschistes, schistes quartzeux, schistes ocellaires, schistes albitiques = \"Schistes verts\" (\"Série verte supérieu",
+        "36.3 km² — Paragneiss migmatiques mylonitisés, gneiss et migmatites indifférenciés localement à amphiboles, séricitoschistes feldsp",
+        "26.4 km² — Micaschistes de l'Arpont, séricitoscistes albitiques (Socle de Vanoise). Paléozoïque inf. ou Précambrien ?",
+        "25.4 km² — Granite à biotite (\"des Sept-Laux\", Massif de Belledonne) daté à 335 +/- 13 Ma. Viséen",
+        "19.1 km² — Gneiss, leptynites, amphibolites et schistes albitiques, gneiss oeillés (Massif de Belledonne, \"Série verte\" et \"Série b",
+        "16.8 km² — Orthogneiss oeillés (Massif du Grand-Paradis). Protolithe à 270 Ma. Permien"
+      ]
+    },
+    "humide": {
+      "polygones": 436,
+      "km2": 340.3,
+      "exemples": [
+        "315 km² — Alluvions actuelles et récentes, localement plus anciennes",
+        "18.6 km² — Alluvions anciennes (fluviatiles à fluvio-glacaires ou fluvio-lacustres). Würm à post-Würm (?)",
+        "4.4 km² — Dépôts lacustres actuels à récents",
+        "2 km² — Dépôts palustres actuels à récents : tourbières",
+        "0.3 km² — Complexe fluvio-lacustre et saumâtre à Microcodium : conglomérats (à grandes nummulites), grès grossiers, calcaires, mar"
+      ]
+    }
+  },
+  "nonClassees": [
+    "132.8 km² — Gl-Ne | Glaciers et névés",
+    "64.9 km² — hydro | Réseau hydrologique",
+    "2 km² — û2 | Barre quarzitique supérieure de la \"Masse magmatique médiane\" du Massif de Bellecôte. Cambrien ou Précambrien ?",
+    "1.6 km² — X | Dépôts et remblais artificiels (anthropiques)",
+    "0.6 km² — û1 | Barres quartzo-albitiques blanches (\"Complexe basal\" du Massif de Bellecôte). Cambrien inférieur ou Précambrien ?",
+    "0.3 km² — ts(3) | Niveaux bréchiques (Unités de Moûtiers et du Roignais-Versoyen). Trias supérieur",
+    "0 km² — ós | Neck de roche grenue acide (\"Complexe basal\" du Massif de Bellecôte). Cambrien inférieur ou Précambrien ?",
+    "0 km² — Fe | Filons de sidérite"
+  ]
+}
