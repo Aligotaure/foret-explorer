@@ -1,0 +1,26 @@
+{
+  "source": "BRGM, cartes géologiques harmonisées au 1/50 000 (BD Charm-50, 2019), Licence Ouverte 2.0",
+  "departements": [
+    "074",
+    "073"
+  ],
+  "genere": "2026-10-31",
+  "bounds": [
+    5.622159,
+    45.051687,
+    7.185878,
+    46.408148
+  ],
+  "minzoom": 9,
+  "maxzoom": 13,
+  "couche": "geologie",
+  "surfacesKm2": {
+    "moraine": 3398,
+    "calcaire": 1870,
+    "eboulis": 1789,
+    "marne": 1177,
+    "gres": 867,
+    "humide": 532,
+    "cristallin": 813
+  }
+}

@@ -1,1 +1,7 @@
-28K	probe5
+     27 10
+     83 11
+    287 12
+   1044 13
+     11 9
+26M	public/data/geologie
+4.7M	probe5

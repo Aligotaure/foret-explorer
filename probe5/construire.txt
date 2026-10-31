@@ -10,7 +10,8 @@
 + RACINE=/home/runner/work/foret-explorer/foret-explorer
 + TRAVAIL=/home/runner/work/foret-explorer/foret-explorer/.cache/geologie
 + SORTIE=/home/runner/work/foret-explorer/foret-explorer/public/data/geologie
-+ mkdir -p /home/runner/work/foret-explorer/foret-explorer/.cache/geologie
+++ dirname /home/runner/work/foret-explorer/foret-explorer/public/data/geologie
++ mkdir -p /home/runner/work/foret-explorer/foret-explorer/.cache/geologie /home/runner/work/foret-explorer/foret-explorer/public/data
 + rm -rf /home/runner/work/foret-explorer/foret-explorer/public/data/geologie
 + :
 + for d in $DEPARTEMENTS
@@ -64,9 +65,14 @@ Téléchargement de la géologie du département 073…
 + echo 'Découpage en tuiles vectorielles…'
 Découpage en tuiles vectorielles…
 + ogr2ogr -f MVT /home/runner/work/foret-explorer/foret-explorer/public/data/geologie /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/tout.geojsonl -nln geologie -dsco FORMAT=DIRECTORY -dsco TILE_EXTENSION=pbf -dsco COMPRESS=NO -dsco MINZOOM=9 -dsco MAXZOOM=13 -dsco SIMPLIFICATION=1 -dsco MAX_SIZE=600000
-ERROR 3: Cannot create directory /home/runner/work/foret-explorer/foret-explorer/public/data/geologie
-ERROR 1: MVT driver failed to create /home/runner/work/foret-explorer/foret-explorer/public/data/geologie
-ÉCHEC code 1
++ node /home/runner/work/foret-explorer/foret-explorer/scripts/geologie/info.mjs /home/runner/work/foret-explorer/foret-explorer/public/data/geologie /home/runner/work/foret-explorer/foret-explorer/.cache/geologie 074 073
+info.json : 074, 073, emprise 5.622159, 45.051687, 7.185878, 46.408148
+++ find /home/runner/work/foret-explorer/foret-explorer/public/data/geologie -name '*.pbf'
+++ wc -l
+++ du -sh /home/runner/work/foret-explorer/foret-explorer/public/data/geologie
+++ cut -f1
++ echo 'Tuiles écrites dans /home/runner/work/foret-explorer/foret-explorer/public/data/geologie (1452 fichiers, 26M).'
+Tuiles écrites dans /home/runner/work/foret-explorer/foret-explorer/public/data/geologie (1452 fichiers, 26M).
 INFO: Open of `.cache/geologie/tout.geojsonl'
       using driver `GeoJSONSeq' successful.
 1: tout (Polygon)
