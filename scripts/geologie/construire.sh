@@ -18,8 +18,8 @@ RACINE="$(cd "$ICI/../.." && pwd)"
 TRAVAIL="${TRAVAIL:-$RACINE/.cache/geologie}"
 SORTIE="$RACINE/public/data/geologie"
 
-mkdir -p "$TRAVAIL"
-rm -rf "$SORTIE"
+mkdir -p "$TRAVAIL" "$(dirname "$SORTIE")"
+rm -rf "$SORTIE" # le pilote MVT crée lui-même le dossier final
 : > "$TRAVAIL/tout.geojsonl"
 
 for d in $DEPARTEMENTS; do
