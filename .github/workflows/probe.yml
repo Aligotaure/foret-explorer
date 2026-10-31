@@ -1,0 +1,71 @@
+# Sonde temporaire : vérifie les sources de données et rapporte les résultats dans probe/.
+name: Sonde des sources de données
+
+on:
+  push:
+    branches: [data-probe]
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: En-têtes CORS
+        run: |
+          mkdir -p probe
+          for u in \
+            "https://geoservices.brgm.fr/geologie?SERVICE=WMS&REQUEST=GetCapabilities" \
+            "https://api.open-meteo.com/v1/forecast?latitude=45.9&longitude=6.1&daily=precipitation_sum&past_days=20" \
+            "https://api.open-meteo.com/v1/elevation?latitude=45.9&longitude=6.1" \
+            "https://data.geopf.fr/altimetrie/1.0/calcul/alti/rest/elevation.json?lon=6.2&lat=45.9&resource=ign_rge_alti_wld" \
+            "https://data.geopf.fr/geocodage/completion?text=Parmelan" \
+            "https://data.geopf.fr/tms/1.0.0/LANDCOVER-TMS.FORESTINVENTORY.V2/10/529/364.pbf" \
+            "https://data.geopf.fr/annexes/ressources/vectorTiles/fonts/Source%20Sans%20Pro%20Regular/0-255.pbf"; do
+            echo "== $u" >> probe/cors.txt
+            curl -s -m 30 -D - -o /dev/null -H "Origin: https://aligotaure.github.io" "$u" \
+              | grep -i -E "^(HTTP|access-control|content-type|content-length|content-encoding)" >> probe/cors.txt \
+              || echo "curl failed" >> probe/cors.txt
+          done
+
+      - name: Exemple Open-Meteo multi-points
+        run: |
+          curl -s -m 60 "https://api.open-meteo.com/v1/forecast?latitude=45.94,45.90&longitude=6.21,6.13&daily=precipitation_sum,temperature_2m_max,temperature_2m_min&past_days=20&forecast_days=1&timezone=Europe%2FParis" -o probe/open-meteo.json || true
+          curl -s -m 60 "https://api.open-meteo.com/v1/forecast?latitude=45.94&longitude=6.21&elevation=1400&daily=precipitation_sum,temperature_2m_max,temperature_2m_min&past_days=20&forecast_days=1&timezone=Europe%2FParis" -o probe/open-meteo-elev1400.json || true
+
+      - name: Géologie BRGM (74 et 73)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
+          ogrinfo --version > probe/gdal.txt
+          ogrinfo --formats | grep -i -E "mvt|pmtiles|geojson" >> probe/gdal.txt || true
+          curl -s -L -m 60 "https://infoterre.brgm.fr/page/telechargement-cartes-geologiques" -o probe/brgm-page.html || true
+          for d in 074 073; do
+            rm -f geol.zip
+            for u in "https://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_${d}.zip" "http://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_${d}.zip"; do
+              code=$(curl -s -L -m 600 -o geol.zip -w "%{http_code}" "$u" || echo "000")
+              echo "$u -> $code $(stat -c %s geol.zip 2>/dev/null)" >> probe/brgm.txt
+              [ "$code" = "200" ] && break
+            done
+            unzip -l geol.zip > "probe/brgm-zip-list-${d}.txt" 2>&1 || true
+            rm -rf "geol${d}" && mkdir "geol${d}" && (unzip -q -o geol.zip -d "geol${d}" || true)
+            SHP=$(find "geol${d}" -iname "*S_FGEOL*.shp" | head -1)
+            echo "$d SHP=$SHP" >> probe/brgm.txt
+            if [ -n "$SHP" ]; then
+              ogrinfo -so -al "$SHP" > "probe/fgeol-info-${d}.txt" 2>&1
+              cp "${SHP%.*}".cpg "probe/fgeol-${d}.cpg" 2>/dev/null || true
+              ogr2ogr -f GeoJSONSeq -t_srs EPSG:4326 -simplify 5 -lco COORDINATE_PRECISION=5 "probe/fgeol-${d}.geojsonl" "$SHP" 2>> probe/brgm.txt
+              gzip -9 "probe/fgeol-${d}.geojsonl"
+            fi
+          done
+          ls -la probe >> probe/brgm.txt
+
+      - name: Publier les résultats
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add probe
+          git commit -q -m "Résultats de la sonde" || echo "rien à committer"
+          git push
