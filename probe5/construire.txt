@@ -1,0 +1,72 @@
++ set -euo pipefail
++ DEPARTEMENTS='074 073'
++ MIROIR=http://data.cquest.org/brgm/bd_charm_50/2019
++++ dirname scripts/geologie/construire.sh
+++ cd scripts/geologie
+++ pwd
++ ICI=/home/runner/work/foret-explorer/foret-explorer/scripts/geologie
+++ cd /home/runner/work/foret-explorer/foret-explorer/scripts/geologie/../..
+++ pwd
++ RACINE=/home/runner/work/foret-explorer/foret-explorer
++ TRAVAIL=/home/runner/work/foret-explorer/foret-explorer/.cache/geologie
++ SORTIE=/home/runner/work/foret-explorer/foret-explorer/public/data/geologie
++ mkdir -p /home/runner/work/foret-explorer/foret-explorer/.cache/geologie
++ rm -rf /home/runner/work/foret-explorer/foret-explorer/public/data/geologie
++ :
++ for d in $DEPARTEMENTS
++ archive=/home/runner/work/foret-explorer/foret-explorer/.cache/geologie/GEO050K_HARM_074.zip
++ '[' '!' -s /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/GEO050K_HARM_074.zip ']'
++ echo 'Téléchargement de la géologie du département 074…'
+Téléchargement de la géologie du département 074…
++ curl -fsSL --retry 3 -o /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/GEO050K_HARM_074.zip http://data.cquest.org/brgm/bd_charm_50/2019/GEO050K_HARM_074.zip
++ rm -rf /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/074
++ mkdir -p /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/074
++ unzip -q -o /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/GEO050K_HARM_074.zip -d /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/074
+++ find /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/074 -iname '*_S_FGEOL_*.shp'
+++ head -1
++ shp=/home/runner/work/foret-explorer/foret-explorer/.cache/geologie/074/GEO050K_HARM_074_S_FGEOL_2154.shp
++ '[' -z /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/074/GEO050K_HARM_074_S_FGEOL_2154.shp ']'
++ ogr2ogr -f GeoJSONSeq -t_srs EPSG:4326 -simplify 4 -lco COORDINATE_PRECISION=6 -select NOTATION,DESCR /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/brut-074.geojsonl /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/074/GEO050K_HARM_074_S_FGEOL_2154.shp
++ node /home/runner/work/foret-explorer/foret-explorer/scripts/geologie/classer.mjs /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/brut-074.geojsonl /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/sol-074.geojsonl /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/rapport-074.json
+16608/16941 formations classées
+  moraine      1864.8 km²  1344 polygones
+  calcaire      919.6 km²  6611 polygones
+  eboulis         594 km²  2726 polygones
+  marne         435.5 km²  2837 polygones
+  gres          233.6 km²  1683 polygones
+  humide        192.4 km²  543 polygones
+  cristallin    180.1 km²  864 polygones
++ cat /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/sol-074.geojsonl
++ for d in $DEPARTEMENTS
++ archive=/home/runner/work/foret-explorer/foret-explorer/.cache/geologie/GEO050K_HARM_073.zip
++ '[' '!' -s /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/GEO050K_HARM_073.zip ']'
++ echo 'Téléchargement de la géologie du département 073…'
+Téléchargement de la géologie du département 073…
++ curl -fsSL --retry 3 -o /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/GEO050K_HARM_073.zip http://data.cquest.org/brgm/bd_charm_50/2019/GEO050K_HARM_073.zip
++ rm -rf /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/073
++ mkdir -p /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/073
++ unzip -q -o /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/GEO050K_HARM_073.zip -d /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/073
+++ find /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/073 -iname '*_S_FGEOL_*.shp'
+++ head -1
++ shp=/home/runner/work/foret-explorer/foret-explorer/.cache/geologie/073/GEO050K_HARM_073_S_FGEOL_2154.shp
++ '[' -z /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/073/GEO050K_HARM_073_S_FGEOL_2154.shp ']'
++ ogr2ogr -f GeoJSONSeq -t_srs EPSG:4326 -simplify 4 -lco COORDINATE_PRECISION=6 -select NOTATION,DESCR /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/brut-073.geojsonl /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/073/GEO050K_HARM_073_S_FGEOL_2154.shp
++ node /home/runner/work/foret-explorer/foret-explorer/scripts/geologie/classer.mjs /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/brut-073.geojsonl /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/sol-073.geojsonl /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/rapport-073.json
+26569/26921 formations classées
+  moraine      1533.3 km²  2109 polygones
+  eboulis      1194.8 km²  5022 polygones
+  calcaire      949.6 km²  8574 polygones
+  marne         741.3 km²  4012 polygones
+  gres          633.4 km²  4115 polygones
+  cristallin    633.3 km²  2301 polygones
+  humide        340.3 km²  436 polygones
++ cat /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/sol-073.geojsonl
++ echo 'Découpage en tuiles vectorielles…'
+Découpage en tuiles vectorielles…
++ ogr2ogr -f MVT /home/runner/work/foret-explorer/foret-explorer/public/data/geologie /home/runner/work/foret-explorer/foret-explorer/.cache/geologie/tout.geojsonl -nln geologie -dsco FORMAT=DIRECTORY -dsco TILE_EXTENSION=pbf -dsco COMPRESS=NO -dsco MINZOOM=9 -dsco MAXZOOM=13 -dsco SIMPLIFICATION=1 -dsco MAX_SIZE=600000
+ERROR 3: Cannot create directory /home/runner/work/foret-explorer/foret-explorer/public/data/geologie
+ERROR 1: MVT driver failed to create /home/runner/work/foret-explorer/foret-explorer/public/data/geologie
+ÉCHEC code 1
+INFO: Open of `.cache/geologie/tout.geojsonl'
+      using driver `GeoJSONSeq' successful.
+1: tout (Polygon)
