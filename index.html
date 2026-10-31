@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#161630" />
+    <meta name="description" content="Carte des types de forêt (IGN BD Forêt V2) avec légende filtrable." />
+    <title>Forêt Explorer</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- « Ajouter à l'écran d'accueil » : la carte s'ouvre en plein écran comme une appli -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Forêts" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="map" role="region" aria-label="Carte"></div>
+
+      <!-- Barre du haut : bouton légende + recherche de lieu -->
+      <div class="topbar">
+        <button id="legend-toggle" class="btn-square" type="button" aria-controls="legend"></button>
+        <form id="search" class="search" role="search" autocomplete="off">
+          <input
+            id="search-input"
+            class="search__input"
+            type="search"
+            placeholder="Rechercher un lieu…"
+            aria-label="Rechercher un lieu"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="search-results"
+            aria-expanded="false"
+          />
+          <button class="search__submit" type="submit" aria-label="Rechercher"></button>
+          <ul id="search-results" class="search__results" role="listbox" hidden></ul>
+        </form>
+      </div>
+
+      <!-- Panneau « Légendes » (rempli par src/legend.ts) -->
+      <aside id="legend" class="panel" aria-label="Légendes"></aside>
+
+      <!-- Barres d'outils (remplies par src/toolbar.ts) -->
+      <div id="toolbar-top" class="toolbar toolbar--top"></div>
+      <div id="toolbar-bottom" class="toolbar toolbar--bottom"></div>
+
+      <div id="zoom-hint" class="zoom-hint" hidden></div>
+      <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

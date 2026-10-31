@@ -1,0 +1,833 @@
+/*
+ * Thème sombre inspiré de cartes.gouv.fr (DSFR) : panneaux bleu nuit, icônes lavande,
+ * légende sur carte blanche avec texte bleu France.
+ */
+:root {
+  --navy-900: #161630; /* fond du panneau */
+  --navy-800: #1e1e3c; /* boutons, barre de recherche */
+  --navy-700: #27274f; /* en-têtes, survol */
+  --navy-600: #33335f;
+  --lavender: #8585f6; /* icônes */
+  --lavender-soft: #cacafb;
+  --accent: #6a6af4; /* bleu France du thème sombre DSFR */
+  --france: #000091; /* texte de la légende sur fond blanc */
+  --france-soft: #e3e3fd;
+  --muted: #b9b9e0;
+  --line: rgba(255, 255, 255, 0.12);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --radius: 4px;
+  --btn: 46px;
+  --gap: 8px;
+  --panel-width: 360px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #fff;
+  -webkit-text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: #e9e7e0; /* teinte neutre pendant le chargement des tuiles */
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+#map {
+  position: absolute;
+  inset: 0;
+}
+
+.icon {
+  display: inline-flex;
+  line-height: 0;
+}
+
+/* ── Boutons carrés ───────────────────────────────────────────────────────── */
+.btn-square {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--btn);
+  height: var(--btn);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--navy-800);
+  color: var(--lavender);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+
+.btn-square:hover {
+  background: var(--navy-700);
+}
+
+.btn-square[aria-pressed='true'],
+.btn-square.is-active {
+  background: var(--accent);
+  color: var(--navy-900);
+}
+
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--navy-900);
+}
+
+.btn-square.is-active .badge {
+  background: #fff;
+  color: var(--france);
+}
+
+/* ── Barre du haut : légende + recherche ──────────────────────────────────── */
+.topbar {
+  position: absolute;
+  z-index: 3;
+  top: calc(var(--gap) + var(--safe-top));
+  left: var(--gap);
+  display: flex;
+  gap: var(--gap);
+}
+
+.search {
+  position: relative;
+  display: flex;
+  width: 420px;
+  min-width: 0;
+  height: var(--btn);
+  border-radius: var(--radius);
+  background: var(--navy-800);
+  box-shadow: var(--shadow);
+}
+
+.search:focus-within {
+  box-shadow:
+    var(--shadow),
+    0 0 0 2px var(--accent);
+}
+
+.search__input {
+  flex: 1;
+  width: 0; /* ignore la largeur intrinsèque du champ : c'est flex qui décide */
+  min-width: 0;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 16px; /* ≥ 16 px : pas de zoom automatique sur iOS */
+}
+
+.search__input::placeholder {
+  color: var(--muted);
+  font-style: italic;
+  opacity: 1;
+}
+
+.search__input:focus {
+  outline: none;
+}
+
+.search__input::-webkit-search-cancel-button {
+  width: 14px;
+  height: 14px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2 2l10 10M12 2 2 12' stroke='%238585f6' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search__submit {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--btn);
+  border: 0;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--accent);
+  color: var(--navy-900);
+  cursor: pointer;
+}
+
+.search__submit:hover {
+  background: #7f7ff6;
+}
+
+.search__results {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  max-height: 50vh;
+  margin: 0;
+  padding: 4px 0;
+  overflow-y: auto;
+  border-radius: var(--radius);
+  background: var(--navy-800);
+  box-shadow: var(--shadow);
+  list-style: none;
+}
+
+.search__option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.search__option:hover,
+.search__option[aria-selected='true'] {
+  background: var(--navy-700);
+}
+
+.search__option-label {
+  font-size: 14px;
+}
+
+.search__option-kind {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ── Panneau « Légendes » ─────────────────────────────────────────────────── */
+.panel {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
+  left: var(--gap);
+  display: flex;
+  flex-direction: column;
+  width: var(--panel-width);
+  max-height: calc(100% - var(--btn) - 3 * var(--gap) - 40px - var(--safe-top));
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--navy-900);
+  box-shadow: var(--shadow);
+}
+
+.panel__header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 6px 0 14px;
+  background: var(--navy-700);
+}
+
+.panel__icon {
+  display: inline-flex;
+  color: var(--lavender);
+}
+
+.panel__title {
+  flex: 1;
+  margin: 0;
+  color: var(--lavender-soft);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.panel__close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--lavender);
+  cursor: pointer;
+}
+
+.panel__close:hover {
+  background: var(--navy-600);
+}
+
+.panel__body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.layer + .layer {
+  border-top: 1px solid var(--line);
+}
+
+.layer__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px 14px 18px;
+}
+
+.layer__title {
+  flex: 1;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.layer__toggle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--navy-700);
+  color: #fff;
+  cursor: pointer;
+}
+
+.layer__toggle:hover {
+  background: var(--navy-600);
+}
+
+.layer__content {
+  padding: 0 16px 16px;
+}
+
+/* Outils au-dessus de la légende */
+.legend-tools {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  padding: 4px 11px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lavender-soft);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: rgba(106, 106, 244, 0.18);
+}
+
+.chip[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.legend-summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.switch-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #e5e5ff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Carte blanche de la légende (comme l'image de légende IGN) */
+.legend-card {
+  /* assez court pour garder la section « fond de carte » visible sous la légende */
+  max-height: max(200px, calc(100vh - 480px));
+  padding: 6px 12px 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 2px;
+  background: #fff;
+  color: var(--france);
+}
+
+.legend-all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  border-bottom: 2px solid var(--france-soft);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.legend-group + .legend-group {
+  margin-top: 6px;
+}
+
+.legend-group__header {
+  position: sticky;
+  z-index: 1;
+  top: -6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px 6px;
+  border-bottom: 1px solid var(--france-soft);
+  background: #fff;
+  color: #3a3a8c;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.legend-list {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px;
+  border-radius: 3px;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  cursor: pointer;
+  user-select: none;
+}
+
+.legend-item:hover {
+  background: #f4f4fe;
+}
+
+.legend-item__label {
+  flex: 1;
+  min-width: 0;
+}
+
+.legend-item__count {
+  flex: none;
+  min-width: 24px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--france-soft);
+  color: var(--france);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.legend-item__count.is-zero {
+  background: transparent;
+  color: #a3a3c2;
+  font-weight: 500;
+}
+
+li.is-off .legend-item {
+  color: #7b7ba8;
+  font-weight: 500;
+}
+
+li.is-off .swatch {
+  opacity: 0.3;
+}
+
+.legend-empty {
+  margin: 12px 0 4px;
+  color: #6b6b94;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--swatch, #999);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+/* Cases à cocher personnalisées */
+.cb {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1.5px solid var(--france);
+  border-radius: 3px;
+  background: #fff center / 12px 12px no-repeat;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.cb:checked {
+  background-color: var(--france);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.6l4.6-5' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.cb:indeterminate {
+  background-color: var(--france);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 6h6' stroke='%23fff' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+.cb--dark {
+  border-color: var(--lavender);
+  background-color: transparent;
+}
+
+.cb--dark:checked {
+  border-color: var(--accent);
+  background-color: var(--accent);
+}
+
+/* Opacité */
+.opacity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  color: #e5e5ff;
+  font-size: 13px;
+}
+
+.opacity input {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.opacity output {
+  min-width: 40px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.legend-note {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--accent);
+  background: rgba(106, 106, 244, 0.14);
+  color: #e5e5ff;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.legend-help {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.legend-help summary {
+  color: var(--lavender-soft);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.legend-help p {
+  margin: 6px 0 0;
+}
+
+.legend-source {
+  color: #8d8db8;
+  font-size: 11.5px;
+}
+
+/* Fonds de carte */
+.basemaps {
+  display: grid;
+  gap: 4px;
+}
+
+.basemap-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.basemap-option:hover {
+  background: var(--navy-700);
+}
+
+.basemap-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* ── Barres d'outils de droite ────────────────────────────────────────────── */
+.toolbar {
+  position: absolute;
+  z-index: 3;
+  right: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.toolbar--top {
+  top: calc(var(--gap) + var(--safe-top));
+}
+
+.toolbar--bottom {
+  bottom: calc(var(--gap) + var(--safe-bottom));
+}
+
+.toolbar__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Bouton de géolocalisation natif masqué : piloté par la barre d'outils. */
+.maplibregl-ctrl-top-right {
+  display: none;
+}
+
+/* Échelle à gauche des boutons de zoom, comme sur cartes.gouv.fr. */
+.maplibregl-ctrl-bottom-right {
+  right: calc(var(--btn) + var(--gap));
+  bottom: var(--safe-bottom);
+}
+
+.maplibregl-ctrl-scale {
+  border: 1.5px solid #fff;
+  border-top: 0;
+  background: rgba(30, 30, 60, 0.92);
+  color: #fff;
+  font-size: 11px;
+  text-align: center;
+}
+
+/* ── Bandeau de zoom, message temporaire ──────────────────────────────────── */
+.zoom-hint {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 6px 6px 14px;
+  border-radius: var(--radius);
+  background: var(--navy-800);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.zoom-hint__btn {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toast {
+  position: absolute;
+  z-index: 5;
+  bottom: calc(28px + var(--safe-bottom));
+  left: 50%;
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  background: var(--navy-800);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  transform: translateX(-50%);
+}
+
+/* ── Bulle d'information ──────────────────────────────────────────────────── */
+.forest-popup .maplibregl-popup-content {
+  padding: 12px 14px 10px;
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  color: var(--france);
+  font-family: inherit;
+}
+
+.forest-popup .maplibregl-popup-close-button {
+  top: 4px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  color: var(--france);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.forest-popup__title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding-right: 24px;
+  font-size: 14.5px;
+  line-height: 1.3;
+}
+
+.forest-popup__title .swatch {
+  margin-top: 2px;
+}
+
+.forest-popup__props {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  margin: 10px 0;
+  font-size: 13px;
+}
+
+.forest-popup__props dt {
+  color: #6b6b94;
+}
+
+.forest-popup__props dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.forest-popup__footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--france-soft);
+  font-size: 12px;
+}
+
+.forest-popup__coords {
+  flex: 1;
+  color: #6b6b94;
+  font-variant-numeric: tabular-nums;
+}
+
+.popup-btn {
+  padding: 4px 8px;
+  border: 1px solid var(--france);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--france);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.popup-btn:hover {
+  background: var(--france-soft);
+}
+
+/* ── Grand écran : le bandeau de zoom évite la légende ouverte ───────────── */
+@media (min-width: 641px) {
+  #app.legend-open .zoom-hint {
+    left: max(50%, calc(var(--panel-width) + 2 * var(--gap) + 200px));
+  }
+}
+
+/* ── Mobile : recherche pleine largeur, légende en tiroir bas ────────────── */
+@media (max-width: 640px) {
+  .topbar {
+    right: calc(var(--btn) + 2 * var(--gap));
+  }
+
+  .search {
+    flex: 1;
+    width: auto;
+  }
+
+  .panel {
+    z-index: 4;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: 62%;
+    padding-bottom: var(--safe-bottom);
+    border-radius: 12px 12px 0 0;
+  }
+
+  .legend-card {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .legend-group__header {
+    position: static;
+  }
+
+  #app.legend-open .toolbar--bottom {
+    display: none;
+  }
+
+  .zoom-hint {
+    right: var(--gap);
+    left: var(--gap);
+    justify-content: space-between;
+    white-space: normal;
+    transform: none;
+  }
+}
