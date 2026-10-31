@@ -1,4 +1,4 @@
-# Sonde temporaire n°4 : géologie BD Charm-50 (version 2019) via le miroir référencé par data.gouv.fr.
+# Sonde temporaire n°5 : test de la chaîne de construction des tuiles de géologie.
 name: Sonde des sources de données
 
 on:
@@ -13,46 +13,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Miroir data.cquest.org (référencé par data.gouv.fr)
-        run: |
-          mkdir -p probe4
-          for u in "http://data.cquest.org/brgm/bd_charm_50/2019/" "http://data.cquest.org/brgm/bd_charm_50/2015/"; do
-            code=$(curl -s -L -m 60 -o probe4/listing.html -w "%{http_code}" "$u" || echo 000)
-            echo "$u -> $code $(stat -c %s probe4/listing.html 2>/dev/null)" >> probe4/mirror.txt
-            [ "$code" = "200" ] && echo "BASE=$u" >> probe4/mirror.txt && break
-          done
-          grep -o -E 'href="[^"]+"' probe4/listing.html | sed 's/href="//;s/"$//' > probe4/listing.txt || true
-
-      - name: Télécharger et décrire 074 et 073
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Construire les tuiles de géologie
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
-          BASE=$(grep '^BASE=' probe4/mirror.txt | cut -d= -f2-)
-          for d in 074 073; do
-            f=$(grep -i -E "(^|/)[^/]*${d}[^/]*\.zip$" probe4/listing.txt | head -1)
-            echo "$d -> fichier: $f" >> probe4/mirror.txt
-            [ -z "$f" ] && continue
-            case "$f" in http*) url="$f";; *) url="${BASE%/}/${f#./}";; esac
-            code=$(curl -s -L -m 600 -o "geol${d}.zip" -w "%{http_code}" "$url" || echo 000)
-            echo "$url -> $code $(stat -c %s "geol${d}.zip" 2>/dev/null)" >> probe4/mirror.txt
-            unzip -l "geol${d}.zip" > "probe4/zip-${d}.txt" 2>&1 || true
-            mkdir -p "g${d}" && (unzip -q -o "geol${d}.zip" -d "g${d}" || true)
-            find "g${d}" -iname "*.zip" -exec unzip -q -o {} -d "g${d}" \; || true
-            SHP=$(find "g${d}" -iname "*FGEOL*.shp" | head -1)
-            echo "$d SHP=$SHP" >> probe4/mirror.txt
-            if [ -n "$SHP" ]; then
-              ogrinfo -so -al "$SHP" > "probe4/fgeol-info-${d}.txt" 2>&1
-              ls "$(dirname "$SHP")" > "probe4/files-${d}.txt"
-              ogr2ogr -f GeoJSONSeq -t_srs EPSG:4326 -simplify 5 -lco COORDINATE_PRECISION=5 "probe4/fgeol-${d}.geojsonl" "$SHP" 2>> probe4/mirror.txt
-              gzip -9 "probe4/fgeol-${d}.geojsonl"
-            fi
+          /usr/bin/time -v bash scripts/geologie/construire.sh 2>&1 | tail -40 > construire.log || true
+          mkdir -p probe5
+          cp construire.log probe5/
+          cp .cache/geologie/rapport-*.json probe5/ || true
+          cp public/data/geologie/info.json public/data/geologie/metadata.json probe5/ || true
+          (cd public/data/geologie && find . -name '*.pbf' | awk -F/ '{print $2}' | sort | uniq -c) > probe5/tuiles-par-zoom.txt || true
+          du -sh public/data/geologie >> probe5/tuiles-par-zoom.txt || true
+          # Échantillon de tuiles autour d'Annecy / Parmelan pour les tests locaux (zooms 9 à 13).
+          for z in 9 10 11 12 13; do
+            n=$((1<<z))
+            for lonlat in "6.13 45.90" "6.21 45.94" "6.30 45.97"; do
+              set -- $lonlat
+              x=$(python3 -c "print(int(($1+180)/360*$n))")
+              y=$(python3 -c "import math; print(int((1-math.log(math.tan(math.radians($2))+1/math.cos(math.radians($2)))/math.pi)/2*$n))")
+              for dx in -1 0 1; do for dy in -1 0 1; do
+                f="public/data/geologie/$z/$((x+dx))/$((y+dy)).pbf"
+                [ -f "$f" ] && mkdir -p "probe5/tuiles/$z/$((x+dx))" && cp "$f" "probe5/tuiles/$z/$((x+dx))/"
+              done; done
+            done
           done
-          ls -la probe4 >> probe4/mirror.txt
-
+          du -sh probe5 >> probe5/tuiles-par-zoom.txt
       - name: Publier les résultats
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add probe4
-          git commit -q -m "Résultats de la sonde n°4" || echo "rien à committer"
+          git add probe5
+          git commit -q -m "Résultats de la sonde n°5" || echo "rien à committer"
           git push
