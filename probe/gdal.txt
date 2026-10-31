@@ -1,0 +1,5 @@
+GDAL 3.8.4, released 2024/02/08
+  GeoJSON -vector- (rw+v): GeoJSON
+  GeoJSONSeq -vector- (rw+v): GeoJSON Sequence
+  MVT -vector- (rw+v): Mapbox Vector Tiles
+  PMTiles -vector- (rw+v): ProtoMap Tiles

@@ -1,0 +1,17 @@
+https://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_074.zip -> 404 236
+http://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_074.zip -> 000000 236
+074 SHP=
+https://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_073.zip -> 404 236
+http://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_073.zip -> 000000 236
+073 SHP=
+total 40
+drwxr-xr-x  2 runner runner 4096 Oct 31 08:03 .
+drwxr-xr-x 10 runner runner 4096 Oct 31 08:03 ..
+-rw-r--r--  1 runner runner  236 Oct 31 08:03 brgm-page.html
+-rw-r--r--  1 runner runner  394 Oct 31 08:03 brgm-zip-list-073.txt
+-rw-r--r--  1 runner runner  394 Oct 31 08:03 brgm-zip-list-074.txt
+-rw-r--r--  1 runner runner  358 Oct 31 08:03 brgm.txt
+-rw-r--r--  1 runner runner 3134 Oct 31 08:02 cors.txt
+-rw-r--r--  1 runner runner  199 Oct 31 08:03 gdal.txt
+-rw-r--r--  1 runner runner  945 Oct 31 08:02 open-meteo-elev1400.json
+-rw-r--r--  1 runner runner 1919 Oct 31 08:02 open-meteo.json

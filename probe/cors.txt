@@ -1,0 +1,55 @@
+== https://geoservices.brgm.fr/geologie?SERVICE=WMS&REQUEST=GetCapabilities
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+Content-Length: 247
+== https://api.open-meteo.com/v1/forecast?latitude=45.9&longitude=6.1&daily=precipitation_sum&past_days=20
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+access-control-allow-origin: *
+access-control-allow-headers: accept, authorization, content-type, origin, x-requested-with, user-agent, access-control-allow-origin, range, if-match, if-unmodified-since
+access-control-allow-methods: GET, POST, OPTIONS
+access-control-max-age: 600
+== https://api.open-meteo.com/v1/elevation?latitude=45.9&longitude=6.1
+HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Length: 21
+access-control-allow-origin: *
+access-control-allow-headers: accept, authorization, content-type, origin, x-requested-with, user-agent, access-control-allow-origin, range, if-match, if-unmodified-since
+access-control-allow-methods: GET, POST, OPTIONS
+access-control-max-age: 600
+== https://data.geopf.fr/altimetrie/1.0/calcul/alti/rest/elevation.json?lon=6.2&lat=45.9&resource=ign_rge_alti_wld
+HTTP/2 200 
+content-type: application/json
+content-length: 103
+access-control-allow-origin: *
+access-control-allow-credentials: true
+access-control-allow-methods: GET, PUT, POST, DELETE, PATCH, OPTIONS
+access-control-allow-headers: DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,Content-Disposition,Content-Length,X-Community
+access-control-max-age: 1728000
+== https://data.geopf.fr/geocodage/completion?text=Parmelan
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+content-length: 2948
+access-control-allow-origin: *
+access-control-allow-credentials: true
+access-control-allow-methods: GET, PUT, POST, DELETE, PATCH, OPTIONS
+access-control-allow-headers: DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,Content-Disposition,Content-Length,X-Community
+access-control-max-age: 1728000
+== https://data.geopf.fr/tms/1.0.0/LANDCOVER-TMS.FORESTINVENTORY.V2/10/529/364.pbf
+HTTP/2 200 
+content-type: application/x-protobuf
+content-length: 430473
+access-control-allow-origin: *
+access-control-allow-credentials: true
+access-control-allow-methods: GET, PUT, POST, DELETE, PATCH, OPTIONS
+access-control-allow-headers: DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,Content-Disposition,Content-Length,X-Community
+access-control-max-age: 1728000
+== https://data.geopf.fr/annexes/ressources/vectorTiles/fonts/Source%20Sans%20Pro%20Regular/0-255.pbf
+HTTP/2 200 
+content-type: application/octet-stream
+content-length: 67247
+access-control-allow-origin: *
+access-control-allow-credentials: true
+access-control-allow-methods: GET, PUT, POST, DELETE, PATCH, OPTIONS
+access-control-allow-headers: DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,Content-Disposition,Content-Length,X-Community
+access-control-max-age: 1728000
