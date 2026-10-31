@@ -1,4 +1,4 @@
-# Sonde temporaire n°2 : catalogues publics (liens officiels de la géologie) et Macrostrat.
+# Sonde temporaire n°3 : géologie BD Charm-50 via le miroir référencé par data.gouv.fr.
 name: Sonde des sources de données
 
 on:
@@ -14,26 +14,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Catalogues publics (data.gouv.fr, data.europa.eu)
+      - name: Miroir data.cquest.org (référencé par data.gouv.fr)
         run: |
-          mkdir -p probe2
-          curl -s -m 60 "https://www.data.gouv.fr/api/1/datasets/cartes-geologiques-departementales-a-1-50-000-bd-charm-50/" -o probe2/datagouv-charm50.json || true
-          curl -s -m 60 "https://www.data.gouv.fr/api/1/datasets/66631d4a67b5b112fafd0f8a/" -o probe2/datagouv-harm.json || true
-          curl -s -m 60 "https://www.data.gouv.fr/api/1/datasets/?q=carte%20geologique%20haute-savoie&page_size=20" -o probe2/datagouv-search-74.json || true
-          curl -s -m 60 "https://www.data.gouv.fr/api/1/datasets/?q=geologie%20savoie&page_size=20" -o probe2/datagouv-search-73.json || true
-          curl -s -m 60 "https://data.europa.eu/api/hub/search/datasets/94636790-8615-11dc-9e02-0050568151b7" -o probe2/europa.json || true
-
-      - name: Macrostrat (carte géologique mondiale ouverte)
-        run: |
-          for q in "lat=45.94&lng=6.21" "lat=45.97&lng=6.30" "lat=46.02&lng=6.25" "lat=45.90&lng=6.13" "lat=45.65&lng=6.15"; do
-            curl -s -m 60 "https://macrostrat.org/api/v2/geologic_units/map?${q}&format=json" -o "probe2/macrostrat-$(echo $q | tr '=&.' '___').json" || true
+          mkdir -p probe3
+          for u in "http://data.cquest.org/brgm/bd_charm_50/" "https://data.cquest.org/brgm/bd_charm_50/"; do
+            code=$(curl -s -L -m 60 -o probe3/listing.html -w "%{http_code}" "$u" || echo 000)
+            echo "$u -> $code $(stat -c %s probe3/listing.html 2>/dev/null)" >> probe3/mirror.txt
+            [ "$code" = "200" ] && echo "BASE=$u" >> probe3/mirror.txt && break
           done
-          curl -s -m 30 -D - -o probe2/macrostrat-tile.mvt -H "Origin: https://aligotaure.github.io" "https://tiles.macrostrat.org/carto/10/529/364.mvt" | grep -i -E "^(HTTP|access-control|content-type|content-length|content-encoding)" > probe2/macrostrat-tiles.txt || true
+          grep -o -E 'href="[^"]+"' probe3/listing.html | sed 's/href="//;s/"$//' > probe3/listing.txt || true
+
+      - name: Télécharger et décrire 074 et 073
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
+          BASE=$(grep '^BASE=' probe3/mirror.txt | cut -d= -f2-)
+          for d in 074 073; do
+            f=$(grep -i -E "(^|/)[^/]*${d}[^/]*\.zip$" probe3/listing.txt | head -1)
+            echo "$d -> fichier: $f" >> probe3/mirror.txt
+            [ -z "$f" ] && continue
+            case "$f" in http*) url="$f";; *) url="${BASE%/}/${f#./}";; esac
+            code=$(curl -s -L -m 600 -o "geol${d}.zip" -w "%{http_code}" "$url" || echo 000)
+            echo "$url -> $code $(stat -c %s "geol${d}.zip" 2>/dev/null)" >> probe3/mirror.txt
+            unzip -l "geol${d}.zip" > "probe3/zip-${d}.txt" 2>&1 || true
+            mkdir -p "g${d}" && (unzip -q -o "geol${d}.zip" -d "g${d}" || true)
+            find "g${d}" -iname "*.zip" -exec unzip -q -o {} -d "g${d}" \; || true
+            SHP=$(find "g${d}" -iname "*FGEOL*.shp" | head -1)
+            echo "$d SHP=$SHP" >> probe3/mirror.txt
+            if [ -n "$SHP" ]; then
+              ogrinfo -so -al "$SHP" > "probe3/fgeol-info-${d}.txt" 2>&1
+              ls "$(dirname "$SHP")" > "probe3/files-${d}.txt"
+              ogr2ogr -f GeoJSONSeq -t_srs EPSG:4326 -simplify 5 -lco COORDINATE_PRECISION=5 "probe3/fgeol-${d}.geojsonl" "$SHP" 2>> probe3/mirror.txt
+              gzip -9 "probe3/fgeol-${d}.geojsonl"
+            fi
+          done
+          ls -la probe3 >> probe3/mirror.txt
 
       - name: Publier les résultats
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add probe2
-          git commit -q -m "Résultats de la sonde n°2" || echo "rien à committer"
+          git add probe3
+          git commit -q -m "Résultats de la sonde n°3" || echo "rien à committer"
           git push
