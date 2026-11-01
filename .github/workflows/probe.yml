@@ -1,4 +1,4 @@
-# Sonde temporaire n°6 : altimétrie IGN multi-points (limites, format, CORS, POST).
+# Sonde temporaire n°6b : altimétrie IGN multi-points (limites, format, CORS, POST).
 name: Sonde des sources de données
 
 on:
@@ -15,6 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Altimétrie multi-points
         run: |
+          set +e
           mkdir -p probe6
           A="https://data.geopf.fr/altimetrie/1.0/calcul/alti/rest/elevation.json"
           O="https://aligotaure.github.io"
@@ -43,6 +44,8 @@ jobs:
           curl -sS -X POST -H 'Content-Type: application/json' -o probe6/rpost800.json -w "POST800 http=%{http_code} time=%{time_total}s size=%{size_download}\n" "$A" --data @probe6/body800.json >> probe6/resume.txt || true
           head -c 300 probe6/rpost800.json >> probe6/resume.txt; echo >> probe6/resume.txt
           rm -f probe6/body800.json
+          for f in probe6/*.txt; do echo "== $f"; cat "$f"; done
+          for f in probe6/*.json; do echo "== $f"; head -c 400 "$f"; echo; done
           # Rafale de 10 requêtes (limite annoncée : 5/s)
           for i in $(seq 0 9); do curl -sS -o /dev/null -w "%{http_code} " "$A?lon=6.2&lat=45.9$i&resource=ign_rge_alti_wld&zonly=true" || true; done > probe6/rafale.txt
           echo >> probe6/rafale.txt
