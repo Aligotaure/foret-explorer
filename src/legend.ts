@@ -2,7 +2,10 @@ import { BDFORET } from './config';
 import { h } from './dom';
 import { ALL_CODES, FOREST_CLASSES, GROUPS, PRESETS, codesOfGroup, type GroupId } from './forestClasses';
 import { icon } from './icons';
+import { mushroomSection, soilSection, weatherSection } from './legendExtras';
+import type { MeteoLayer } from './meteoLayer';
 import type { AppState, BasemapId, Store } from './state';
+import { collapsible, sectionTitle } from './ui';
 
 interface Row {
   item: HTMLLIElement;
@@ -14,8 +17,6 @@ const BASEMAPS: readonly { id: BasemapId; label: string }[] = [
   { id: 'plan', label: 'Plan IGN' },
   { id: 'ortho', label: 'Photographies aériennes' },
 ];
-
-let sectionCounter = 0;
 
 /**
  * Panneau « Légendes » inspiré de cartes.gouv.fr : chaque type de forêt a sa case à
@@ -47,10 +48,12 @@ export class LegendPanel {
   private readonly opacityValue = h('output', {});
   private readonly basemapTitle = h('h3', { class: 'layer__title' });
   private counts: ReadonlyMap<string, number> | null = null;
+  private readonly extras: { sync(state: AppState): void }[] = [];
 
   constructor(
     private readonly root: HTMLElement,
     private readonly store: Store,
+    private readonly meteo: MeteoLayer,
   ) {
     this.render();
     this.sync(store.state);
@@ -91,7 +94,19 @@ export class LegendPanel {
       h('h2', { class: 'panel__title' }, 'Légendes'),
       close,
     );
-    const body = h('div', { class: 'panel__body' }, this.renderForestSection(), this.renderBasemapSection());
+    const mushrooms = mushroomSection(this.store);
+    const soils = soilSection(this.store);
+    const weather = weatherSection(this.store, this.meteo);
+    this.extras.push(mushrooms, soils, weather);
+    const body = h(
+      'div',
+      { class: 'panel__body' },
+      mushrooms.el,
+      this.renderForestSection(),
+      soils.el,
+      weather.el,
+      this.renderBasemapSection(),
+    );
     this.root.replaceChildren(header, body);
   }
 
@@ -198,7 +213,7 @@ export class LegendPanel {
         ),
       ),
     );
-    return this.section(h('h3', { class: 'layer__title' }, 'Carte forestière (BD Forêt® V2)'), content, true);
+    return collapsible(sectionTitle('Carte forestière (BD Forêt® V2)', 'tree'), content, true).el;
   }
 
   private renderBasemapSection(): HTMLElement {
@@ -211,31 +226,9 @@ export class LegendPanel {
       this.basemapInputs.set(basemap.id, input);
       list.append(h('label', { class: 'basemap-option' }, input, h('span', {}, basemap.label)));
     }
-    return this.section(this.basemapTitle, list, false);
+    return collapsible(this.basemapTitle, list, false).el;
   }
 
-  /** Section repliable (titre + bouton chevron), comme sur cartes.gouv.fr. */
-  private section(title: HTMLElement, content: HTMLElement, expanded: boolean): HTMLElement {
-    const id = `legend-section-${++sectionCounter}`;
-    content.id = id;
-    content.classList.add('layer__content');
-
-    const toggle = h('button', { class: 'layer__toggle', type: 'button', 'aria-controls': id });
-    let open = expanded;
-    const render = (): void => {
-      content.hidden = !open;
-      toggle.setAttribute('aria-expanded', String(open));
-      toggle.setAttribute('aria-label', open ? 'Replier la section' : 'Déplier la section');
-      toggle.replaceChildren(icon(open ? 'chevronUp' : 'chevronDown'));
-    };
-    toggle.addEventListener('click', () => {
-      open = !open;
-      render();
-    });
-    render();
-
-    return h('section', { class: 'layer' }, h('div', { class: 'layer__header' }, title, toggle), content);
-  }
 
   private setCodes(codes: readonly string[], on: boolean): void {
     const selected = new Set(this.store.state.selected);
@@ -274,6 +267,7 @@ export class LegendPanel {
     this.opacityValue.textContent = `${percent} %`;
     for (const [id, input] of this.basemapInputs) input.checked = id === state.basemap;
     this.basemapTitle.textContent = BASEMAPS.find((b) => b.id === state.basemap)?.label ?? 'Fond de carte';
+    for (const extra of this.extras) extra.sync(state);
 
     this.updateVisibility(state);
   }

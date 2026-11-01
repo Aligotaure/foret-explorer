@@ -1,7 +1,11 @@
 import { DEFAULT_OPACITY, STORAGE_KEY } from './config';
 import { ALL_CODES } from './forestClasses';
+import { MUSHROOM_BY_ID, type MushroomId } from './mushrooms';
 
 export type BasemapId = 'plan' | 'ortho';
+
+/** Grille météo : masquée, pluie cumulée sur 20 jours, ou indice de pousse du champignon choisi. */
+export type WeatherMode = 'off' | 'pluie' | 'indice';
 
 export interface AppState {
   /** Codes `code_tfv` affichés sur la carte. */
@@ -11,6 +15,11 @@ export interface AppState {
   basemap: BasemapId;
   /** Dans la légende, n'afficher que les types présents dans la zone visible. */
   onlyPresent: boolean;
+  /** Champignon recherché (« Je cherche… »), ou null. */
+  mushroom: MushroomId | null;
+  weatherMode: WeatherMode;
+  /** Couche « nature du sol » (motifs) affichée. */
+  geology: boolean;
   /** Panneau « Légendes » ouvert (non persisté : dépend de l'écran). */
   legendOpen: boolean;
 }
@@ -47,6 +56,9 @@ interface PersistedState {
   opacity?: unknown;
   basemap?: unknown;
   onlyPresent?: unknown;
+  mushroom?: unknown;
+  weatherMode?: unknown;
+  geology?: unknown;
 }
 
 /** État initial : préférences sauvegardées si elles existent, sinon valeurs par défaut. */
@@ -56,6 +68,9 @@ export function loadInitialState(legendOpen: boolean): AppState {
     opacity: DEFAULT_OPACITY,
     basemap: 'plan',
     onlyPresent: false,
+    mushroom: null,
+    weatherMode: 'off',
+    geology: false,
     legendOpen,
   };
 
@@ -77,9 +92,23 @@ export function loadInitialState(legendOpen: boolean): AppState {
       ? saved.opacity
       : defaults.opacity;
   const basemap: BasemapId = saved.basemap === 'ortho' ? 'ortho' : 'plan';
-  const onlyPresent = saved.onlyPresent === true;
+  const mushroom =
+    typeof saved.mushroom === 'string' && MUSHROOM_BY_ID.has(saved.mushroom as MushroomId)
+      ? (saved.mushroom as MushroomId)
+      : null;
+  const weatherMode: WeatherMode =
+    saved.weatherMode === 'pluie' || saved.weatherMode === 'indice' ? saved.weatherMode : 'off';
 
-  return { ...defaults, selected, opacity, basemap, onlyPresent };
+  return {
+    ...defaults,
+    selected,
+    opacity,
+    basemap,
+    onlyPresent: saved.onlyPresent === true,
+    mushroom,
+    weatherMode,
+    geology: saved.geology === true,
+  };
 }
 
 /** Sauvegarde les préférences dans localStorage (sans bloquer si c'est impossible). */
@@ -93,6 +122,9 @@ export function persistState(store: Store): void {
         opacity: state.opacity,
         basemap: state.basemap,
         onlyPresent: state.onlyPresent,
+        mushroom: state.mushroom,
+        weatherMode: state.weatherMode,
+        geology: state.geology,
       };
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));

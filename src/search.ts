@@ -1,5 +1,6 @@
 import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl';
 import { GEOCODING_COMPLETION_URL } from './config';
+import { track } from './metrics';
 import { debounce, h, toast } from './dom';
 import { icon } from './icons';
 
@@ -28,10 +29,16 @@ export async function fetchSuggestions(text: string, signal?: AbortSignal): Prom
   url.searchParams.set('text', text);
   url.searchParams.set('type', 'StreetAddress,PositionOfInterest');
   url.searchParams.set('maximumResponses', '6');
-  const response = await fetch(url, { signal });
-  if (!response.ok) throw new Error(`Géocodage : HTTP ${response.status}`);
-  const data = (await response.json()) as { results?: unknown };
-  return Array.isArray(data.results) ? data.results.filter(isSuggestion) : [];
+  track('ign.geocoding.requests');
+  try {
+    const response = await fetch(url, { signal });
+    if (!response.ok) throw new Error(`Géocodage : HTTP ${response.status}`);
+    const data = (await response.json()) as { results?: unknown };
+    return Array.isArray(data.results) ? data.results.filter(isSuggestion) : [];
+  } catch (error) {
+    if (!signal?.aborted) track('ign.geocoding.errors');
+    throw error;
+  }
 }
 
 function zoomFor(s: Suggestion): number {

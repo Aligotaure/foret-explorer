@@ -1,5 +1,5 @@
-// Faux services Géoplateforme pour tester l'appli sans réseau :
-// tuiles vectorielles BD Forêt (MVT encodées ici), tuiles WMTS (PNG fixes), géocodage.
+// Faux services pour tester l'appli sans réseau : tuiles BD Forêt et géologie (MVT encodées ici),
+// tuiles WMTS (PNG fixes), géocodage et altitude (Géoplateforme), météo (Open-Meteo).
 import { readFileSync } from 'node:fs';
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url));
@@ -134,6 +134,70 @@ export function forestTile(z, x, y) {
   return encodeTile('formation_vegetale', features);
 }
 
+// Géologie : moitié gauche de chaque tuile en calcaire, moitié droite en moraine.
+export function geologyTile() {
+  const half = (x0, sol, notation, descr) => ({
+    id: fid++,
+    props: { sol, notation, descr },
+    rings: [
+      [
+        [x0, 0],
+        [x0 + 2048, 0],
+        [x0 + 2048, 4096],
+        [x0, 4096],
+      ],
+    ],
+  });
+  return encodeTile('geologie', [
+    half(0, 'calcaire', 'n3-5U', 'Calcaires massifs urgoniens (à rudistes, polypieds)'),
+    half(2048, 'moraine', 'Gy', 'Dépôts glaciaires (moraines) anciens (argiles, sables, galets, cailloux, blocs)'),
+  ]);
+}
+
+// Météo : 20 jours passés + aujourd'hui, avec deux grosses pluies il y a 10 et 13 jours
+// (relevés réels du 11 au 31 octobre 2026 vers 930 m, au-dessus de Nâves-Parmelan).
+const DAILY = {
+  rain: [0, 0, 0, 0, 0, 0, 2.2, 30.6, 1.0, 0.9, 31.8, 0, 11.8, 4.1, 8.9, 0, 0, 0.1, 0, 0, 0],
+  tmax: [11.1, 13.5, 14.8, 17.1, 18.1, 18.0, 12.6, 7.6, 12.0, 11.5, 8.2, 9.5, 10.8, 6.4, 11.0, 11.2, 15.8, 11.6, 9.2, 8.9, 8.1],
+  tmin: [7.1, 6.4, 8.5, 10.7, 12.3, 12.6, 7.6, 5.2, 6.1, 7.9, 4.4, 3.2, 5.2, 2.5, 5.0, 4.1, 9.9, 6.4, 5.1, 4.2, 3.1],
+};
+function openMeteo(url) {
+  const lats = (url.searchParams.get('latitude') ?? '').split(',').map(Number);
+  const lons = (url.searchParams.get('longitude') ?? '').split(',').map(Number);
+  const elevations = (url.searchParams.get('elevation') ?? '').split(',').filter(Boolean).map(Number);
+  const today = new Date();
+  const time = DAILY.rain.map((_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (DAILY.rain.length - 1 - i));
+    return d.toISOString().slice(0, 10);
+  });
+  const items = lats.map((lat, k) => {
+    const elevation = elevations[k] ?? 930;
+    const shift = (930 - elevation) * 0.0065; // gradient thermique
+    const wetter = 1 + ((k % 3) - 1) * 0.3; // un peu de variété d'une case à l'autre
+    return {
+      latitude: lat,
+      longitude: lons[k],
+      elevation,
+      daily: {
+        time,
+        precipitation_sum: DAILY.rain.map((r) => Math.round(r * wetter * 10) / 10),
+        temperature_2m_max: DAILY.tmax.map((t) => Math.round((t + shift) * 10) / 10),
+        temperature_2m_min: DAILY.tmin.map((t) => Math.round((t + shift) * 10) / 10),
+      },
+    };
+  });
+  return items.length === 1 ? items[0] : items;
+}
+
+// Altitude : 930 m pour un point seul (bilan d'un coin), relief varié pour une liste de points.
+function altitudes(url) {
+  const lats = (url.searchParams.get('lat') ?? '').split('|').map(Number);
+  const lons = (url.searchParams.get('lon') ?? '').split('|').map(Number);
+  if (lats.length === 1) return { elevations: [930] };
+  return { elevations: lats.map((lat, k) => Math.round(450 + Math.abs(Math.sin(lat * 900) * Math.cos(lons[k] * 700)) * 1300)) };
+}
+
 const COMPLETION = {
   status: 'OK',
   results: [
@@ -143,8 +207,27 @@ const COMPLETION = {
   ],
 };
 
-/** Intercepte toutes les requêtes vers data.geopf.fr et les consigne dans `log`. */
+/** Intercepte les requêtes vers les services externes et les consigne dans `log`. */
 export async function installMocks(page, log) {
+  log.meteo ??= [];
+  log.geologie ??= [];
+  log.altitude ??= [];
+  log.mesures ??= [];
+  // Serveur de mesure (adresse fictive définie au build des tests) : on garde les envois.
+  await page.route('https://mesures.test/**', (route) => {
+    const request = route.request();
+    log.mesures.push({ method: request.method(), path: new URL(request.url()).pathname, body: request.postData() ?? '' });
+    return route.fulfill({ status: 204, headers: CORS, body: '' });
+  });
+  await page.route('https://api.open-meteo.com/**', (route) => {
+    const url = new URL(route.request().url());
+    log.meteo.push(url.search);
+    return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(openMeteo(url)) });
+  });
+  await page.route('https://aligotaure.github.io/foret-explorer/data/geologie/**', (route) => {
+    log.geologie.push(new URL(route.request().url()).pathname);
+    return route.fulfill({ status: 200, contentType: 'application/x-protobuf', headers: CORS, body: geologyTile() });
+  });
   await page.route('https://data.geopf.fr/**', (route) => {
     const url = new URL(route.request().url());
     const tms = url.pathname.match(/\/tms\/1\.0\.0\/LANDCOVER-TMS\.FORESTINVENTORY\.V2\/(\d+)\/(\d+)\/(\d+)\.pbf$/);
@@ -159,6 +242,13 @@ export async function installMocks(page, log) {
       const body =
         layer === 'ORTHOIMAGERY.ORTHOPHOTOS' ? PNG.ortho : layer === 'LANDCOVER.FORESTINVENTORY.V2' ? PNG.overview : PNG.plan;
       return route.fulfill({ status: 200, contentType: 'image/png', headers: CORS, body });
+    }
+    if (url.pathname.startsWith('/altimetrie/')) {
+      log.altitude.push(url.search);
+      return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(altitudes(url)) });
+    }
+    if (url.pathname.startsWith('/annexes/ressources/vectorTiles/fonts/')) {
+      return route.fulfill({ status: 200, contentType: 'application/x-protobuf', headers: CORS, body: Buffer.alloc(0) }); // police vide
     }
     if (url.pathname === '/geocodage/completion') {
       log.geocode.push(url.search);

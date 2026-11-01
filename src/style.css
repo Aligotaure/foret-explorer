@@ -831,3 +831,371 @@ li.is-off .swatch {
     transform: none;
   }
 }
+
+/* ── Sections ajoutées : « Je cherche… », sol, météo ─────────────────────── */
+.layer__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.layer__icon {
+  display: inline-flex;
+  color: var(--lavender);
+}
+
+.layer__header .switch {
+  flex: none;
+}
+
+/* Interrupteur (case à cocher en bascule) */
+.switch {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  border: 1.5px solid var(--lavender);
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.switch::after {
+  position: absolute;
+  top: 2.5px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--lavender);
+  content: '';
+  transition: transform 0.15s;
+}
+
+.switch:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.switch:checked::after {
+  background: #fff;
+  transform: translateX(15px);
+}
+
+.chip--mushroom[aria-pressed='true'] {
+  background: #b45309;
+  border-color: #b45309;
+}
+
+.legend-hint {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.mushroom-card {
+  margin-top: 12px;
+}
+
+.mushroom-card__summary {
+  margin: 0 0 10px;
+  color: #e5e5ff;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.mushroom-card__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.mushroom-card__facts dt {
+  color: var(--muted);
+}
+
+.mushroom-card__facts dd {
+  margin: 0;
+  color: #fff;
+}
+
+.mushroom-card__season {
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  background: var(--navy-700);
+  color: var(--lavender-soft);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+/* Précautions : encadré ambre, lisible sur le fond bleu nuit. */
+.mushroom-card__caution {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-left: 3px solid #f0a03c;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: rgba(240, 160, 60, 0.12);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.mushroom-card__caution p {
+  margin: 0;
+  color: #fde7c8;
+}
+
+.mushroom-card__caution p + p {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.mushroom-card__caution strong {
+  color: #ffc46b;
+}
+
+.legend-card--soil {
+  max-height: none;
+  padding: 6px 10px;
+}
+
+.soil-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.soil-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 4px;
+  border-radius: 3px;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.soil-item__text small {
+  display: block;
+  color: #6b6b94;
+  font-size: 11.5px;
+}
+
+.soil-item.is-favored {
+  background: #fff4e5;
+  box-shadow: inset 3px 0 0 #b45309;
+}
+
+.swatch--pattern {
+  width: 22px;
+  height: 22px;
+  background-color: #f3f0e8;
+  background-size: 16px 16px;
+}
+
+.scale {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.scale li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Bilan d'un coin ──────────────────────────────────────────────────────── */
+.panel--spot {
+  top: calc(var(--gap) + var(--safe-top));
+  right: calc(var(--btn) + 2 * var(--gap));
+  left: auto;
+  max-height: calc(100% - 2 * var(--gap) - 40px - var(--safe-top));
+}
+
+.spot__heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.spot__coords {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.spot__body {
+  padding: 4px 16px 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.spot__section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.spot__title {
+  margin: 0 0 8px;
+  color: var(--lavender-soft);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.spot__facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.spot__row {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 10px;
+  font-size: 13.5px;
+}
+
+.spot__row dt {
+  color: var(--muted);
+}
+
+.spot__row dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0;
+}
+
+.spot__descr {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.spot__summary {
+  margin: 6px 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.spot__status {
+  margin: 12px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rain-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 4px 0;
+}
+
+.rain-chart__axis {
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 1;
+}
+
+.rain-chart__bar {
+  fill: #6baed6;
+}
+
+.rain-chart__bar--peak {
+  fill: #9ecae1;
+}
+
+.rain-chart__value,
+.rain-chart__tick {
+  fill: var(--muted);
+  font-size: 9px;
+}
+
+.verdicts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.verdict {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--france);
+}
+
+.verdict__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.level-pill {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--level);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.verdict--0 .level-pill,
+.verdict--1 .level-pill {
+  color: #1b1b35;
+}
+
+.verdict__reasons {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  color: #3a3a6a;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.spot__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.spot__note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+@media (max-width: 640px) {
+  .panel--spot {
+    top: auto;
+    right: 0;
+    left: 0;
+    max-height: 70%;
+  }
+}
+
+.spot__value {
+  flex: 1 1 0;
+  min-width: 0;
+}
