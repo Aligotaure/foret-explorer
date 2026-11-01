@@ -1,0 +1,17 @@
+HTTP/2 200 
+date: Sun, 01 Nov 2026 12:48:16 GMT
+content-type: application/json
+content-length: 32
+x-ratelimit-limit-second: 1
+ratelimit-limit: 5
+www-authenticate: Key realm="kong"
+cache-control: private, max-age=1814400
+access-control-allow-origin: *
+access-control-allow-credentials: true
+strict-transport-security: max-age=31536000; includeSubDomains
+access-control-allow-methods: GET, PUT, POST, DELETE, PATCH, OPTIONS
+access-control-allow-headers: DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,Content-Disposition,Content-Length,X-Community
+access-control-max-age: 1728000
+x-iplb-request-id: 30D9B543:57C0_91EFC1E7:01BB_6AE73510_459B3628:38C2F7
+x-iplb-instance: 61217
+
