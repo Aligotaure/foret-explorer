@@ -1,0 +1,33 @@
+
+> test
+> node --no-warnings test/run.mjs
+
+OK     collecte : envoi valide accepté (204, CORS) — 204
+OK     collecte : totaux du jour additionnés — {"app.sessions":1,"ign.tiles.forest":100,"openMeteo.calls10":750,"openMeteo.locations":40,"openMeteo.requests":2}
+OK     collecte : compteur inconnu ignoré
+OK     collecte : autre origine refusée (403) — 403
+OK     collecte : valeur hors plafond refusée (400) — 400
+OK     collecte : corps illisible refusé (400) — 400
+OK     collecte : envoi trop gros refusé (413) — 413
+OK     collecte : pré-vérification CORS
+OK     collecte : analyse des envois
+OK     racine : 404
+OK     mauvais chemin : 404, rien ne trahit la page
+OK     chemin secret : page de connexion, sans chiffres
+OK     en-têtes de sécurité
+OK     mauvais mot de passe : 401
+OK     bon mot de passe : session signée, cookie protégé — fe_admin=1796130425.zwXiTiQv3lsF_h3WpwnTjZjYivWswHUNKUtDDzzM
+OK     tableau de bord : affiché avec la session
+OK     cookie falsifié : retour à la connexion
+OK     mot de passe changé : anciennes sessions invalides
+OK     export JSON avec la session
+OK     export JSON sans session : 404
+OK     déconnexion : cookie effacé
+OK     9e essai depuis la même adresse : bloqué (429), même avec le bon mot de passe — 429
+OK     autre adresse : connexion possible
+OK     aucune adresse IP enregistrée (empreintes seulement) — *,55c813f2c0c7dda4a6c25964
+OK     mot de passe trop court : connexion désactivée, message clair
+OK     chemin trop court : tableau de bord désactivé (404)
+
+26/26 vérifications OK — aperçus dans test/apercus/
+exit=0

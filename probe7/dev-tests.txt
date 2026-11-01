@@ -1,0 +1,18 @@
+== collecte
+204
+== collecte autre origine
+403
+== racine
+404
+== page de connexion
+/label>
+<input id="motdepasse" name="motdepasse" type="password" autocomplete="current-password" required autofocus>
+<button type="submit">Se connecter</button>
+</form></div></main></body></html>
+200
+== connexion
+HTTP/1.1 303 See Other
+Location: /chemin-secret-de-test-42
+Set-Cookie: fe_admin=1796130430.Z3sy91xALwuRoExn4czGyyUVEnBOgm40oqkK8Na-Vk4; Path=/chemin-secret-de-test-42; Max-Age=2592000; HttpOnly; Secure; SameSite=Strict
+== tableau
+hero__value">15
