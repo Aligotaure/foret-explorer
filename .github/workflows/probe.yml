@@ -1,4 +1,4 @@
-# Sonde temporaire n°7 : fichiers de verrouillage npm, serveur de mesure (wrangler), données réelles.
+# Sonde temporaire n°7c : fichiers de verrouillage npm, serveur de mesure (wrangler), données réelles.
 name: Sonde des sources de données
 
 on:
@@ -22,25 +22,25 @@ jobs:
       - name: Verrouillage, build, serveur de mesure
         run: |
           set +e
-          mkdir -p probe7
-          { node --version; npm --version; } > probe7/versions.txt
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund > probe7/lock-root.txt 2>&1
-          (cd worker && npm install --package-lock-only --ignore-scripts --no-audit --no-fund) > probe7/lock-worker.txt 2>&1
-          cp package-lock.json probe7/package-lock.json
-          cp worker/package-lock.json probe7/worker-package-lock.json
-          npm ci --ignore-scripts --no-audit --no-fund > probe7/ci-root.txt 2>&1; echo "exit=$?" >> probe7/ci-root.txt
-          VITE_METRICS_URL=https://exemple.workers.dev npm run check > probe7/check.txt 2>&1; echo "exit=$?" >> probe7/check.txt
-          ls -la dist dist/assets >> probe7/check.txt
-          grep -o 'https://exemple.workers.dev' dist/assets/*.js | head -2 >> probe7/check.txt
+          rm -rf probe7c && mkdir -p probe7c
+          { node --version; npm --version; } > probe7c/versions.txt
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund > probe7c/lock-root.txt 2>&1
+          (cd worker && npm install --package-lock-only --ignore-scripts --no-audit --no-fund) > probe7c/lock-worker.txt 2>&1
+          cp package-lock.json probe7c/package-lock.json
+          cp worker/package-lock.json probe7c/worker-package-lock.json
+          npm ci --ignore-scripts --no-audit --no-fund > probe7c/ci-root.txt 2>&1; echo "exit=$?" >> probe7c/ci-root.txt
+          VITE_METRICS_URL=https://exemple.workers.dev npm run check > probe7c/check.txt 2>&1; echo "exit=$?" >> probe7c/check.txt
+          ls -la dist dist/assets >> probe7c/check.txt
+          grep -o 'https://exemple.workers.dev' dist/assets/*.js | head -2 >> probe7c/check.txt
           cd worker
-          npm ci --ignore-scripts --no-audit --no-fund > ../probe7/ci-worker.txt 2>&1; echo "exit=$?" >> ../probe7/ci-worker.txt
-          npx wrangler --version > ../probe7/wrangler.txt 2>&1
-          npm run typecheck > ../probe7/typecheck.txt 2>&1; echo "exit=$?" >> ../probe7/typecheck.txt
-          npm test > ../probe7/tests.txt 2>&1; echo "exit=$?" >> ../probe7/tests.txt
-          npx wrangler deploy --dry-run --outdir dist > ../probe7/dryrun.txt 2>&1; echo "exit=$?" >> ../probe7/dryrun.txt
-          ls -la dist >> ../probe7/dryrun.txt
+          npm ci --ignore-scripts --no-audit --no-fund > ../probe7c/ci-worker.txt 2>&1; echo "exit=$?" >> ../probe7c/ci-worker.txt
+          npx wrangler --version > ../probe7c/wrangler.txt 2>&1
+          npm run typecheck > ../probe7c/typecheck.txt 2>&1; echo "exit=$?" >> ../probe7c/typecheck.txt
+          npm test > ../probe7c/tests.txt 2>&1; echo "exit=$?" >> ../probe7c/tests.txt
+          npx wrangler deploy --dry-run --outdir dist > ../probe7c/dryrun.txt 2>&1; echo "exit=$?" >> ../probe7c/dryrun.txt
+          ls -la dist >> ../probe7c/dryrun.txt
           printf 'ADMIN_PASSWORD=mot-de-passe-de-test-123\nADMIN_PATH=chemin-secret-de-test-42\n' > .dev.vars
-          (npx wrangler dev --port 8787 --ip 127.0.0.1 > ../probe7/dev.txt 2>&1 &)
+          (npx wrangler dev --port 8787 --ip 127.0.0.1 > ../probe7c/dev.txt 2>&1 &)
           for i in $(seq 1 90); do curl -s -o /dev/null http://127.0.0.1:8787/robots.txt && break; sleep 1; done
           B=http://127.0.0.1:8787
           {
@@ -51,21 +51,21 @@ jobs:
             echo "== connexion"; curl -s -D - -o /dev/null -X POST --data 'motdepasse=mot-de-passe-de-test-123' $B/chemin-secret-de-test-42/connexion | grep -i 'HTTP/\|set-cookie\|location'
             c=$(curl -s -D - -o /dev/null -X POST --data 'motdepasse=mot-de-passe-de-test-123' $B/chemin-secret-de-test-42/connexion | grep -i '^set-cookie' | sed 's/^[Ss]et-[Cc]ookie: //; s/;.*//')
             echo "== tableau"; curl -s -H "Cookie: $c" $B/chemin-secret-de-test-42 | grep -o 'hero__value">[^<]*'
-          } > ../probe7/dev-tests.txt 2>&1
+          } > ../probe7c/dev-tests.txt 2>&1
           pkill -f "wrangler" || true
           sleep 2
           cd ..
-          for f in probe7/*.txt; do echo "== $f"; tail -c 2500 "$f"; done
+          for f in probe7c/*.txt; do echo "== $f"; tail -c 2500 "$f"; done
       - name: Données réelles autour du Parmelan
         run: |
           set +e
-          python3 scripts-probe/fetch.py probe7 > probe7/fetch.txt 2>&1
-          du -sh probe7 >> probe7/fetch.txt
-          cat probe7/fetch.txt | tail -20
+          python3 scripts-probe/fetch.py probe7 > probe7c/fetch.txt 2>&1
+          du -sh probe7 >> probe7c/fetch.txt
+          cat probe7c/fetch.txt | tail -20
       - name: Publier les résultats
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add probe7
-          git commit -q -m "Résultats de la sonde n°7" || echo "rien à committer"
+          git add probe7c
+          git commit -q -m "Résultats de la sonde n°7c" || echo "rien à committer"
           git push
