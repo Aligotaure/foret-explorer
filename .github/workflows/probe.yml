@@ -1,4 +1,4 @@
-# Sonde temporaire n°7d : vérification de types du serveur de mesure avec les fichiers de verrouillage.
+# Sonde temporaire n°8 : contrôle du site en ligne après publication.
 name: Sonde des sources de données
 
 on:
@@ -12,20 +12,16 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Serveur de mesure
-        working-directory: worker
+      - name: Site en ligne
         run: |
-          npm ci --ignore-scripts --no-audit --no-fund
-          npm run typecheck
-          npm test
-          npx wrangler deploy --dry-run --outdir dist
-      - name: Carte
-        env:
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
-        run: |
-          npm ci --ignore-scripts --no-audit --no-fund
-          npm run check
+          set +e
+          B=https://aligotaure.github.io/foret-explorer/
+          curl -sS -o index.html -w "index %{http_code}\n" $B
+          js=$(grep -Eo 'assets/index-[A-Za-z0-9_-]+\.js' index.html | head -1)
+          echo "bundle : $js"
+          curl -sS -o app.js -w "js %{http_code} %{size_download} octets\n" "$B$js"
+          for w in Morilles gyromitre meteo-fin-cellules foret-explorer:altitudes 'pas ce qui se mange' mesures.test workers.dev; do
+            printf '%-28s %s\n' "$w" "$(grep -c -- "$w" app.js)"
+          done
+          curl -sS -o /dev/null -w "géologie info.json %{http_code}\n" ${B}data/geologie/info.json
+          curl -sS -o /dev/null -w "tuile géologie 12/2118/1456 %{http_code}\n" ${B}data/geologie/12/2118/1456.pbf
