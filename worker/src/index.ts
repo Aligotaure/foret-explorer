@@ -6,7 +6,7 @@
  *  POST /<chemin>/connexion, /<chemin>/deconnexion, GET /<chemin>/export.json
  *  Tout le reste : 404, y compris un chemin secret erroné.
  */
-import { METRICS, isMetricName } from '../../src/metricsSchema.ts';
+import { METRIC_DEFS, isMetricName } from '../../src/metricsSchema.ts';
 import { adminBase, attemptKey, checkPassword, clearedCookie, hasSession, passwordConfigured, sessionCookie } from './auth.ts';
 import { renderDashboard, renderLogin, type Period } from './dashboard.ts';
 import { addDays, parisDay } from './days.ts';
@@ -66,7 +66,7 @@ export function parsePayload(text: string): Record<string, number> | null {
   const counts: Record<string, number> = {};
   for (const [name, n] of Object.entries(c as Record<string, unknown>)) {
     if (!isMetricName(name)) continue;
-    if (typeof n !== 'number' || !Number.isInteger(n) || n < 0 || n > METRICS[name].max) return null;
+    if (typeof n !== 'number' || !Number.isInteger(n) || n < 0 || n > METRIC_DEFS[name].max) return null;
     if (n > 0) counts[name] = n;
   }
   return counts;

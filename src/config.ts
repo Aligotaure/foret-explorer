@@ -69,7 +69,7 @@ export const WEATHER_MIN_ZOOM = 8;
  * Grille fine de l'indice (carrés ≈ 500 m : chaque case météo découpée en 9 × 9), à partir de ce
  * zoom. Au-delà de FINE_MAX_CELLS carrés à l'écran, on garde la grille de 4,5 km.
  */
-export const FINE_MIN_ZOOM = 13;
+export const FINE_MIN_ZOOM = 12;
 export const FINE_DIVISIONS = 9;
 export const FINE_MAX_CELLS = 1600;
 

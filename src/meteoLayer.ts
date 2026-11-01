@@ -15,7 +15,7 @@ import {
 } from './fineGrid';
 import { track } from './metrics';
 import { LEVELS, MUSHROOMS, MUSHROOM_BY_ID, scoreMushroom, type MushroomId } from './mushrooms';
-import { LAYERS, SOURCES, setFineVisible, setMeteoVisible } from './mapStyle';
+import { LAYERS, SOURCES, applyOpacity, setFineVisible, setMeteoVisible } from './mapStyle';
 import type { AppState, Store } from './state';
 import { cellsForBounds, fetchAltitudes, summarize, weatherForCells, type DailySeries } from './weather';
 
@@ -53,20 +53,27 @@ interface Box {
   north: number;
 }
 
-function boxPolygon(c: Box): Polygon {
+/** Rectangle d'une case ; `inset` le rétrécit (part de la largeur ôtée de chaque côté). */
+function boxPolygon(c: Box, inset = 0): Polygon {
+  const dx = (c.east - c.west) * inset;
+  const dy = (c.north - c.south) * inset;
+  const [w, s, e, n] = [c.west + dx, c.south + dy, c.east - dx, c.north - dy].map((v) => +v.toFixed(6)) as [number, number, number, number];
   return {
     type: 'Polygon',
     coordinates: [
       [
-        [c.west, c.south],
-        [c.east, c.south],
-        [c.east, c.north],
-        [c.west, c.north],
-        [c.west, c.south],
+        [w, s],
+        [e, s],
+        [e, n],
+        [w, n],
+        [w, s],
       ],
     ],
   };
 }
+
+/** Marge entre deux carrés fins : une mosaïque se lit mieux qu'un damier collé. */
+const FINE_INSET = 0.06;
 
 const isAbort = (error: unknown): boolean => error instanceof DOMException && error.name === 'AbortError';
 
@@ -105,6 +112,11 @@ export class MeteoLayer {
     private readonly store: Store,
   ) {}
 
+  /** Les forêts s'estompent aux zooms de la grille fine (mode indice, carrés dessinés). */
+  get dimsForests(): boolean {
+    return this.fineShown && this.store.state.weatherMode === 'indice';
+  }
+
   onStatus(listener: (s: MeteoStatus) => void): void {
     this.listeners.add(listener);
     listener(this.status);
@@ -127,6 +139,7 @@ export class MeteoLayer {
     setFineVisible(this.map, state.weatherMode === 'indice');
     if (!on) {
       this.controller?.abort();
+      this.showFine(false);
       this.setStatus({ state: 'off' });
       return;
     }
@@ -159,12 +172,19 @@ export class MeteoLayer {
     for (const layer of [LAYERS.meteoFineFill, LAYERS.meteoFineLine, LAYERS.meteoFineLabel]) {
       this.map.setFilter(layer, hostOnly as never);
     }
+    // Défavorable : contour seul. Puis de plus en plus soutenu ; un carré plus couvert d'arbres
+    // hôtes est plus opaque.
     this.map.setPaintProperty(LAYERS.meteoFineFill, 'fill-color', ['match', level, ...colors, 'rgba(0,0,0,0)'] as never);
-    // Plus le carré est couvert d'arbres hôtes, plus il est opaque.
     this.map.setPaintProperty(
       LAYERS.meteoFineFill,
       'fill-opacity',
-      ['*', ['match', level, 0, 0.16, 1, 0.34, 2, 0.5, 3, 0.66, 0], ['+', 0.5, ['*', 0.5, coverage]]] as never,
+      ['*', ['match', level, 0, 0, 1, 0.5, 2, 0.68, 3, 0.85, 0], ['+', 0.6, ['*', 0.4, coverage]]] as never,
+    );
+    this.map.setPaintProperty(LAYERS.meteoFineLine, 'line-color', ['match', level, 0, '#5d5d7e', 3, '#4a1a03', 'rgba(0,0,0,0)'] as never);
+    this.map.setPaintProperty(
+      LAYERS.meteoFineLine,
+      'line-width',
+      ['interpolate', ['linear'], ['zoom'], FINE_MIN_ZOOM, ['match', level, 3, 1.2, 0.6], 16, ['match', level, 3, 2.4, 1.2]] as never,
     );
     this.map.setLayoutProperty(LAYERS.meteoFineLabel, 'text-field', ['match', level, 2, LEVELS[2]?.label ?? '', 3, LEVELS[3]?.label ?? '', ''] as never);
   }
@@ -174,6 +194,7 @@ export class MeteoLayer {
     if (on === this.fineShown) return;
     this.fineShown = on;
     if (this.store.state.weatherMode === 'indice') this.paintIndex(indexMushroom(this.store.state));
+    applyOpacity(this.map, this.store.state.opacity, this.dimsForests);
   }
 
   private async update(): Promise<void> {
@@ -301,7 +322,7 @@ export class MeteoLayer {
         if (s) any = true;
         if (s && m.id === shown) count++;
       }
-      if (any) features.push({ type: 'Feature', id: c.id, properties, geometry: boxPolygon(c) });
+      if (any) features.push({ type: 'Feature', id: c.id, properties, geometry: boxPolygon(c, FINE_INSET) });
     }
     this.map.getSource<GeoJSONSource>(SOURCES.meteoFine)?.setData({ type: 'FeatureCollection', features });
     this.showFine(features.length > 0);

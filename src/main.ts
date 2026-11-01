@@ -85,7 +85,7 @@ map.on('load', () => {
   meteo.applyMode();
   store.subscribe((state, prev) => {
     if (state.selected !== prev.selected) applySelection(map, state.selected);
-    if (state.opacity !== prev.opacity) applyOpacity(map, state.opacity);
+    if (state.opacity !== prev.opacity) applyOpacity(map, state.opacity, meteo.dimsForests);
     if (state.basemap !== prev.basemap) applyBasemap(map, state.basemap);
     if (state.geology !== prev.geology) applyGeology(map, state.geology);
     if (state.weatherMode !== prev.weatherMode || state.mushroom !== prev.mushroom) meteo.applyMode();

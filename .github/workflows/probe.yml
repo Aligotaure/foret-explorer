@@ -1,4 +1,4 @@
-# Sonde temporaire n°7c : fichiers de verrouillage npm, serveur de mesure (wrangler), données réelles.
+# Sonde temporaire n°7d : vérification de types du serveur de mesure avec les fichiers de verrouillage.
 name: Sonde des sources de données
 
 on:
@@ -6,66 +6,26 @@ on:
     branches: [data-probe]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   probe:
     runs-on: ubuntu-latest
-    env:
-      WRANGLER_SEND_METRICS: 'false'
-      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verrouillage, build, serveur de mesure
+      - name: Serveur de mesure
+        working-directory: worker
         run: |
-          set +e
-          rm -rf probe7c && mkdir -p probe7c
-          { node --version; npm --version; } > probe7c/versions.txt
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund > probe7c/lock-root.txt 2>&1
-          (cd worker && npm install --package-lock-only --ignore-scripts --no-audit --no-fund) > probe7c/lock-worker.txt 2>&1
-          cp package-lock.json probe7c/package-lock.json
-          cp worker/package-lock.json probe7c/worker-package-lock.json
-          npm ci --ignore-scripts --no-audit --no-fund > probe7c/ci-root.txt 2>&1; echo "exit=$?" >> probe7c/ci-root.txt
-          VITE_METRICS_URL=https://exemple.workers.dev npm run check > probe7c/check.txt 2>&1; echo "exit=$?" >> probe7c/check.txt
-          ls -la dist dist/assets >> probe7c/check.txt
-          grep -o 'https://exemple.workers.dev' dist/assets/*.js | head -2 >> probe7c/check.txt
-          cd worker
-          npm ci --ignore-scripts --no-audit --no-fund > ../probe7c/ci-worker.txt 2>&1; echo "exit=$?" >> ../probe7c/ci-worker.txt
-          npx wrangler --version > ../probe7c/wrangler.txt 2>&1
-          npm run typecheck > ../probe7c/typecheck.txt 2>&1; echo "exit=$?" >> ../probe7c/typecheck.txt
-          npm test > ../probe7c/tests.txt 2>&1; echo "exit=$?" >> ../probe7c/tests.txt
-          npx wrangler deploy --dry-run --outdir dist > ../probe7c/dryrun.txt 2>&1; echo "exit=$?" >> ../probe7c/dryrun.txt
-          ls -la dist >> ../probe7c/dryrun.txt
-          printf 'ADMIN_PASSWORD=mot-de-passe-de-test-123\nADMIN_PATH=chemin-secret-de-test-42\n' > .dev.vars
-          (npx wrangler dev --port 8787 --ip 127.0.0.1 > ../probe7c/dev.txt 2>&1 &)
-          for i in $(seq 1 90); do curl -s -o /dev/null http://127.0.0.1:8787/robots.txt && break; sleep 1; done
-          B=http://127.0.0.1:8787
-          {
-            echo "== collecte"; curl -s -o /dev/null -w "%{http_code}\n" -X POST -H 'Origin: https://aligotaure.github.io' -H 'Content-Type: text/plain' --data '{"v":1,"c":{"app.sessions":1,"openMeteo.calls10":150}}' $B/collect
-            echo "== collecte autre origine"; curl -s -o /dev/null -w "%{http_code}\n" -X POST -H 'Origin: https://pirate.example' --data '{"v":1,"c":{"app.sessions":1}}' $B/collect
-            echo "== racine"; curl -s -o /dev/null -w "%{http_code}\n" $B/
-            echo "== page de connexion"; curl -s -w "\n%{http_code}\n" $B/chemin-secret-de-test-42 | tail -c 200
-            echo "== connexion"; curl -s -D - -o /dev/null -X POST --data 'motdepasse=mot-de-passe-de-test-123' $B/chemin-secret-de-test-42/connexion | grep -i 'HTTP/\|set-cookie\|location'
-            c=$(curl -s -D - -o /dev/null -X POST --data 'motdepasse=mot-de-passe-de-test-123' $B/chemin-secret-de-test-42/connexion | grep -i '^set-cookie' | sed 's/^[Ss]et-[Cc]ookie: //; s/;.*//')
-            echo "== tableau"; curl -s -H "Cookie: $c" $B/chemin-secret-de-test-42 | grep -o 'hero__value">[^<]*'
-          } > ../probe7c/dev-tests.txt 2>&1
-          pkill -f "wrangler" || true
-          sleep 2
-          cd ..
-          for f in probe7c/*.txt; do echo "== $f"; tail -c 2500 "$f"; done
-      - name: Données réelles autour du Parmelan
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm test
+          npx wrangler deploy --dry-run --outdir dist
+      - name: Carte
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
         run: |
-          set +e
-          python3 scripts-probe/fetch.py probe7 > probe7c/fetch.txt 2>&1
-          du -sh probe7 >> probe7c/fetch.txt
-          cat probe7c/fetch.txt | tail -20
-      - name: Publier les résultats
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add probe7c
-          git commit -q -m "Résultats de la sonde n°7c" || echo "rien à committer"
-          git push
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check

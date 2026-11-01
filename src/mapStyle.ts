@@ -210,11 +210,7 @@ export function buildStyle(state: AppState): StyleSpecification {
         source: SOURCES.meteoFine,
         minzoom: FINE_MIN_ZOOM,
         layout: { visibility: 'none' },
-        paint: {
-          'line-color': '#ffffff',
-          'line-opacity': 0.75,
-          'line-width': ['interpolate', ['linear'], ['zoom'], 13, 0.5, 16, 1.4],
-        },
+        paint: { 'line-color': 'rgba(0,0,0,0)', 'line-opacity': 0.85, 'line-width': 1 },
       },
       {
         id: LAYERS.meteoLabel,
@@ -234,7 +230,7 @@ export function buildStyle(state: AppState): StyleSpecification {
         id: LAYERS.meteoFineLabel,
         type: 'symbol',
         source: SOURCES.meteoFine,
-        minzoom: 14.5,
+        minzoom: 14,
         layout: {
           visibility: 'none',
           'text-field': '',
@@ -255,8 +251,13 @@ export function applySelection(map: MapLibreMap, selected: ReadonlySet<string>):
   for (const layer of FILTERED_LAYERS) map.setFilter(layer, filter);
 }
 
-export function applyOpacity(map: MapLibreMap, opacity: number): void {
-  map.setPaintProperty(LAYERS.fill, 'fill-opacity', opacity);
+/**
+ * Opacité des forêts. Avec `dimAtFineZoom`, elles s'estompent là où la grille fine de l'indice
+ * s'affiche, pour que ses carrés restent lisibles.
+ */
+export function applyOpacity(map: MapLibreMap, opacity: number, dimAtFineZoom = false): void {
+  const fill = dimAtFineZoom ? ['step', ['zoom'], opacity, FINE_MIN_ZOOM, Math.round(opacity * 45) / 100] : opacity;
+  map.setPaintProperty(LAYERS.fill, 'fill-opacity', fill as never);
   map.setPaintProperty(LAYERS.overview, 'raster-opacity', opacity);
 }
 

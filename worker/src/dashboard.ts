@@ -3,7 +3,7 @@
  * de la page n'en autorise pas). Graphiques en SVG ; survol = info-bulle native (`<title>`),
  * et toutes les valeurs sont aussi dans le tableau.
  */
-import { METRICS, METRIC_NAMES, SERVICES, type MetricName, type ServiceId } from '../../src/metricsSchema.ts';
+import { METRIC_DEFS as METRICS, METRIC_NAMES, SERVICES, type MetricName, type ServiceId } from '../../src/metricsSchema.ts';
 import { lastDays } from './days.ts';
 import type { CountRow } from './store.ts';
 
@@ -338,7 +338,7 @@ ${['large', 'etroit'].map((variant) => columnChart({ label: `Appels Open-Meteo p
   const services = Object.keys(SERVICES) as ServiceId[];
   const bodyRows = services
     .map((service) => {
-      const names = METRIC_NAMES.filter((n) => METRICS[n].service === service && !('error' in METRICS[n]));
+      const names = METRIC_NAMES.filter((n) => METRICS[n].service === service && !METRICS[n].error);
       if (!names.length) return '';
       const head = `<tr><th colspan="5" scope="rowgroup">${esc(SERVICES[service].label)}</th></tr>`;
       const lines = names.map((name) => {
@@ -351,7 +351,7 @@ ${['large', 'etroit'].map((variant) => columnChart({ label: `Appels Open-Meteo p
     .join('');
   const table = `<section class="card"><h2>Tous les compteurs</h2><div class="table-wrap"><table><thead><tr><th scope="col">Compteur</th><th scope="col">Aujourd’hui</th><th scope="col">7 jours</th><th scope="col">${period} jours</th><th scope="col">Par visite</th></tr></thead><tbody>${bodyRows}</tbody></table></div></section>`;
 
-  const errorNames = METRIC_NAMES.filter((n) => 'error' in METRICS[n]);
+  const errorNames = METRIC_NAMES.filter((n) => METRICS[n].error);
   const errorLines = errorNames
     .map((name) => ({ name, total: t.sum(days, [name]), today: t.day(today, [name]) }))
     .filter((e) => e.total > 0)

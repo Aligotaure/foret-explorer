@@ -62,6 +62,9 @@ export const METRICS = {
 
 export type MetricName = keyof typeof METRICS;
 
+/** Même liste, vue comme des définitions homogènes (facteur d'affichage, erreur…). */
+export const METRIC_DEFS: Readonly<Record<MetricName, MetricDef>> = METRICS;
+
 export const METRIC_NAMES = Object.keys(METRICS) as MetricName[];
 
 export function isMetricName(name: string): name is MetricName {
