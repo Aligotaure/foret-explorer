@@ -11,7 +11,7 @@ import { CLASS_BY_CODE } from './forestClasses';
 import { SOIL_BY_ID, type SoilId } from './soils';
 import type { WeatherSummary } from './weather';
 
-export type MushroomId = 'cepe' | 'girolle' | 'trompette' | 'chanterelle';
+export type MushroomId = 'cepe' | 'girolle' | 'trompette' | 'chanterelle' | 'morille';
 
 export interface Mushroom {
   id: MushroomId;
@@ -33,7 +33,15 @@ export interface Mushroom {
   frost: number;
   /** Résumé pour la fiche « Je cherche… ». */
   summary: string;
+  /** Arbres en clair, quand les libellés BD Forêt ne parlent pas (« autre feuillu pur »). */
+  trees?: string;
+  /** Confusion dangereuse ou précaution propre à l'espèce (affichée en encadré dans la fiche). */
+  caution?: string;
 }
+
+/** Rappel affiché dans chaque fiche : l'indice ne dit rien de la comestibilité. */
+export const GENERAL_CAUTION =
+  'L’indice dit où chercher, pas ce qui se mange. Au moindre doute, faites contrôler la récolte par un pharmacien ou une société mycologique.';
 
 /** Hôtes communs : feuillus et conifères « à cèpes ». */
 const BROADLEAF = { 'FF1G01-01': 1, 'FF1-09-09': 1, 'FF1-10-10': 1, 'FF1-00-00': 0.85, 'FF1-00': 0.5, FO1: 0.4 };
@@ -56,6 +64,7 @@ export const MUSHROOMS: readonly Mushroom[] = [
     summary:
       'Sous chênes, hêtres, châtaigniers, sapins et épicéas adultes, plutôt sur sol acide et drainant. ' +
       'Pousse 1 à 2 semaines après une grosse pluie, par temps doux.',
+    caution: 'Ne pas confondre avec le bolet de Satan (pores et pied rouges, toxique).',
   },
   {
     id: 'girolle',
@@ -72,6 +81,8 @@ export const MUSHROOMS: readonly Mushroom[] = [
     summary:
       'Dans la mousse sous feuillus et sapins, surtout sur sol acide. Plus lente que le cèpe : ' +
       '1 à 3 semaines après la pluie, et la pousse dure longtemps.',
+    caution:
+      'Ne pas confondre avec la fausse girolle ni le clitocybe de l’olivier (toxique), qui ont de vraies lames sous le chapeau.',
   },
   {
     id: 'trompette',
@@ -104,6 +115,42 @@ export const MUSHROOMS: readonly Mushroom[] = [
     summary:
       'Chanterelles grises, en masse dans les sapinières et pessières moussues sur sol acide et frais. ' +
       'Les plus tardives : supportent le froid et les petites gelées.',
+    caution:
+      'Vérifier les plis sous le chapeau : de petits champignons bruns à vraies lames poussent au même endroit, et certains sont mortels.',
+  },
+  {
+    id: 'morille',
+    label: 'Morilles',
+    singular: 'la morille',
+    latin: 'Morchella spp.',
+    hosts: {
+      'FF1-49-49': 1, // « autre feuillu pur » : frênaies surtout, ormes, érables
+      FP: 1, // peupleraies
+      'FF1-00-00': 0.9, // mélanges de feuillus, ripisylves
+      'FF1-00': 0.8, // feuillus en îlots, haies
+      FF0: 0.8, // forêt sans couvert arboré : coupes, chablis, places de feu
+      FF31: 0.7,
+      'FF2G61-61': 0.6, // morilles de montagne, en lisière et dans les coupes
+      FF32: 0.6,
+      'FF2-63-63': 0.4,
+      'FF2-00-00': 0.4,
+      FO1: 0.4,
+      'FF1-09-09': 0.3,
+      'FF1G01-01': 0.3,
+    },
+    soils: { calcaire: 1, humide: 0.9, marne: 0.9, moraine: 0.8, eboulis: 0.7, gres: 0.5, cristallin: 0.3 },
+    season: { 2: 0.2, 3: 0.8, 4: 1, 5: 1, 6: 0.7, 7: 0.3 },
+    temp: [8, 15],
+    tempRamp: 4,
+    lag: [3, 7, 16, 24],
+    frost: 0.6,
+    trees: 'frênes, ormes, peupliers, bords de rivière ; en montagne, sapins et épicéas, surtout dans les coupes',
+    summary:
+      'Au printemps, quand le sol se réchauffe : sous les frênes et les peupliers, dans les forêts de bord de rivière ' +
+      'et les vieux vergers ; en montagne, en lisière et dans les coupes. Une à deux semaines après une pluie douce.',
+    caution:
+      'La gyromitre, mortelle, pousse en même temps sous les conifères : chapeau plissé en cervelle, pas creusé d’alvéoles. ' +
+      'Les morilles se mangent toujours cuites, au moins 20 minutes, jamais crues.',
   },
 ];
 
@@ -143,6 +190,12 @@ export interface SpotContext {
   forestCode?: string | null;
   /** Nature du sol au point (null : hors de la zone couverte). */
   soil?: SoilId | null;
+  /**
+   * Carré de la grille fine : qualité des arbres hôtes présents (0–1) et facteur de sol déjà
+   * moyenné sur ces arbres. Remplacent `forestCode` et `soil`, sans phrase d'explication.
+   */
+  hostQuality?: number;
+  soilFactor?: number;
 }
 
 const clamp = (x: number, lo = 0, hi = 1): number => Math.min(hi, Math.max(lo, x));
@@ -222,9 +275,14 @@ export function scoreMushroom(m: Mushroom, w: WeatherSummary, month: number, ctx
     const soil = SOIL_BY_ID.get(ctx.soil);
     const word = pref >= 0.9 ? 'favorable' : pref >= 0.6 ? 'correct' : 'peu favorable';
     reasons.push(`Sol : ${soil?.label.toLowerCase()} (${word}).`);
-    score *= 0.4 + 0.6 * pref; // le sol module sans exclure : la géologie n'est qu'une tendance
+    score *= soilModulation(pref);
   }
+  if (ctx.hostQuality !== undefined) score *= ctx.hostQuality;
+  if (ctx.soilFactor !== undefined) score *= ctx.soilFactor;
 
   score = clamp(score);
   return { id: m.id, score, level: levelOf(score), reasons };
 }
+
+/** Le sol module sans exclure : la géologie n'est qu'une tendance. */
+export const soilModulation = (pref: number): number => 0.4 + 0.6 * pref;

@@ -1,0 +1,260 @@
+/**
+ * Grille fine de l'indice de pousse : carrés d'environ 500 m, à partir du zoom FINE_MIN_ZOOM.
+ *
+ * Chaque case météo de 4,5 km est découpée en FINE_DIVISIONS × FINE_DIVISIONS carrés. Pour chacun :
+ *  - forêts et sols relevés sur 3 × 3 points, dans les tuiles déjà affichées ;
+ *  - altitude IGN au centre, gardée dans le navigateur (elle ne change pas) ;
+ *  - météo de la case parente, températures ramenées à l'altitude du carré (−0,65 °C par 100 m).
+ * La pluie reste celle de la case : le modèle météo n'est pas plus fin.
+ */
+import type { MultiPolygon, Polygon, Position } from 'geojson';
+import type { Map as MapLibreMap } from 'maplibre-gl';
+import { FINE_DIVISIONS, FINE_MAX_CELLS } from './config';
+import { LAYERS } from './mapStyle';
+import { scoreMushroom, soilModulation, type Level, type Mushroom } from './mushrooms';
+import { SOIL_BY_ID, type SoilId } from './soils';
+import { BASE_STEP_LAT, BASE_STEP_LON, type DailySeries, type WeatherSummary } from './weather';
+
+export const FINE_STEP_LAT = BASE_STEP_LAT / FINE_DIVISIONS;
+export const FINE_STEP_LON = BASE_STEP_LON / FINE_DIVISIONS;
+/** Gradient thermique standard (°C par mètre). */
+export const LAPSE_RATE = 0.0065;
+
+export interface FineCell {
+  /** « I:J », indices du carré dans la grille fine mondiale. */
+  id: string;
+  /** Identifiant de la case météo parente (grille de 4,5 km, facteur 1). */
+  parentId: string;
+  lat: number;
+  lon: number;
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}
+
+interface Bounds {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}
+
+/** Carrés qui touchent la vue ; null s'il y en a plus de `max`. */
+export function fineCellsForBounds(b: Bounds, max = FINE_MAX_CELLS): FineCell[] | null {
+  const i0 = Math.floor(b.south / FINE_STEP_LAT);
+  const i1 = Math.floor(b.north / FINE_STEP_LAT);
+  const j0 = Math.floor(b.west / FINE_STEP_LON);
+  const j1 = Math.floor(b.east / FINE_STEP_LON);
+  if ((i1 - i0 + 1) * (j1 - j0 + 1) > max) return null;
+  const cells: FineCell[] = [];
+  for (let i = i0; i <= i1; i++) {
+    for (let j = j0; j <= j1; j++) {
+      const south = (i * BASE_STEP_LAT) / FINE_DIVISIONS;
+      const west = (j * BASE_STEP_LON) / FINE_DIVISIONS;
+      cells.push({
+        id: `${i}:${j}`,
+        parentId: `1:${Math.floor(i / FINE_DIVISIONS)}:${Math.floor(j / FINE_DIVISIONS)}`,
+        south: +south.toFixed(6),
+        north: +(south + FINE_STEP_LAT).toFixed(6),
+        west: +west.toFixed(6),
+        east: +(west + FINE_STEP_LON).toFixed(6),
+        lat: +(south + FINE_STEP_LAT / 2).toFixed(5),
+        lon: +(west + FINE_STEP_LON / 2).toFixed(5),
+      });
+    }
+  }
+  return cells;
+}
+
+// ── Relevé des forêts et des sols ────────────────────────────────────────────
+
+/** Ce qu'il y a sous un des 3 × 3 points du carré. */
+export interface Sample {
+  code: string | null;
+  soil: SoilId | null;
+}
+
+interface IndexedPolygon {
+  rings: Position[][];
+  value: string;
+}
+
+/** Point dans un polygone (règle pair-impair : les trous sont gérés). */
+function inside(rings: Position[][], x: number, y: number): boolean {
+  let hit = false;
+  for (const ring of rings) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const a = ring[i];
+      const b = ring[j];
+      if (!a || !b) continue;
+      const [xa = 0, ya = 0] = a;
+      const [xb = 0, yb = 0] = b;
+      if (ya > y !== yb > y && x < ((xb - xa) * (y - ya)) / (yb - ya) + xa) hit = !hit;
+    }
+  }
+  return hit;
+}
+
+/**
+ * Polygones affichés d'une couche, rangés par carré fin : chaque point relevé ne teste que les
+ * polygones dont l'emprise touche son carré. Une seule requête MapLibre pour toute la vue.
+ */
+class CellIndex {
+  private readonly buckets = new Map<string, IndexedPolygon[]>();
+
+  constructor(map: MapLibreMap, layer: string, property: string) {
+    if (!map.getLayer(layer)) return;
+    for (const feature of map.queryRenderedFeatures({ layers: [layer] })) {
+      const value = feature.properties?.[property];
+      if (typeof value !== 'string') continue;
+      const geometry = feature.geometry as Polygon | MultiPolygon;
+      const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.type === 'MultiPolygon' ? geometry.coordinates : [];
+      for (const rings of polygons) {
+        const outer = rings[0];
+        if (!outer?.length) continue;
+        let west = Infinity;
+        let south = Infinity;
+        let east = -Infinity;
+        let north = -Infinity;
+        for (const [x = 0, y = 0] of outer) {
+          if (x < west) west = x;
+          if (x > east) east = x;
+          if (y < south) south = y;
+          if (y > north) north = y;
+        }
+        const entry = { rings, value };
+        for (let i = Math.floor(south / FINE_STEP_LAT); i <= Math.floor(north / FINE_STEP_LAT); i++) {
+          for (let j = Math.floor(west / FINE_STEP_LON); j <= Math.floor(east / FINE_STEP_LON); j++) {
+            const key = `${i}:${j}`;
+            const bucket = this.buckets.get(key);
+            if (bucket) bucket.push(entry);
+            else this.buckets.set(key, [entry]);
+          }
+        }
+      }
+    }
+  }
+
+  valueAt(cellId: string, x: number, y: number): string | null {
+    for (const p of this.buckets.get(cellId) ?? []) if (inside(p.rings, x, y)) return p.value;
+    return null;
+  }
+}
+
+const OFFSETS = [1 / 6, 1 / 2, 5 / 6] as const;
+/** Relevés complets (carré entièrement visible) : ils ne changent pas, on les garde pour la visite. */
+const samplesCache = new Map<string, Sample[]>();
+
+/**
+ * Forêts et sols de chaque carré, d'après les tuiles affichées (attendre qu'elles soient chargées).
+ * Un carré à cheval sur le bord de l'écran n'est relevé que sur ses points visibles.
+ */
+export function sampleCells(map: MapLibreMap, cells: readonly FineCell[]): Map<string, Sample[]> {
+  const out = new Map<string, Sample[]>();
+  const todo = cells.filter((c) => {
+    const cached = samplesCache.get(c.id);
+    if (cached) out.set(c.id, cached);
+    return !cached;
+  });
+  if (!todo.length) return out;
+
+  const forests = new CellIndex(map, LAYERS.forestHit, 'code_tfv');
+  const soils = new CellIndex(map, LAYERS.geologyHit, 'sol');
+  const view = map.getBounds();
+  if (samplesCache.size > 60_000) samplesCache.clear();
+  for (const c of todo) {
+    const samples: Sample[] = [];
+    let complete = true;
+    for (const fy of OFFSETS) {
+      for (const fx of OFFSETS) {
+        const x = c.west + fx * (c.east - c.west);
+        const y = c.south + fy * (c.north - c.south);
+        if (!view.contains([x, y])) {
+          complete = false;
+          continue;
+        }
+        const code = forests.valueAt(c.id, x, y);
+        const soil = code ? soils.valueAt(c.id, x, y) : null;
+        samples.push({ code, soil: soil && SOIL_BY_ID.has(soil) ? (soil as SoilId) : null });
+      }
+    }
+    if (!samples.length) continue;
+    out.set(c.id, samples);
+    if (complete) samplesCache.set(c.id, samples);
+  }
+  return out;
+}
+
+export const hasForest = (samples: readonly Sample[] | undefined): boolean => Boolean(samples?.some((s) => s.code));
+
+// ── Altitudes (cache permanent dans le navigateur) ───────────────────────────
+
+const ALTITUDE_KEY = 'foret-explorer:altitudes';
+const ALTITUDE_MAX_ENTRIES = 40_000;
+let altitudes: Map<string, number | null> | null = null;
+
+/** Altitudes connues des carrés (null : hors couverture du RGE ALTI). */
+export function altitudeCache(): Map<string, number | null> {
+  if (altitudes) return altitudes;
+  altitudes = new Map();
+  try {
+    const raw = localStorage.getItem(ALTITUDE_KEY);
+    const saved = raw ? (JSON.parse(raw) as { v?: number; z?: Record<string, number | null> }) : null;
+    if (saved?.v === 1 && saved.z) for (const [k, v] of Object.entries(saved.z)) altitudes.set(k, v);
+  } catch {
+    /* stockage indisponible : les altitudes seront redemandées */
+  }
+  return altitudes;
+}
+
+export function saveAltitudes(): void {
+  const cache = altitudeCache();
+  // Les plus anciennes d'abord dans la Map : on les oublie si le cache devient trop gros.
+  for (const key of cache.keys()) {
+    if (cache.size <= ALTITUDE_MAX_ENTRIES) break;
+    cache.delete(key);
+  }
+  try {
+    localStorage.setItem(ALTITUDE_KEY, JSON.stringify({ v: 1, z: Object.fromEntries(cache) }));
+  } catch {
+    /* quota dépassé : le cache reste en mémoire pour la visite */
+  }
+}
+
+// ── Indice d'un carré ─────────────────────────────────────────────────────────
+
+/** Série météo de la case parente, températures ramenées à l'altitude `z`. */
+export function atAltitude(series: DailySeries, z: number | null): DailySeries {
+  if (z === null || !Number.isFinite(series.elevation)) return series;
+  const shift = -LAPSE_RATE * (z - series.elevation);
+  const move = (t: number | null): number | null => (t === null ? null : Math.round((t + shift) * 10) / 10);
+  return { ...series, tmax: series.tmax.map(move), tmin: series.tmin.map(move), elevation: z };
+}
+
+export interface FineScore {
+  level: Level;
+  score: number;
+  /** Part des points du carré sous un arbre hôte (0–1). */
+  coverage: number;
+}
+
+/**
+ * Indice d'un carré pour un champignon : qualité moyenne des arbres hôtes présents et sol
+ * moyen sous ces arbres. Null si aucun point du carré n'est sous un arbre hôte.
+ */
+export function scoreFineCell(m: Mushroom, w: WeatherSummary, month: number, samples: readonly Sample[]): FineScore | null {
+  let hosts = 0;
+  let quality = 0;
+  let soil = 0;
+  for (const s of samples) {
+    const weight = s.code ? (m.hosts[s.code] ?? 0) : 0;
+    if (weight <= 0) continue;
+    hosts++;
+    quality += weight;
+    soil += s.soil ? soilModulation(m.soils[s.soil]) : 1;
+  }
+  if (!hosts) return null;
+  const { score, level } = scoreMushroom(m, w, month, { hostQuality: quality / hosts, soilFactor: soil / hosts });
+  return { score, level, coverage: hosts / samples.length };
+}

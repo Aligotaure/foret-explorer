@@ -4,7 +4,8 @@
 //   npm run test:e2e                  # démarre Vite, teste, s'arrête
 //
 // Variables : BASE_URL=http://… pour tester un serveur déjà lancé (il doit exposer
-// window.map, c.-à-d. tourner en mode développement) ; HEADED=1 pour voir le navigateur.
+// window.map, c.-à-d. tourner en mode développement, avec VITE_METRICS_URL=https://mesures.test) ;
+// HEADED=1 pour voir le navigateur.
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
@@ -38,6 +39,8 @@ const waitForMap = (page) =>
 
 async function startServer() {
   if (process.env.BASE_URL) return { url: process.env.BASE_URL, close: async () => {} };
+  // Serveur de mesure fictif (intercepté par mocks.mjs) : on vérifie les envois sans rien publier.
+  process.env.VITE_METRICS_URL ??= 'https://mesures.test';
   const { createServer } = await import('vite');
   const server = await createServer({ server: { port: 5199, strictPort: false, open: false }, logLevel: 'error' });
   await server.listen();
@@ -162,7 +165,7 @@ async function desktopTests(browser, base) {
     check('bilan : nature du sol', /Calcaires et dolomies|Moraines et dépôts glaciaires/.test(spot.rows[1] ?? ''), spot.rows[1]);
     check('bilan : altitude IGN', /^Altitude\s*930 m$/.test(spot.rows[2] ?? ''), spot.rows[2]);
     check('bilan : pluie des 20 jours', /mm de pluie/.test(spot.summary ?? '') && spot.bars >= 8, `${spot.summary} (${spot.bars} barres)`);
-    check('bilan : un verdict par champignon', spot.verdicts.length === 4, spot.verdicts.join(', '));
+    check('bilan : un verdict par champignon (5 espèces)', spot.verdicts.length === 5 && spot.verdicts.includes('Morilles'), spot.verdicts.join(', '));
     check('surbrillance du polygone cliqué', spot.highlight === JSON.stringify(['==', ['get', 'id'], target.id]), spot.highlight);
     await page.screenshot({ path: `${OUT}03-bureau-bilan.png` });
     await page.locator('#spot .panel__close').click();
@@ -192,6 +195,46 @@ async function desktopTests(browser, base) {
   check('état de la grille dans la légende', Boolean(cepes.status), cepes.status);
   await page.screenshot({ path: `${OUT}04-bureau-cepes.png` });
 
+  // Grille fine : carrés de 500 m à partir du zoom 13 (mode indice)
+  const before = log.altitude.length;
+  await page.evaluate(() => window.map.jumpTo({ zoom: 13.6 }));
+  await page.waitForFunction(() => window.map.querySourceFeatures('meteo-fin').length > 0, null, { timeout: 20000 });
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('#legend .legend-hint')].some((p) => /carrés? de 500 m avec arbres hôtes/.test(p.textContent)),
+    null,
+    { timeout: 20000 },
+  );
+  await idle(page);
+  const fine = await page.evaluate(() => {
+    const features = window.map.querySourceFeatures('meteo-fin');
+    return {
+      count: features.length,
+      visible: window.map.getLayoutProperty('meteo-fin-cellules', 'visibility'),
+      filter: JSON.stringify(window.map.getFilter('meteo-fin-cellules')),
+      altitudes: [...new Set(features.map((f) => f.properties.z))].length,
+      levels: [...new Set(features.map((f) => f.properties.l_cepe))].sort(),
+      coverage: features.every((f) => f.properties.c_cepe >= 0 && f.properties.c_cepe <= 1),
+      coarseOpacity: JSON.stringify(window.map.getPaintProperty('meteo-cellules', 'fill-opacity')),
+      status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /500 m avec/.test(t)),
+      saved: (() => {
+        try {
+          return Object.keys(JSON.parse(localStorage.getItem('foret-explorer:altitudes')).z).length;
+        } catch {
+          return 0;
+        }
+      })(),
+    };
+  });
+  const batches = log.altitude.slice(before);
+  check('grille fine : carrés de 500 m dessinés', fine.count > 20 && fine.visible === 'visible' && fine.filter.includes('c_cepe'), `${fine.count} carrés, ${fine.levels.join(',')}`);
+  check('grille fine : altitudes IGN groupées et variées', batches.length >= 1 && batches.every((q) => q.includes('%7C')) && fine.altitudes > 5, `${batches.length} requête(s), ${fine.altitudes} altitudes`);
+  check('grille fine : altitudes gardées dans le navigateur', fine.saved > 20, `${fine.saved} altitudes`);
+  check('grille fine : la grille de 4,5 km s’efface au zoom 12', fine.coarseOpacity.startsWith('["step",["zoom"]'), fine.coarseOpacity.slice(0, 40));
+  check('grille fine : état dans la légende', Boolean(fine.status) && fine.coverage, fine.status);
+  await page.screenshot({ path: `${OUT}04b-bureau-grille-fine.png` });
+  await page.evaluate(() => window.map.jumpTo({ zoom: 11.5 }));
+  await idle(page);
+
   // Grille en mode pluie
   await page.getByText('Pluie cumulée', { exact: true }).click();
   const rain = await page.evaluate(() => ({
@@ -214,7 +257,46 @@ async function desktopTests(browser, base) {
   check('tuiles de géologie demandées', log.geologie.length > 0, log.geologie.slice(0, 2).join(', '));
   await page.screenshot({ path: `${OUT}05-bureau-sol.png` });
   await page.getByRole('switch', { name: 'Afficher la nature du sol' }).uncheck();
+
+  // Morilles : forêts hôtes de printemps, encadré de sécurité
+  await page.getByRole('button', { name: 'Morilles', exact: true }).click();
+  await idle(page);
+  const morel = await page.evaluate(() => ({
+    mushroom: window.store.state.mushroom,
+    filter: JSON.stringify(window.map.getFilter('bdforet-fill')),
+    caution: document.querySelector('.mushroom-card__caution')?.textContent ?? '',
+    season: document.querySelector('.mushroom-card__season')?.textContent ?? '',
+    facts: document.querySelector('.mushroom-card__facts')?.textContent ?? '',
+    favored: [...document.querySelectorAll('.soil-item.is-favored')].map((li) => li.dataset.soil),
+  }));
+  const springNow = [3, 4, 5, 6].includes(new Date().getMonth() + 1);
+  check('morilles : frênaies, peupleraies et coupes affichées', morel.mushroom === 'morille' && ['FF1-49-49', 'FP', 'FF0'].every((c) => morel.filter.includes(c)), morel.filter.slice(0, 90));
+  check('morilles : encadré gyromitre et cuisson', /gyromitre/i.test(morel.caution) && /20 minutes/.test(morel.caution) && /pas ce qui se mange/i.test(morel.caution), morel.caution.slice(0, 60));
+  check('morilles : saison de mars à juin, hors saison signalé', /mars à juin/.test(morel.facts) && (springNow || /Hors saison/.test(morel.season)), morel.season || morel.facts.slice(-30));
+  check('morilles : sols calcaires et alluvions favorables', ['calcaire', 'humide', 'marne'].every((x) => morel.favored.includes(x)), morel.favored.join(','));
+  await page.screenshot({ path: `${OUT}05b-bureau-morilles.png` });
+  await page.getByRole('button', { name: 'Morilles', exact: true }).click();
   await page.getByRole('switch', { name: 'Afficher la grille météo' }).uncheck();
+
+  // Consommation des API : compteurs de la visite et envoi groupé au serveur de mesure
+  const totals = await page.evaluate(() => window.metrics.totals());
+  check(
+    'mesure : compteurs Open-Meteo, IGN, géologie',
+    totals['app.sessions'] === 1 &&
+      totals['openMeteo.requests'] >= 1 &&
+      totals['openMeteo.calls10'] === totals['openMeteo.locations'] * 15 &&
+      totals['ign.tiles.forest'] > 0 &&
+      totals['ign.tiles.plan'] > 0 &&
+      totals['ign.altitude.points'] > 20 &&
+      totals['pages.geology'] > 0 &&
+      totals['app.spots'] === 1,
+    JSON.stringify(totals),
+  );
+  await page.evaluate(() => window.metrics.flush());
+  await page.waitForTimeout(400);
+  const sent = log.mesures.filter((m) => m.method === 'POST' && m.path === '/collect');
+  const payload = sent.length ? JSON.parse(sent[sent.length - 1].body) : null;
+  check('mesure : envoi groupé, sans identifiant', sent.length >= 1 && payload?.v === 1 && Object.keys(payload).sort().join() === 'c,v' && payload.c['ign.tiles.forest'] > 0, sent.length ? sent[sent.length - 1].body.slice(0, 90) : 'aucun envoi');
 
   // Opacité, fond de carte
   await page.locator('.opacity input').fill('40');

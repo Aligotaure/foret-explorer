@@ -1,8 +1,15 @@
 # Publie la carte sur GitHub Pages à chaque push sur main :
 # https://aligotaure.github.io/foret-explorer/
 #
-# Avant le build, construit les tuiles « nature du sol » à partir des cartes géologiques du BRGM
-# (scripts/geologie/construire.sh) : elles sont servies par GitHub Pages avec le site.
+# 1. Construit les tuiles « nature du sol » à partir des cartes géologiques du BRGM
+#    (scripts/geologie/construire.sh) : elles sont servies par GitHub Pages avec le site.
+# 2. Teste le serveur de mesure (worker/) et, si les secrets Cloudflare existent, le publie :
+#    son adresse est alors donnée au build pour que la carte y envoie ses compteurs.
+# 3. Vérifie les types, construit la carte et la publie.
+#
+# Dépendances installées avec `npm ci --ignore-scripts` : versions figées par les
+# package-lock.json, aucun script d'installation exécuté. Les secrets Cloudflare ne sont
+# visibles que de l'étape qui publie le serveur de mesure.
 name: Publication GitHub Pages
 
 on:
@@ -22,6 +29,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      WRANGLER_SEND_METRICS: 'false'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,11 +47,45 @@ jobs:
       - name: Construire les tuiles « nature du sol »
         run: bash scripts/geologie/construire.sh
       - name: Installer les dépendances
-        run: npm install --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Tester le serveur de mesure
+        working-directory: worker
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm test
+      - name: Serveur de mesure configuré ?
+        id: config
         env:
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          CONFIGURED: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        run: echo "actif=$CONFIGURED" >> "$GITHUB_OUTPUT"
+      - name: Publier le serveur de mesure (Cloudflare)
+        id: mesures
+        if: steps.config.outputs.actif == 'true'
+        # Un souci côté Cloudflare ne doit pas bloquer la carte : elle part alors sans mesure.
+        continue-on-error: true
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_PATH: ${{ secrets.ADMIN_PATH }}
+        run: |
+          set -o pipefail
+          npx wrangler deploy 2>&1 | tee deploy.log
+          url=$(grep -Eo 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -n 1)
+          if [ -z "$url" ]; then echo "::error::Adresse du serveur de mesure introuvable dans la sortie de wrangler"; exit 1; fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          if [ -n "$ADMIN_PASSWORD" ]; then printf '%s' "$ADMIN_PASSWORD" | npx wrangler secret put ADMIN_PASSWORD; fi
+          if [ -n "$ADMIN_PATH" ]; then printf '%s' "$ADMIN_PATH" | npx wrangler secret put ADMIN_PATH; fi
+          if [ -z "$ADMIN_PASSWORD" ] || [ -z "$ADMIN_PATH" ]; then
+            echo "::warning::Secrets ADMIN_PASSWORD et ADMIN_PATH manquants : la page privée reste fermée."
+          fi
       - name: Vérifier les types et construire
         run: npm run check
+        env:
+          # Vide si le serveur de mesure n'est pas configuré : la carte n'envoie alors rien.
+          VITE_METRICS_URL: ${{ steps.mesures.outputs.url }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

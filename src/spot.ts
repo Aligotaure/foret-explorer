@@ -3,6 +3,7 @@ import { GEOLOGY } from './config';
 import { h, toast } from './dom';
 import { forestAt, soilAt, type ForestAtPoint, type SoilAtPoint } from './geology';
 import { icon } from './icons';
+import { track } from './metrics';
 import { LEVELS, MUSHROOMS, scoreMushroom, type MushroomScore } from './mushrooms';
 import { setHighlight } from './mapStyle';
 import { patternImageId, drawPattern } from './soils';
@@ -111,6 +112,7 @@ export class SpotPanel {
 
   /** Ouvre le bilan du point cliqué. */
   async open(lngLat: LngLat, point: PointLike): Promise<void> {
+    track('app.spots');
     this.controller?.abort();
     const controller = new AbortController();
     this.controller = controller;
@@ -246,7 +248,7 @@ export class SpotPanel {
       h(
         'p',
         { class: 'spot__note' },
-        'Indice indicatif, fondé sur des règles de cueilleur : délai après la pluie, températures à cette altitude, arbres hôtes et sol. Météo : Open-Meteo.',
+        'Indice indicatif, fondé sur des règles de cueilleur : délai après la pluie, températures à cette altitude, arbres hôtes et sol. Il dit où chercher, pas ce qui se mange. Météo : Open-Meteo.',
       ),
     );
     this.body.replaceChildren(...parts);

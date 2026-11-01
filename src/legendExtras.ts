@@ -2,11 +2,11 @@
  * Sections ajoutées au panneau « Légendes » : « Je cherche… », nature du sol, météo.
  * Comme le reste du panneau, elles ne touchent jamais la carte : elles lisent et modifient le Store.
  */
-import { GEOLOGY } from './config';
+import { FINE_MIN_ZOOM, GEOLOGY } from './config';
 import { h } from './dom';
 import { CLASS_BY_CODE } from './forestClasses';
 import { RAIN_STEPS, describeStatus, indexMushroom, type MeteoLayer } from './meteoLayer';
-import { LEVELS, MUSHROOMS, MUSHROOM_BY_ID, hostCodes, type Mushroom } from './mushrooms';
+import { GENERAL_CAUTION, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, hostCodes, type Mushroom } from './mushrooms';
 import { SOIL_CLASSES, drawPattern } from './soils';
 import type { AppState, Store } from './state';
 import { collapsible, sectionTitle, switchInput } from './ui';
@@ -28,6 +28,7 @@ function seasonText(m: Mushroom): string {
 const MIXTURES = new Set(['FF1-00-00', 'FF2-00-00', 'FF2-80-80', 'FF2-90-90', 'FF31', 'FF32', 'FO3']);
 
 function hostText(m: Mushroom): string {
+  if (m.trees) return m.trees;
   const typical = Object.entries(m.hosts).filter(([, w]) => w >= 0.8);
   const names = typical
     .filter(([code]) => !MIXTURES.has(code))
@@ -77,8 +78,12 @@ export function mushroomSection(store: Store): { el: HTMLElement; sync(state: Ap
       return;
     }
     const [, start, end] = m.lag;
+    const outOfSeason = !m.season[new Date().getMonth() + 1];
     card.replaceChildren(
       h('p', { class: 'mushroom-card__summary' }, h('em', {}, m.latin), ' — ', m.summary),
+      ...(outOfSeason
+        ? [h('p', { class: 'mushroom-card__season' }, `Hors saison en ce moment : l’indice reste nul jusqu’à la saison (${seasonText(m)}).`)]
+        : []),
       h(
         'dl',
         { class: 'mushroom-card__facts' },
@@ -92,6 +97,12 @@ export function mushroomSection(store: Store): { el: HTMLElement; sync(state: Ap
         h('dd', {}, `${m.temp[0]} à ${m.temp[1]} °C en moyenne`),
         h('dt', {}, 'Saison'),
         h('dd', {}, seasonText(m)),
+      ),
+      h(
+        'div',
+        { class: 'mushroom-card__caution', role: 'note' },
+        ...(m.caution ? [h('p', {}, h('strong', {}, 'Attention : '), m.caution)] : []),
+        h('p', {}, GENERAL_CAUTION),
       ),
     );
   };
@@ -183,7 +194,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
     h(
       'p',
       { class: 'legend-hint' },
-      'Cases de 4,5 km, températures ramenées à l’altitude moyenne de chaque case. Pour un coin précis (forêt, sol, altitude exacte), touchez la carte. Météo : Open-Meteo.',
+      `Cases de 4,5 km, températures ramenées à l’altitude de chaque case. En mode indice, à partir du zoom ${FINE_MIN_ZOOM} : carrés de 500 m colorés seulement là où poussent les arbres hôtes, avec l’altitude et le sol de chaque carré ; la pluie reste celle de la case. Pour un point précis, touchez la carte. Météo : Open-Meteo.`,
     ),
   );
   const section = collapsible(sectionTitle('Météo des 20 derniers jours', 'rain'), content, false, toggle);

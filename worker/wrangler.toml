@@ -1,0 +1,21 @@
+# Serveur de mesure de la consommation des API de Forêt Explorer (Cloudflare Workers, offre gratuite).
+# Publié par .github/workflows/deploy.yml quand les secrets CLOUDFLARE_API_TOKEN et
+# CLOUDFLARE_ACCOUNT_ID existent ; ADMIN_PASSWORD et ADMIN_PATH y sont recopiés comme secrets.
+# En local : `npm run dev`, avec les secrets dans worker/.dev.vars (jamais committé).
+name = "foret-explorer-mesures"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# Seule la carte en ligne peut envoyer des compteurs.
+ALLOWED_ORIGINS = "https://aligotaure.github.io"
+
+[[durable_objects.bindings]]
+name = "STORE"
+class_name = "MetricsStore"
+
+# Durable Object à stockage SQLite : seul type disponible avec l'offre gratuite.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MetricsStore"]

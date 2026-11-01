@@ -66,6 +66,27 @@ export const PAST_DAYS = 20;
 export const WEATHER_MIN_ZOOM = 8;
 
 /**
+ * Grille fine de l'indice (carrés ≈ 500 m : chaque case météo découpée en 9 × 9), à partir de ce
+ * zoom. Au-delà de FINE_MAX_CELLS carrés à l'écran, on garde la grille de 4,5 km.
+ */
+export const FINE_MIN_ZOOM = 12;
+export const FINE_DIVISIONS = 9;
+export const FINE_MAX_CELLS = 1600;
+
+/**
+ * Altitude IGN : points par requête et délai entre deux requêtes. La Géoplateforme limite le calcul
+ * altimétrique à 5 requêtes par seconde et par adresse IP (erreur 429 au-delà).
+ */
+export const ALTITUDE_BATCH = 200; // ≈ 4 Ko d'URL ; au-delà de 15 Ko, le service refuse
+export const ALTITUDE_SPACING_MS = 250;
+
+/**
+ * Serveur de mesure de la consommation des API (Cloudflare, dossier `worker/`), fourni au build par
+ * la publication quand il est configuré. Vide : rien n'est envoyé.
+ */
+export const METRICS_URL = (import.meta.env.VITE_METRICS_URL ?? '').replace(/\/+$/, '');
+
+/**
  * Tuiles de géologie simplifiée, produites par `scripts/geologie/` et publiées avec le site.
  * En développement, on lit celles du site en ligne (GitHub Pages autorise le CORS).
  */

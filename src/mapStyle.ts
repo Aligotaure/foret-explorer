@@ -6,6 +6,7 @@ import {
   GEOLOGY_TILES_BASE,
   GLYPHS_URL,
   LABEL_FONT,
+  FINE_MIN_ZOOM,
   TILES,
   WEATHER_MIN_ZOOM,
 } from './config';
@@ -20,6 +21,7 @@ export const SOURCES = {
   bdForet: 'bdforet',
   geologie: 'geologie',
   meteo: 'meteo',
+  meteoFine: 'meteo-fin',
 } as const;
 
 export const LAYERS = {
@@ -38,7 +40,11 @@ export const LAYERS = {
   outline: 'bdforet-outline',
   meteoFill: 'meteo-cellules',
   meteoLine: 'meteo-contours',
+  /** Grille fine de l'indice (carrés de 500 m, zoom 13 et plus). */
+  meteoFineFill: 'meteo-fin-cellules',
+  meteoFineLine: 'meteo-fin-contours',
   meteoLabel: 'meteo-etiquettes',
+  meteoFineLabel: 'meteo-fin-etiquettes',
   highlightCasing: 'bdforet-highlight-casing',
   highlight: 'bdforet-highlight',
 } as const;
@@ -46,6 +52,7 @@ export const LAYERS = {
 /** Couches forêt qui suivent la sélection de la légende. */
 const FILTERED_LAYERS = [LAYERS.fill, LAYERS.outline] as const;
 const METEO_LAYERS = [LAYERS.meteoFill, LAYERS.meteoLine, LAYERS.meteoLabel] as const;
+const FINE_LAYERS = [LAYERS.meteoFineFill, LAYERS.meteoFineLine, LAYERS.meteoFineLabel] as const;
 
 /** Filtre qui ne correspond à aucun polygone (surbrillance vide). */
 const NO_HIGHLIGHT: FilterSpecification = ['==', ['get', 'id'], '__aucun__'];
@@ -131,6 +138,7 @@ export function buildStyle(state: AppState): StyleSpecification {
         data: { type: 'FeatureCollection', features: [] },
         attribution: ATTRIBUTION.meteo,
       },
+      [SOURCES.meteoFine]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
     },
     layers: [
       { id: LAYERS.basePlan, type: 'raster', source: SOURCES.planIgn, layout: { visibility: visibility(state.basemap === 'plan') } },
@@ -189,6 +197,22 @@ export function buildStyle(state: AppState): StyleSpecification {
         paint: { 'line-color': '#161630', 'line-opacity': 0.25, 'line-width': 0.6 },
       },
       {
+        id: LAYERS.meteoFineFill,
+        type: 'fill',
+        source: SOURCES.meteoFine,
+        minzoom: FINE_MIN_ZOOM,
+        layout: { visibility: 'none' },
+        paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.5 },
+      },
+      {
+        id: LAYERS.meteoFineLine,
+        type: 'line',
+        source: SOURCES.meteoFine,
+        minzoom: FINE_MIN_ZOOM,
+        layout: { visibility: 'none' },
+        paint: { 'line-color': 'rgba(0,0,0,0)', 'line-opacity': 0.85, 'line-width': 1 },
+      },
+      {
         id: LAYERS.meteoLabel,
         type: 'symbol',
         source: SOURCES.meteo,
@@ -202,6 +226,20 @@ export function buildStyle(state: AppState): StyleSpecification {
         },
         paint: { 'text-color': '#0b1f44', 'text-halo-color': 'rgba(255,255,255,0.9)', 'text-halo-width': 1.4 },
       },
+      {
+        id: LAYERS.meteoFineLabel,
+        type: 'symbol',
+        source: SOURCES.meteoFine,
+        minzoom: 14,
+        layout: {
+          visibility: 'none',
+          'text-field': '',
+          'text-font': [LABEL_FONT],
+          'text-size': 11,
+          'text-allow-overlap': false,
+        },
+        paint: { 'text-color': '#0b1f44', 'text-halo-color': 'rgba(255,255,255,0.9)', 'text-halo-width': 1.2 },
+      },
       { id: LAYERS.highlightCasing, type: 'line', ...vector, filter: NO_HIGHLIGHT, paint: { 'line-color': '#ffffff', 'line-width': 5, 'line-opacity': 0.9 } },
       { id: LAYERS.highlight, type: 'line', ...vector, filter: NO_HIGHLIGHT, paint: { 'line-color': '#6a6af4', 'line-width': 2.5 } },
     ],
@@ -213,8 +251,13 @@ export function applySelection(map: MapLibreMap, selected: ReadonlySet<string>):
   for (const layer of FILTERED_LAYERS) map.setFilter(layer, filter);
 }
 
-export function applyOpacity(map: MapLibreMap, opacity: number): void {
-  map.setPaintProperty(LAYERS.fill, 'fill-opacity', opacity);
+/**
+ * Opacité des forêts. Avec `dimAtFineZoom`, elles s'estompent là où la grille fine de l'indice
+ * s'affiche, pour que ses carrés restent lisibles.
+ */
+export function applyOpacity(map: MapLibreMap, opacity: number, dimAtFineZoom = false): void {
+  const fill = dimAtFineZoom ? ['step', ['zoom'], opacity, FINE_MIN_ZOOM, Math.round(opacity * 45) / 100] : opacity;
+  map.setPaintProperty(LAYERS.fill, 'fill-opacity', fill as never);
   map.setPaintProperty(LAYERS.overview, 'raster-opacity', opacity);
 }
 
@@ -229,6 +272,10 @@ export function applyGeology(map: MapLibreMap, on: boolean): void {
 
 export function setMeteoVisible(map: MapLibreMap, on: boolean): void {
   for (const layer of METEO_LAYERS) map.setLayoutProperty(layer, 'visibility', visibility(on));
+}
+
+export function setFineVisible(map: MapLibreMap, on: boolean): void {
+  for (const layer of FINE_LAYERS) map.setLayoutProperty(layer, 'visibility', visibility(on));
 }
 
 /** Rejoue tout l'état sur la carte (utile si l'état a changé pendant le chargement du style). */

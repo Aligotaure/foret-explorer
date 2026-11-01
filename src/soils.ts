@@ -26,14 +26,14 @@ export const SOIL_CLASSES: readonly SoilClass[] = [
     id: 'calcaire',
     label: 'Calcaires et dolomies',
     ground: 'sol calcaire, souvent caillouteux et sec',
-    mushrooms: 'trompettes, pieds-de-mouton, cèpes d’été sous feuillus',
+    mushrooms: 'trompettes, pieds-de-mouton, morilles, cèpes d’été sous feuillus',
     pattern: 'bricks',
   },
   {
     id: 'marne',
     label: 'Marnes et argiles',
     ground: 'sol calcaire, lourd et frais',
-    mushrooms: 'trompettes, pieds-de-mouton',
+    mushrooms: 'trompettes, pieds-de-mouton, morilles',
     pattern: 'dashes',
   },
   {
@@ -54,7 +54,7 @@ export const SOIL_CLASSES: readonly SoilClass[] = [
     id: 'moraine',
     label: 'Moraines et dépôts glaciaires',
     ground: 'sol mélangé, souvent décalcifié en surface',
-    mushrooms: 'cèpes, girolles ; trompettes s’il reste du calcaire',
+    mushrooms: 'cèpes, girolles ; trompettes et morilles s’il reste du calcaire',
     pattern: 'triangles',
   },
   {
@@ -67,8 +67,8 @@ export const SOIL_CLASSES: readonly SoilClass[] = [
   {
     id: 'humide',
     label: 'Alluvions, tourbes et zones humides',
-    ground: 'sol gorgé d’eau',
-    mushrooms: 'peu de champignons recherchés ; chanterelles en tube en bordure',
+    ground: 'sol frais à gorgé d’eau',
+    mushrooms: 'morilles sur les alluvions, sous frênes et peupliers ; chanterelles en tube en bordure',
     pattern: 'waves',
   },
 ];

@@ -925,6 +925,41 @@ li.is-off .swatch {
   color: #fff;
 }
 
+.mushroom-card__season {
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  background: var(--navy-700);
+  color: var(--lavender-soft);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+/* Précautions : encadré ambre, lisible sur le fond bleu nuit. */
+.mushroom-card__caution {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-left: 3px solid #f0a03c;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: rgba(240, 160, 60, 0.12);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.mushroom-card__caution p {
+  margin: 0;
+  color: #fde7c8;
+}
+
+.mushroom-card__caution p + p {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.mushroom-card__caution strong {
+  color: #ffc46b;
+}
+
 .legend-card--soil {
   max-height: none;
   padding: 6px 10px;

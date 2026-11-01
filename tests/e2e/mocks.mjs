@@ -190,6 +190,14 @@ function openMeteo(url) {
   return items.length === 1 ? items[0] : items;
 }
 
+// Altitude : 930 m pour un point seul (bilan d'un coin), relief varié pour une liste de points.
+function altitudes(url) {
+  const lats = (url.searchParams.get('lat') ?? '').split('|').map(Number);
+  const lons = (url.searchParams.get('lon') ?? '').split('|').map(Number);
+  if (lats.length === 1) return { elevations: [930] };
+  return { elevations: lats.map((lat, k) => Math.round(450 + Math.abs(Math.sin(lat * 900) * Math.cos(lons[k] * 700)) * 1300)) };
+}
+
 const COMPLETION = {
   status: 'OK',
   results: [
@@ -204,6 +212,13 @@ export async function installMocks(page, log) {
   log.meteo ??= [];
   log.geologie ??= [];
   log.altitude ??= [];
+  log.mesures ??= [];
+  // Serveur de mesure (adresse fictive définie au build des tests) : on garde les envois.
+  await page.route('https://mesures.test/**', (route) => {
+    const request = route.request();
+    log.mesures.push({ method: request.method(), path: new URL(request.url()).pathname, body: request.postData() ?? '' });
+    return route.fulfill({ status: 204, headers: CORS, body: '' });
+  });
   await page.route('https://api.open-meteo.com/**', (route) => {
     const url = new URL(route.request().url());
     log.meteo.push(url.search);
@@ -230,7 +245,7 @@ export async function installMocks(page, log) {
     }
     if (url.pathname.startsWith('/altimetrie/')) {
       log.altitude.push(url.search);
-      return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify({ elevations: [930] }) });
+      return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(altitudes(url)) });
     }
     if (url.pathname.startsWith('/annexes/ressources/vectorTiles/fonts/')) {
       return route.fulfill({ status: 200, contentType: 'application/x-protobuf', headers: CORS, body: Buffer.alloc(0) }); // police vide

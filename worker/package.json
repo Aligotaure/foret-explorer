@@ -1,0 +1,20 @@
+{
+  "name": "foret-explorer-mesures",
+  "private": true,
+  "type": "module",
+  "description": "Serveur de mesure de la consommation des API de Forêt Explorer (Cloudflare Workers, Durable Object SQLite).",
+  "scripts": {
+    "test": "node --no-warnings test/run.mjs",
+    "typecheck": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261023.1",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}

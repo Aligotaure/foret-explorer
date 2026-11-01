@@ -5,7 +5,9 @@
  * déjà ramenées à l'altitude du point (modèle numérique de terrain à 90 m, ou `elevation` fourni).
  * Plusieurs points par requête → réponse sous forme de tableau, dans le même ordre.
  */
-import { ALTITUDE_URL, OPEN_METEO_URL, PAST_DAYS } from './config';
+import { ALTITUDE_BATCH, ALTITUDE_SPACING_MS, ALTITUDE_URL, OPEN_METEO_URL, PAST_DAYS } from './config';
+import { track } from './metrics';
+import { openMeteoCalls10 } from './metricsSchema';
 
 export interface DailySeries {
   /** Dates (AAAA-MM-JJ) du plus ancien au plus récent ; le dernier jour est aujourd'hui. */
@@ -151,30 +153,80 @@ export async function fetchDaily(points: readonly WeatherPoint[], signal?: Abort
   if (points.every((p) => typeof p.elevation === 'number')) {
     url.searchParams.set('elevation', points.map((p) => Math.round(p.elevation ?? 0)).join(','));
   }
-  url.searchParams.set('daily', 'precipitation_sum,temperature_2m_max,temperature_2m_min');
+  const variables = ['precipitation_sum', 'temperature_2m_max', 'temperature_2m_min'];
+  url.searchParams.set('daily', variables.join(','));
   url.searchParams.set('past_days', String(PAST_DAYS));
   url.searchParams.set('forecast_days', '1');
   url.searchParams.set('timezone', 'Europe/Paris');
-  const response = await fetch(url, { signal });
-  if (!response.ok) throw new Error(`Météo : HTTP ${response.status}`);
-  const data = (await response.json()) as OpenMeteoDaily | OpenMeteoDaily[];
-  return (Array.isArray(data) ? data : [data]).map(parse);
+  track('openMeteo.requests');
+  track('openMeteo.locations', points.length);
+  track('openMeteo.calls10', openMeteoCalls10(points.length, PAST_DAYS + 1, variables.length));
+  try {
+    const response = await fetch(url, { signal });
+    if (!response.ok) throw new Error(`Météo : HTTP ${response.status}`);
+    const data = (await response.json()) as OpenMeteoDaily | OpenMeteoDaily[];
+    return (Array.isArray(data) ? data : [data]).map(parse);
+  } catch (error) {
+    if (!signal?.aborted) track('openMeteo.errors');
+    throw error;
+  }
+}
+
+const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const timer = window.setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      window.clearTimeout(timer);
+      reject(new DOMException('Aborted', 'AbortError'));
+    });
+  });
+
+const parseElevation = (value: unknown): number | null => {
+  const z = typeof value === 'number' ? value : (value as { z?: unknown } | null)?.z;
+  // L'API renvoie -99999 hors de sa couverture.
+  return typeof z === 'number' && z > -1000 ? Math.round(z) : null;
+};
+
+/**
+ * Altitudes IGN (RGE ALTI) d'une liste de points, en mètres : requêtes de ALTITUDE_BATCH points,
+ * l'une après l'autre (limite de 5 requêtes par seconde). `onBatch` reçoit chaque lot dès son arrivée.
+ */
+export async function fetchAltitudes(
+  points: readonly { lon: number; lat: number }[],
+  signal?: AbortSignal,
+  onBatch?: (start: number, values: (number | null)[]) => void,
+): Promise<(number | null)[]> {
+  const out: (number | null)[] = [];
+  for (let start = 0; start < points.length; start += ALTITUDE_BATCH) {
+    if (start > 0) await sleep(ALTITUDE_SPACING_MS, signal);
+    const chunk = points.slice(start, start + ALTITUDE_BATCH);
+    const url = new URL(ALTITUDE_URL);
+    url.searchParams.set('lon', chunk.map((p) => p.lon.toFixed(5)).join('|'));
+    url.searchParams.set('lat', chunk.map((p) => p.lat.toFixed(5)).join('|'));
+    url.searchParams.set('resource', 'ign_rge_alti_wld');
+    url.searchParams.set('zonly', 'true');
+    track('ign.altitude.requests');
+    track('ign.altitude.points', chunk.length);
+    let values: (number | null)[];
+    try {
+      const response = await fetch(url, { signal });
+      if (!response.ok) throw new Error(`Altitude : HTTP ${response.status}`);
+      const data = (await response.json()) as { elevations?: unknown[] };
+      values = chunk.map((_, i) => parseElevation(data.elevations?.[i]));
+    } catch (error) {
+      if (!signal?.aborted) track('ign.altitude.errors');
+      throw error;
+    }
+    out.push(...values);
+    onBatch?.(start, values);
+  }
+  return out;
 }
 
 /** Altitude IGN (RGE ALTI) d'un point, en mètres. */
 export async function fetchAltitude(lon: number, lat: number, signal?: AbortSignal): Promise<number | null> {
-  const url = new URL(ALTITUDE_URL);
-  url.searchParams.set('lon', lon.toFixed(6));
-  url.searchParams.set('lat', lat.toFixed(6));
-  url.searchParams.set('resource', 'ign_rge_alti_wld');
-  url.searchParams.set('zonly', 'true');
-  const response = await fetch(url, { signal });
-  if (!response.ok) throw new Error(`Altitude : HTTP ${response.status}`);
-  const data = (await response.json()) as { elevations?: (number | { z?: number })[] };
-  const first = data.elevations?.[0];
-  const z = typeof first === 'number' ? first : first?.z;
-  // L'API renvoie -99999 hors de sa couverture.
-  return typeof z === 'number' && z > -1000 ? Math.round(z) : null;
+  const [z] = await fetchAltitudes([{ lon, lat }], signal);
+  return z ?? null;
 }
 
 // ── Grille de cellules pour la carte ─────────────────────────────────────────
@@ -190,8 +242,8 @@ export interface GridCell {
 }
 
 /** Pas de base ≈ 4,5 km, doublé tant que la vue contient trop de cellules. */
-const BASE_STEP_LAT = 0.04;
-const BASE_STEP_LON = 0.056;
+export const BASE_STEP_LAT = 0.04;
+export const BASE_STEP_LON = 0.056;
 
 export function cellsForBounds(
   bounds: { west: number; south: number; east: number; north: number },
@@ -262,6 +314,7 @@ export async function weatherForCells(cells: readonly GridCell[], signal?: Abort
   loadCache(todayKey());
   const key = (c: GridCell): string => `${c.lat},${c.lon}`;
   const missing = cells.filter((c) => !cache.has(key(c)));
+  track('openMeteo.cacheHits', cells.length - missing.length);
   for (let k = 0; k < missing.length; k += 100) {
     const chunk = missing.slice(k, k + 100);
     const series = await fetchDaily(chunk, signal);

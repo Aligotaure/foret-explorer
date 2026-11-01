@@ -8,6 +8,7 @@ import { registerSoilPatterns } from './geology';
 import { LegendPanel } from './legend';
 import { LAYERS, SOURCES, applyBasemap, applyGeology, applyOpacity, applySelection, applyState, buildStyle } from './mapStyle';
 import { MeteoLayer } from './meteoLayer';
+import { flush, sessionTotals, startMetrics, track, trackMapRequest } from './metrics';
 import { initSearch } from './search';
 import { SpotPanel } from './spot';
 import { Store, loadInitialState, persistState } from './state';
@@ -17,6 +18,7 @@ import { initLegendToggle, initToolbar } from './toolbar';
 const wideScreen = window.matchMedia('(min-width: 641px)').matches;
 const store = new Store(loadInitialState(wideScreen)); // légende ouverte d'office sur grand écran
 persistState(store);
+startMetrics(!wideScreen);
 
 // ── Carte ─────────────────────────────────────────────────────────────────────
 const map = new maplibregl.Map({
@@ -31,6 +33,11 @@ const map = new maplibregl.Map({
   dragRotate: false,
   pitchWithRotate: false,
   touchPitch: false,
+  // Compte les tuiles et polices demandées (consommation des API), sans modifier la requête.
+  transformRequest: (url, resourceType) => {
+    trackMapRequest(url, resourceType);
+    return { url };
+  },
 });
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
@@ -78,7 +85,7 @@ map.on('load', () => {
   meteo.applyMode();
   store.subscribe((state, prev) => {
     if (state.selected !== prev.selected) applySelection(map, state.selected);
-    if (state.opacity !== prev.opacity) applyOpacity(map, state.opacity);
+    if (state.opacity !== prev.opacity) applyOpacity(map, state.opacity, meteo.dimsForests);
     if (state.basemap !== prev.basemap) applyBasemap(map, state.basemap);
     if (state.geology !== prev.geology) applyGeology(map, state.geology);
     if (state.weatherMode !== prev.weatherMode || state.mushroom !== prev.mushroom) meteo.applyMode();
@@ -119,11 +126,13 @@ const shownErrors = new Set<string>();
 map.on('error', (event) => {
   const sourceId = (event as { sourceId?: string }).sourceId;
   console.warn('[carte]', sourceId ?? '', event.error?.message ?? event.error);
+  if (sourceId === SOURCES.geologie) track('pages.geology.errors');
+  else if (sourceId) track('ign.tiles.errors');
   if (sourceId === SOURCES.bdForet && !shownErrors.has(sourceId)) {
     shownErrors.add(sourceId);
     toast('La BD Forêt ne répond pas pour le moment (réseau ou service IGN).', 5000);
   }
 });
 
-// En développement, `map`, `store` et `spot` sont accessibles depuis la console du navigateur.
-if (import.meta.env.DEV) Object.assign(window, { map, store, spot });
+// En développement, `map`, `store`, `spot` et `metrics.totals()` sont accessibles depuis la console.
+if (import.meta.env.DEV) Object.assign(window, { map, store, spot, metrics: { totals: sessionTotals, flush } });
