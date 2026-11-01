@@ -1,4 +1,4 @@
-# Sonde temporaire n°5c : test de la chaîne de construction des tuiles de géologie.
+# Sonde temporaire n°6 : altimétrie IGN multi-points (limites, format, CORS, POST).
 name: Sonde des sources de données
 
 on:
@@ -13,38 +13,45 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Construire les tuiles de géologie
+      - name: Altimétrie multi-points
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
-          bash -x scripts/geologie/construire.sh > construire.txt 2>&1 || echo "ÉCHEC code $?" >> construire.txt
-          ogrinfo -so .cache/geologie/tout.geojsonl >> construire.txt 2>&1 || true
-          mkdir -p probe5
-          cp construire.txt probe5/
-          cp .cache/geologie/rapport-*.json probe5/ || true
-          cp public/data/geologie/info.json public/data/geologie/metadata.json probe5/ || true
-          (cd public/data/geologie && find . -name '*.pbf' | awk -F/ '{print $2}' | sort | uniq -c) > probe5/tuiles-par-zoom.txt || true
-          du -sh public/data/geologie >> probe5/tuiles-par-zoom.txt || true
-          # Échantillon de tuiles autour d'Annecy / Parmelan pour les tests locaux (zooms 9 à 13).
-          for z in 9 10 11 12 13; do
-            n=$((1<<z))
-            for lonlat in "6.13 45.90" "6.21 45.94" "6.30 45.97"; do
-              set -- $lonlat
-              x=$(python3 -c "print(int(($1+180)/360*$n))")
-              y=$(python3 -c "import math; print(int((1-math.log(math.tan(math.radians($2))+1/math.cos(math.radians($2)))/math.pi)/2*$n))")
-              for dx in -1 0 1; do for dy in -1 0 1; do
-                f="public/data/geologie/$z/$((x+dx))/$((y+dy)).pbf"
-                [ -f "$f" ] && mkdir -p "probe5/tuiles/$z/$((x+dx))" && cp "$f" "probe5/tuiles/$z/$((x+dx))/"
-              done; done
-            done
+          mkdir -p probe6
+          A="https://data.geopf.fr/altimetrie/1.0/calcul/alti/rest/elevation.json"
+          O="https://aligotaure.github.io"
+          curl -sS -H "Origin: $O" -D probe6/h2.txt -o probe6/r2.json "$A?lon=6.2%7C6.21&lat=45.94%7C45.95&resource=ign_rge_alti_wld&zonly=true" || true
+          for N in 50 150 250 400 800; do
+            q=$(python3 -c "
+          import sys
+          n=$N
+          lons='%7C'.join(f'{6.1+0.0011*i:.4f}' for i in range(n))
+          lats='%7C'.join(f'{45.9+0.0004*i:.4f}' for i in range(n))
+          print(f'lon={lons}&lat={lats}&resource=ign_rge_alti_wld&zonly=true')
+          ")
+            curl -sS -o probe6/r$N.json -w "N=$N http=%{http_code} time=%{time_total}s size=%{size_download} urllen=${#q}\n" "$A?$q" >> probe6/resume.txt || echo "N=$N curl error" >> probe6/resume.txt
+            head -c 300 probe6/r$N.json >> probe6/resume.txt; echo >> probe6/resume.txt
           done
-          du -sh probe5 >> probe5/tuiles-par-zoom.txt
+          curl -sS -X POST -H 'Content-Type: application/json' -H "Origin: $O" -D probe6/hpost-json.txt -o probe6/rpost-json.json "$A" -d '{"lon":"6.2|6.21","lat":"45.94|45.95","resource":"ign_rge_alti_wld","zonly":true}' || true
+          curl -sS -X POST -H 'Content-Type: application/x-www-form-urlencoded' -H "Origin: $O" -D probe6/hpost-form.txt -o probe6/rpost-form.json "$A" --data 'lon=6.2%7C6.21&lat=45.94%7C45.95&resource=ign_rge_alti_wld&zonly=true' || true
+          curl -sS -X POST -H 'Content-Type: text/plain' -H "Origin: $O" -D probe6/hpost-text.txt -o probe6/rpost-text.json "$A" -d '{"lon":"6.2|6.21","lat":"45.94|45.95","resource":"ign_rge_alti_wld","zonly":true}' || true
+          curl -sS -X OPTIONS -H "Origin: $O" -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: content-type' -D probe6/hpreflight.txt -o /dev/null "$A" || true
+          # Gros lot en POST JSON (800 points)
+          python3 -c "
+          import json
+          n=800
+          print(json.dumps({'lon':'|'.join(f'{6.1+0.0011*i:.4f}' for i in range(n)),'lat':'|'.join(f'{45.9+0.0004*i:.4f}' for i in range(n)),'resource':'ign_rge_alti_wld','zonly':True}))
+          " > probe6/body800.json
+          curl -sS -X POST -H 'Content-Type: application/json' -o probe6/rpost800.json -w "POST800 http=%{http_code} time=%{time_total}s size=%{size_download}\n" "$A" --data @probe6/body800.json >> probe6/resume.txt || true
+          head -c 300 probe6/rpost800.json >> probe6/resume.txt; echo >> probe6/resume.txt
+          rm -f probe6/body800.json
+          # Rafale de 10 requêtes (limite annoncée : 5/s)
+          for i in $(seq 0 9); do curl -sS -o /dev/null -w "%{http_code} " "$A?lon=6.2&lat=45.9$i&resource=ign_rge_alti_wld&zonly=true" || true; done > probe6/rafale.txt
+          echo >> probe6/rafale.txt
+          # Hors couverture et point en mer
+          curl -sS -o probe6/rhors.json "$A?lon=3.0%7C6.2&lat=43.0%7C45.94&resource=ign_rge_alti_wld&zonly=true" || true
       - name: Publier les résultats
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add probe5
-          git commit -q -m "Résultats de la sonde n°5" || echo "rien à committer"
+          git add probe6
+          git commit -q -m "Résultats de la sonde n°6" || echo "rien à committer"
           git push
