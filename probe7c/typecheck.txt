@@ -1,0 +1,7 @@
+
+> typecheck
+> tsc --noEmit
+
+src/dashboard.ts(48,83): error TS2339: Property 'scale' does not exist on type '{ readonly label: "Visites"; readonly service: "app"; readonly max: 1; } | { readonly label: "dont sur téléphone"; readonly service: "app"; readonly max: 1; } | { readonly label: "Bilans de coin ouverts"; readonly service: "app"; readonly max: 300; } | ... 18 more ... | { ...; }'.
+  Property 'scale' does not exist on type '{ readonly label: "Visites"; readonly service: "app"; readonly max: 1; }'.
+exit=2

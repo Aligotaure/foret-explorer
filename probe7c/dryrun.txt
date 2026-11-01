@@ -1,0 +1,17 @@
+
+ ⛅️ wrangler 4.156.0
+────────────────────
+Total Upload: 37.54 KiB / gzip: 12.29 KiB
+Your Worker has access to the following bindings:
+Binding                                                   Resource                  
+env.STORE (MetricsStore)                                  Durable Object            
+env.ALLOWED_ORIGINS ("https://aligotaure.github.io")      Environment Variable      
+
+--dry-run: exiting now.
+exit=0
+total 124
+drwxr-xr-x 2 runner runner  4096 Nov  1 13:09 .
+drwxr-xr-x 7 runner runner  4096 Nov  1 13:09 ..
+-rw-r--r-- 1 runner runner   123 Nov  1 13:09 README.md
+-rw-r--r-- 1 runner runner 38441 Nov  1 13:09 index.js
+-rw-r--r-- 1 runner runner 69702 Nov  1 13:09 index.js.map

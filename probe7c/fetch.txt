@@ -1,0 +1,6 @@
+ERREUR https://data.geopf.fr/tms/1.0.0/LANDCOVER-TMS.FORESTINVENTORY.V2/13/4234/2916.pbf HTTP Error 502: Bad Gateway
+ERREUR https://data.geopf.fr/tms/1.0.0/LANDCOVER-TMS.FORESTINVENTORY.V2/14/8469/5831.pbf HTTP Error 400: Bad Request
+octets de tuiles 2021769
+altitudes 900
+cases météo 49
+2.6M	probe7
