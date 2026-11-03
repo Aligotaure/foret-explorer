@@ -1,0 +1,19 @@
+2026-11-03 : 1972 cases, 1972 à mettre à jour (4366 appels pondérés) ; déjà dépensé : 0 sur l'heure, 0 sur 24 h, 0 sur 30 jours.
+100 cases mises à jour, 221 appels pondérés ; arrêt : budget du passage.
+100 cases dans 7 fichiers, 100 à jour du 2026-11-02 ; à publier.
+32_4.json
+32_5.json
+33_-1.json
+33_0.json
+33_1.json
+7
+72K	/tmp/meteo
+plus gros bloc : 33_1.json 11514 octets, 3553 compressé
+{"v":1,"pasLat":0.16,"pasLon":0.224,"bloc":8,"jours":30,"dernierJour":"2026-11-02","maj":"2026-11-03T11:49:38.815Z","cases":100,"aJour":100,"blocs":["32_4","32_5","33_-1","33_0","33_1","33_4","33_5"],"source":"Open-Meteo (open-meteo.com), CC BY 4.0 : modèles météo, pas de pluviomètres"}
+2026-10-04 2026-11-02 259:39 {"lat":41.52,"lon":8.848,"z":39,"c":"2026-11-02","p":[0,0.1,2.4,15.5,38.6,2,0,0,0,0,0,0,0,0,0,0,34.5,13.6,0,2,0,0,0,0,0,0,2.4,1.5,7.3,0],"x":[27.4,26.9,25.5,26.5,23.2,19.7,22.3,22.4,23.1,23,23.9,24.3,23.8,23.7,24,25,25.4,20.4,20.1,19.5,19,19.6,21,20.8,21.1,21.5,18.4,19.4,18.1,17.8],"n":[21.7,19.5,19.2,17.4,18.3,15.4,12.5,16.1,15.8,14,14,13.8,14.8,15.7,15.9,20.8,19,18,17,14.1,16.7,16.7,14.3,13.2,12
+--- second passage, budget 0
+100 cases reprises du dossier /tmp/meteo.
+2026-11-03 : 1972 cases, 1872 à mettre à jour (4145 appels pondérés) ; déjà dépensé : 221 sur l'heure, 221 sur 24 h, 221 sur 30 jours.
+0 cases mises à jour, 0 appels pondérés ; arrêt : budget du passage.
+100 cases dans 7 fichiers, 100 à jour du 2026-11-02.
+{"v":1,"appels":[[1793706549280,221.4]],"publie":"2026-11-03T11:49:38.815Z"}

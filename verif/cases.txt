@@ -1,0 +1,3 @@
+3439 cases de 0.12° × 0.168° écrites dans /home/runner/work/foret-explorer/foret-explorer/verif/cases-f3.json.
+1972 cases de 0.16° × 0.224° écrites dans /home/runner/work/foret-explorer/foret-explorer/verif/cases-f4.json.
+1285 cases de 0.2° × 0.28° écrites dans /home/runner/work/foret-explorer/foret-explorer/verif/cases-f5.json.
