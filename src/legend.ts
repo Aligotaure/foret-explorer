@@ -2,7 +2,8 @@ import { BDFORET } from './config';
 import { h } from './dom';
 import { ALL_CODES, FOREST_CLASSES, GROUPS, PRESETS, codesOfGroup, type GroupId } from './forestClasses';
 import { icon } from './icons';
-import { mushroomSection, soilSection, weatherSection } from './legendExtras';
+import { ABOUT_URL } from './legal';
+import { mushroomSection, soilSection, weatherSection, zonesSection } from './legendExtras';
 import type { MeteoLayer } from './meteoLayer';
 import type { AppState, BasemapId, Store } from './state';
 import { collapsible, sectionTitle } from './ui';
@@ -95,17 +96,28 @@ export class LegendPanel {
       close,
     );
     const mushrooms = mushroomSection(this.store);
+    const zones = zonesSection(this.store);
     const soils = soilSection(this.store);
     const weather = weatherSection(this.store, this.meteo);
-    this.extras.push(mushrooms, soils, weather);
+    this.extras.push(mushrooms, zones, soils, weather);
+    const link = (text: string, anchor: string): HTMLAnchorElement => h('a', { href: `${ABOUT_URL}#${anchor}` }, text);
     const body = h(
       'div',
       { class: 'panel__body' },
       mushrooms.el,
       this.renderForestSection(),
+      zones.el,
       soils.el,
       weather.el,
       this.renderBasemapSection(),
+      h(
+        'footer',
+        { class: 'legend-footer' },
+        link('Avant de cueillir', 'identifier'),
+        link('Conditions', 'conditions'),
+        link('Mentions légales', 'mentions-legales'),
+        link('Confidentialité', 'confidentialite'),
+      ),
     );
     this.root.replaceChildren(header, body);
   }

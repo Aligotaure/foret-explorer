@@ -1,0 +1,40 @@
+# Vérifie chaque pull request (dont celles de Dependabot) avant fusion : types, build, tests de bout
+# en bout de la carte (services simulés) et tests du serveur de mesure. Rien n'est publié ici, et
+# aucun secret n'est utilisé.
+name: Vérification
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Installer les dépendances
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Vérifier les types et construire
+        run: npm run check
+      - name: Tests de bout en bout
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+      - name: Tester le serveur de mesure
+        working-directory: worker
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm test

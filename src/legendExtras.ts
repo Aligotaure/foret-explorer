@@ -2,14 +2,16 @@
  * Sections ajoutées au panneau « Légendes » : « Je cherche… », nature du sol, météo.
  * Comme le reste du panneau, elles ne touchent jamais la carte : elles lisent et modifient le Store.
  */
-import { FINE_MIN_ZOOM, GEOLOGY } from './config';
+import { FINE_MIN_ZOOM, GEOLOGY, ZONES } from './config';
 import { h } from './dom';
 import { CLASS_BY_CODE } from './forestClasses';
+import { ABOUT_URL } from './legal';
 import { RAIN_STEPS, describeStatus, indexMushroom, type MeteoLayer } from './meteoLayer';
 import { GENERAL_CAUTION, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, hostCodes, type Mushroom } from './mushrooms';
 import { SOIL_CLASSES, drawPattern } from './soils';
 import type { AppState, Store } from './state';
 import { collapsible, sectionTitle, switchInput } from './ui';
+import { onZonesInfo, zonesInfo } from './zones';
 
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
@@ -105,6 +107,63 @@ export function mushroomSection(store: Store): { el: HTMLElement; sync(state: Ap
         h('p', {}, GENERAL_CAUTION),
       ),
     );
+  };
+  return { el: section.el, sync };
+}
+
+/** « Où cueillir » : zones protégées (affichées par défaut) et forêts publiques, à titre indicatif. */
+export function zonesSection(store: Store): { el: HTMLElement; sync(state: AppState): void } {
+  const protectedToggle = switchInput('Afficher les zones protégées');
+  protectedToggle.addEventListener('change', () => store.update({ zones: protectedToggle.checked }));
+  const publicToggle = switchInput('Afficher les forêts publiques');
+  publicToggle.addEventListener('change', () => store.update({ publicForests: publicToggle.checked }));
+
+  const row = (toggle: HTMLInputElement, kind: string, title: string, text: string): HTMLElement =>
+    h(
+      'div',
+      { class: 'zone-row' },
+      h('span', { class: `zone-swatch zone-swatch--${kind}`, 'aria-hidden': 'true' }),
+      h('span', { class: 'zone-row__text' }, h('strong', {}, title), h('small', {}, text)),
+      toggle,
+    );
+  const status = h('p', { class: 'legend-hint' });
+  const content = h(
+    'div',
+    {},
+    h(
+      'div',
+      { class: 'legend-card legend-card--zones' },
+      row(
+        protectedToggle,
+        'protected',
+        'Zones protégées',
+        'Réserves naturelles et biologiques, cœurs de parc national, arrêtés de biotope, terrains des conservatoires : la cueillette y est souvent interdite ou limitée.',
+      ),
+      row(
+        publicToggle,
+        'public',
+        'Forêts publiques',
+        'Forêts domaniales et communales : cueillette familiale en général tolérée, sauf interdiction. Ailleurs, la forêt est le plus souvent privée : il faut l’accord du propriétaire.',
+      ),
+    ),
+    status,
+    h('p', { class: 'legend-hint' }, h('a', { class: 'legend-link', href: `${ABOUT_URL}#regles` }, 'Règles de cueillette et quantités')),
+  );
+  const describe = (): void => {
+    const { state, info } = zonesInfo();
+    const day = info?.genere ? new Date(info.genere) : null;
+    const when = day && !Number.isNaN(day.getTime()) ? `, données du ${day.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}` : '';
+    status.textContent =
+      state === 'missing'
+        ? 'Données des zones indisponibles pour le moment : le bilan d’un coin ne dit rien du statut du terrain.'
+        : `${ZONES.coverage}, à partir du zoom ${ZONES.minZoom}${when}. Sources : PatriNat (OFB, MNHN) et IGN (BD TOPO, d’après l’ONF). Indicatif : seuls les textes officiels et les panneaux sur place font foi.`;
+  };
+  onZonesInfo(describe);
+  describe();
+  const section = collapsible(sectionTitle('Où cueillir', 'shield'), content, false);
+  const sync = (state: AppState): void => {
+    protectedToggle.checked = state.zones;
+    publicToggle.checked = state.publicForests;
   };
   return { el: section.el, sync };
 }

@@ -1,5 +1,18 @@
 # Publie la carte sur GitHub Pages à chaque push sur main :
 # https://aligotaure.github.io/foret-explorer/
+#
+# 1. Construit les tuiles « nature du sol » à partir des cartes géologiques du BRGM
+#    (scripts/geologie/construire.sh) et les tuiles des zones protégées et forêts publiques
+#    (scripts/zones/construire.sh) : elles sont servies par GitHub Pages avec le site.
+# 2. Teste le serveur de mesure (worker/) et, si les secrets Cloudflare existent, le publie :
+#    son adresse est alors donnée au build pour que la carte y envoie ses compteurs.
+# 3. Vérifie les types, construit la carte et la publie.
+#
+# Sécurité : actions épinglées sur leur identifiant de commit (mises à jour par Dependabot),
+# dépendances installées avec `npm ci --ignore-scripts` (versions figées par les
+# package-lock.json, aucun script d'installation exécuté), pas de cache npm partagé, jeton
+# GitHub non conservé après le checkout. Les secrets Cloudflare ne sont visibles que de
+# l'étape qui publie le serveur de mesure.
 name: Publication GitHub Pages
 
 on:
@@ -19,18 +32,83 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      WRANGLER_SEND_METRICS: 'false'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
+          package-manager-cache: false
+      - name: Installer GDAL
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
+      - name: Cartes géologiques BRGM en cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/geologie/*.zip
+          key: geologie-brgm-${{ hashFiles('scripts/geologie/construire.sh') }}
+      - name: Construire les tuiles « nature du sol »
+        run: bash scripts/geologie/construire.sh
+      - name: Semaine en cours
+        id: semaine
+        run: echo "n=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - name: Zones protégées et forêts publiques en cache (retéléchargées chaque semaine)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .cache/zones/protection.geojsonl
+            .cache/zones/forets.geojsonl
+            .cache/zones/resume.json
+          key: zones-${{ hashFiles('scripts/zones/*') }}-${{ steps.semaine.outputs.n }}
+          restore-keys: zones-${{ hashFiles('scripts/zones/*') }}-
+      - name: Construire les tuiles des zones protégées et des forêts publiques
+        # Sans ces tuiles, la carte part quand même : le bilan d'un coin dit alors « statut inconnu ».
+        continue-on-error: true
+        run: bash scripts/zones/construire.sh
       - name: Installer les dépendances
-        run: npm install --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Tester le serveur de mesure
+        working-directory: worker
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm test
+      - name: Serveur de mesure configuré ?
+        id: config
         env:
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          CONFIGURED: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        run: echo "actif=$CONFIGURED" >> "$GITHUB_OUTPUT"
+      - name: Publier le serveur de mesure (Cloudflare)
+        id: mesures
+        if: steps.config.outputs.actif == 'true'
+        # Un souci côté Cloudflare ne doit pas bloquer la carte : elle part alors sans mesure.
+        continue-on-error: true
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_PATH: ${{ secrets.ADMIN_PATH }}
+        run: |
+          set -o pipefail
+          npx wrangler deploy 2>&1 | tee deploy.log
+          url=$(grep -Eo 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -n 1)
+          if [ -z "$url" ]; then echo "::error::Adresse du serveur de mesure introuvable dans la sortie de wrangler"; exit 1; fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          if [ -n "$ADMIN_PASSWORD" ]; then printf '%s' "$ADMIN_PASSWORD" | npx wrangler secret put ADMIN_PASSWORD; fi
+          if [ -n "$ADMIN_PATH" ]; then printf '%s' "$ADMIN_PATH" | npx wrangler secret put ADMIN_PATH; fi
+          if [ -z "$ADMIN_PASSWORD" ] || [ -z "$ADMIN_PATH" ]; then
+            echo "::warning::Secrets ADMIN_PASSWORD et ADMIN_PATH manquants : la page privée reste fermée."
+          fi
       - name: Vérifier les types et construire
         run: npm run check
-      - uses: actions/upload-pages-artifact@v3
+        env:
+          # Vide si le serveur de mesure n'est pas configuré : la carte n'envoie alors rien.
+          VITE_METRICS_URL: ${{ steps.mesures.outputs.url }}
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: dist
 
@@ -42,4 +120,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

@@ -1199,3 +1199,293 @@ li.is-off .swatch {
   flex: 1 1 0;
   min-width: 0;
 }
+
+/* ── Lien « À propos » dans la barre d'outils ─────────────────────────────── */
+a.btn-square {
+  text-decoration: none;
+}
+
+/* ── Avertissement à l'ouverture (fenêtre bloquante) ──────────────────────── */
+.disclaimer {
+  width: min(560px, calc(100% - 24px));
+  max-height: min(780px, calc(100% - 24px));
+  max-height: min(780px, calc(100dvh - 24px));
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 8px;
+  background: var(--navy-900);
+  color: #e5e5ff;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+.disclaimer[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.disclaimer::backdrop {
+  background: rgba(8, 8, 26, 0.74);
+  backdrop-filter: blur(2px);
+}
+
+.disclaimer__head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  background: var(--navy-700);
+}
+
+.disclaimer__icon {
+  display: inline-flex;
+  color: #ffc46b;
+}
+
+.disclaimer__heading {
+  margin: 0;
+  color: var(--lavender-soft);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.disclaimer__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 14px 18px 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.disclaimer__body:focus {
+  outline: none;
+}
+
+.disclaimer__body p {
+  margin: 0;
+}
+
+.disclaimer__body strong {
+  color: #fff;
+}
+
+.disclaimer__intro {
+  font-size: 15px;
+}
+
+.disclaimer__title {
+  margin: 16px 0 6px;
+  color: var(--lavender-soft);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.disclaimer__list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.disclaimer__foot {
+  display: grid;
+  flex: none;
+  gap: 10px;
+  padding: 12px 18px calc(14px + var(--safe-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--navy-800);
+}
+
+.disclaimer__terms {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.disclaimer__terms a {
+  color: var(--lavender-soft);
+}
+
+.disclaimer__accept {
+  min-height: var(--btn);
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.disclaimer__accept:not(:disabled):hover {
+  background: #7d7df6;
+}
+
+.disclaimer__accept:disabled {
+  background: var(--navy-600);
+  color: var(--muted);
+  cursor: wait;
+}
+
+@media (min-width: 641px) {
+  .disclaimer__foot {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .disclaimer {
+    width: calc(100% - 16px);
+    max-height: calc(100% - 16px);
+    max-height: calc(100dvh - 16px - var(--safe-top));
+  }
+
+  .disclaimer__body {
+    font-size: 13.5px;
+  }
+}
+
+/* ── Légende : « Où cueillir » et liens du bas ────────────────────────────── */
+.legend-card--zones {
+  max-height: none;
+  padding: 2px 10px;
+}
+
+.zone-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 2px;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.zone-row + .zone-row {
+  border-top: 1px solid var(--france-soft);
+}
+
+.zone-row__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.zone-row__text small {
+  display: block;
+  margin-top: 2px;
+  color: #6b6b94;
+  font-size: 11.5px;
+}
+
+.zone-row .switch {
+  flex: none;
+  margin-top: 1px;
+}
+
+.zone-swatch {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 3px;
+}
+
+.zone-swatch--protected {
+  border: 2px solid #b71c1c;
+  background:
+    repeating-linear-gradient(-45deg, rgba(183, 28, 28, 0.55) 0 2px, transparent 2px 6px),
+    #fff;
+}
+
+.zone-swatch--public {
+  border: 2px dashed #0f4d3a;
+  background: #f3f0e8;
+}
+
+.legend-link {
+  color: var(--lavender-soft);
+}
+
+.legend-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.legend-footer a {
+  color: var(--muted);
+}
+
+.legend-footer a:hover {
+  color: #fff;
+}
+
+/* ── Bilan : droit de cueillir ────────────────────────────────────────────── */
+.spot__rule {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.spot__rule strong {
+  color: #fff;
+}
+
+.spot__rule--muted {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.spot__alert {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-left: 3px solid #ef5350;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: rgba(239, 83, 80, 0.14);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.spot__alert-icon {
+  flex: none;
+  color: #ff8a80;
+  line-height: 0;
+}
+
+.spot__alert strong {
+  color: #ffcdd2;
+}
+
+.spot__alert p {
+  margin: 4px 0;
+  color: #fde2e2;
+}
+
+.spot__alert a {
+  color: #ffcdd2;
+  font-size: 12px;
+}
+
+.spot__warning {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  background: rgba(239, 83, 80, 0.14);
+  color: #ffcdd2;
+  font-size: 12.5px;
+  line-height: 1.4;
+}

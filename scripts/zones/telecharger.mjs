@@ -1,0 +1,189 @@
+// Télécharge, depuis le WFS de la Géoplateforme et en Lambert-93 (EPSG:2154), sur l'emprise donnée :
+//   - les espaces protégés de PatriNat (OFB, MNHN) dont le règlement peut interdire ou limiter
+//     la cueillette (réserves naturelles et biologiques, cœurs de parc national, arrêtés de
+//     protection, terrains des conservatoires) → protection.geojsonl ;
+//   - les forêts publiques de la BD TOPO de l'IGN (d'après l'ONF) → forets.geojsonl ;
+// et écrit resume.json (date, nombres par type), copié ensuite en info.json à côté des tuiles.
+//
+// Usage : node telecharger.mjs <dossier> [sud,ouest,nord,est]
+// Si les fichiers ont moins de 6 jours, rien n'est retéléchargé (FORCE=1 pour forcer). Si le service
+// ne répond pas et qu'une version précédente existe, on la garde (avertissement dans le journal).
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const WFS = 'https://data.geopf.fr/wfs';
+const PAGE = 5000;
+const [dir, emprise = '45.0,5.6,46.45,7.25'] = process.argv.slice(2);
+if (!dir) {
+  console.error('Usage : node telecharger.mjs <dossier> [sud,ouest,nord,est]');
+  process.exit(2);
+}
+mkdirSync(dir, { recursive: true });
+
+/** Couches PatriNat retenues. Mêmes types que src/zones.ts. */
+const PROTECTION = [
+  { typename: 'patrinat_rnn:rnn', type: 'rnn' },
+  { typename: 'patrinat_rnr:rnr', type: 'rnr' },
+  { typename: 'patrinat_pprnn:pprnn', type: 'perimetre' },
+  { typename: 'patrinat_pprnr:pprnr', type: 'perimetre' },
+  { typename: 'patrinat_rb:rb', type: 'rb' },
+  // Parcs nationaux : seul le cœur a une réglementation propre (pas l'aire d'adhésion).
+  { typename: 'patrinat_pn:parc_national', type: 'pn', garder: (p) => /c(œ|oe)ur/i.test(String(p.zone ?? '')) },
+  { typename: 'patrinat_apb:apb', type: 'apb' },
+  { typename: 'patrinat_aphn:aphn', type: 'aphn' },
+  { typename: 'patrinat_cdl:conservatoire_littoral', type: 'cdl' },
+  { typename: 'patrinat_cen:cen', type: 'cen' },
+];
+const FORETS = 'BDTOPO_V3:foret_publique';
+
+const fichiers = {
+  protection: join(dir, 'protection.geojsonl'),
+  forets: join(dir, 'forets.geojsonl'),
+  resume: join(dir, 'resume.json'),
+};
+
+function recent() {
+  if (process.env.FORCE === '1' || !Object.values(fichiers).every((f) => existsSync(f))) return false;
+  try {
+    const { genere, emprise: deja } = JSON.parse(readFileSync(fichiers.resume, 'utf8'));
+    return deja === emprise && Date.now() - Date.parse(genere) < 6 * 86400e3;
+  } catch {
+    return false;
+  }
+}
+
+async function telecharger(typename) {
+  const entites = [];
+  for (let start = 0; ; start += PAGE) {
+    const params = new URLSearchParams({
+      SERVICE: 'WFS',
+      VERSION: '2.0.0',
+      REQUEST: 'GetFeature',
+      TYPENAMES: typename,
+      OUTPUTFORMAT: 'application/json',
+      SRSNAME: 'EPSG:2154',
+      BBOX: `${emprise},urn:ogc:def:crs:EPSG::4326`,
+      COUNT: String(PAGE),
+      STARTINDEX: String(start),
+    });
+    let page;
+    for (let essai = 1; ; essai++) {
+      try {
+        const r = await fetch(`${WFS}?${params}`, {
+          headers: { 'User-Agent': 'foret-explorer (construction des tuiles)' },
+          signal: AbortSignal.timeout(180_000),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        page = await r.json();
+        break;
+      } catch (error) {
+        if (essai >= 3) throw new Error(`${typename} : ${error.message}`);
+        await new Promise((resolve) => setTimeout(resolve, 4000 * essai));
+      }
+    }
+    const lot = page.features ?? [];
+    entites.push(...lot);
+    if (lot.length < PAGE) return entites;
+  }
+}
+
+/** « Bout Du Lac D'Annecy » → « Bout du Lac d'Annecy » ; « le planay » → « Le planay ». */
+const PETITS = new Set(['de', 'du', 'des', 'la', 'le', 'les', 'et', 'en', 'sur', 'aux', 'au', 'à', 'sous']);
+function nom(valeur) {
+  const s = String(valeur ?? '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  const mots = s.split(' ').map((mot, i) => {
+    if (i === 0) return mot;
+    if (PETITS.has(mot.toLowerCase())) return mot.toLowerCase();
+    if (/^[DL]['’]/.test(mot)) return mot[0].toLowerCase() + mot.slice(1);
+    return mot;
+  });
+  const texte = mots.join(' ');
+  return texte[0].toUpperCase() + texte.slice(1);
+}
+
+/** « Périmètre De Protection De La Réserve Naturelle Nationale Du Bout Du Lac » → « Bout du Lac ». */
+const sansPerimetre = (s) =>
+  s.replace(/^p[ée]rim[èe]tre de protection de la r[ée]serve naturelle (nationale |r[ée]gionale )?(de l['’]|de la |du |des |de |d['’])?/i, '');
+
+const ligne = (properties, geometry) => JSON.stringify({ type: 'Feature', properties, geometry });
+
+async function construire() {
+  const compteurs = {};
+  const vus = new Set();
+  const protection = [];
+  for (const couche of PROTECTION) {
+    const entites = await telecharger(couche.typename);
+    for (const f of entites) {
+      const p = f.properties ?? {};
+      if (!f.geometry || (couche.garder && !couche.garder(p))) continue;
+      const id = String(p.id_mnhn ?? p.cd_sig ?? `${couche.typename}:${p.nom_site}`);
+      if (vus.has(id)) continue; // même zone dans deux couches (périmètres de protection)
+      vus.add(id);
+      let type = couche.type;
+      let texte = nom(p.nom_site);
+      if (/^p[ée]rim[èe]tre de protection/i.test(texte)) {
+        type = 'perimetre';
+        texte = nom(sansPerimetre(texte)) || texte;
+      }
+      const props = { type, nom: texte };
+      if (typeof p.url_fiche === 'string' && p.url_fiche.startsWith('https://inpn.mnhn.fr/')) props.url = p.url_fiche;
+      if (type === 'rb' && typeof p.zone === 'string' && p.zone) props.detail = p.zone; // Intégrale / Dirigée
+      protection.push(ligne(props, f.geometry));
+      compteurs[type] = (compteurs[type] ?? 0) + 1;
+    }
+    console.log(`${couche.typename} : ${entites.length} objets`);
+  }
+
+  const forets = [];
+  for (const f of await telecharger(FORETS)) {
+    const p = f.properties ?? {};
+    if (!f.geometry) continue;
+    const domaniale = /domaniale/i.test(String(p.nature ?? ''));
+    const texte = nom(p.toponyme).replace(/\b(Communale|Domaniale|Indivise|Sectionale|Départementale|Régionale)\b/g, (m) =>
+      m.toLowerCase(),
+    );
+    forets.push(ligne({ nature: domaniale ? 'domaniale' : 'autre', nom: texte || 'Forêt publique' }, f.geometry));
+    compteurs[domaniale ? 'forets_domaniales' : 'autres_forets_publiques'] =
+      (compteurs[domaniale ? 'forets_domaniales' : 'autres_forets_publiques'] ?? 0) + 1;
+  }
+  console.log(`${FORETS} : ${forets.length} objets`);
+  if (!protection.length || !forets.length) throw new Error('aucune zone téléchargée');
+
+  // Écriture atomique : un téléchargement raté ne laisse pas de fichier à moitié écrit.
+  writeFileSync(`${fichiers.protection}.tmp`, `${protection.join('\n')}\n`);
+  writeFileSync(`${fichiers.forets}.tmp`, `${forets.join('\n')}\n`);
+  writeFileSync(
+    `${fichiers.resume}.tmp`,
+    JSON.stringify(
+      {
+        genere: new Date().toISOString(),
+        emprise,
+        compteurs,
+        sources: [
+          'PatriNat (OFB, MNHN), espaces protégés, via le WFS de la Géoplateforme',
+          'IGN, BD TOPO® V3, forêts publiques (d’après l’ONF), Licence Ouverte Etalab 2.0',
+        ],
+      },
+      null,
+      1,
+    ),
+  );
+  for (const f of Object.values(fichiers)) renameSync(`${f}.tmp`, f);
+  console.log('Zones :', JSON.stringify(compteurs));
+}
+
+if (recent()) {
+  console.log('Zones déjà téléchargées il y a moins de 6 jours : rien à faire.');
+} else {
+  try {
+    await construire();
+  } catch (error) {
+    if (Object.values(fichiers).every((f) => existsSync(f))) {
+      console.log(`::warning::Zones non mises à jour (${error.message}) : on garde la version précédente.`);
+    } else {
+      console.error(`Zones : ${error.message}`);
+      process.exit(1);
+    }
+  }
+}

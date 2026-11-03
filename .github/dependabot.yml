@@ -1,0 +1,33 @@
+# Mises à jour des dépendances, une fois par semaine, en pull requests à relire avant de fusionner :
+# npm de la carte, npm du serveur de mesure (worker/) et actions GitHub (épinglées sur leur commit).
+# Une nouvelle version n'est proposée qu'au bout de 7 jours (cooldown) : le temps que les paquets
+# piégés soient repérés et retirés du registre. Les alertes de sécurité, elles, arrivent tout de suite.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      carte:
+        patterns: ['*']
+  - package-ecosystem: npm
+    directory: /worker
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      serveur-de-mesure:
+        patterns: ['*']
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ['*']

@@ -20,6 +20,10 @@ export interface AppState {
   weatherMode: WeatherMode;
   /** Couche « nature du sol » (motifs) affichée. */
   geology: boolean;
+  /** Zones protégées affichées (par défaut : oui, la cueillette y est souvent interdite). */
+  zones: boolean;
+  /** Contours des forêts publiques affichés. */
+  publicForests: boolean;
   /** Panneau « Légendes » ouvert (non persisté : dépend de l'écran). */
   legendOpen: boolean;
 }
@@ -59,6 +63,8 @@ interface PersistedState {
   mushroom?: unknown;
   weatherMode?: unknown;
   geology?: unknown;
+  zones?: unknown;
+  publicForests?: unknown;
 }
 
 /** État initial : préférences sauvegardées si elles existent, sinon valeurs par défaut. */
@@ -71,6 +77,8 @@ export function loadInitialState(legendOpen: boolean): AppState {
     mushroom: null,
     weatherMode: 'off',
     geology: false,
+    zones: true,
+    publicForests: false,
     legendOpen,
   };
 
@@ -108,6 +116,8 @@ export function loadInitialState(legendOpen: boolean): AppState {
     mushroom,
     weatherMode,
     geology: saved.geology === true,
+    zones: saved.zones !== false,
+    publicForests: saved.publicForests === true,
   };
 }
 
@@ -125,6 +135,8 @@ export function persistState(store: Store): void {
         mushroom: state.mushroom,
         weatherMode: state.weatherMode,
         geology: state.geology,
+        zones: state.zones,
+        publicForests: state.publicForests,
       };
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));

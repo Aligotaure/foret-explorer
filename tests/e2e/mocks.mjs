@@ -154,6 +154,26 @@ export function geologyTile() {
   ]);
 }
 
+// Zones : réserve naturelle sur le quart haut-gauche de chaque tuile, forêt publique sur le quart
+// bas-droit ; ailleurs, terrain sans statut public (forêt « sans doute privée »).
+export function zonesTile() {
+  const quarter = (x0, y0) => [
+    [
+      [x0, y0],
+      [x0 + 2048, y0],
+      [x0 + 2048, y0 + 2048],
+      [x0, y0 + 2048],
+    ],
+  ];
+  const protection = encodeTile('protection', [
+    { id: fid++, props: { type: 'rnn', nom: 'Réserve d’essai', url: 'https://inpn.mnhn.fr/espace/protege/FR3600000' }, rings: quarter(0, 0) },
+  ]);
+  const forests = encodeTile('foret_publique', [
+    { id: fid++, props: { nature: 'autre', nom: 'Forêt communale d’essai' }, rings: quarter(2048, 2048) },
+  ]);
+  return Buffer.concat([protection, forests]); // une tuile = suite de couches : on les met bout à bout
+}
+
 // Météo : 20 jours passés + aujourd'hui, avec deux grosses pluies il y a 10 et 13 jours
 // (relevés réels du 11 au 31 octobre 2026 vers 930 m, au-dessus de Nâves-Parmelan).
 const DAILY = {
@@ -213,6 +233,16 @@ export async function installMocks(page, log) {
   log.geologie ??= [];
   log.altitude ??= [];
   log.mesures ??= [];
+  log.zones ??= [];
+  await page.route('https://aligotaure.github.io/foret-explorer/data/zones/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    log.zones.push(path);
+    if (path.endsWith('/info.json')) {
+      const info = { genere: '2026-11-03T06:00:00.000Z', compteurs: { rnn: 1, autres_forets_publiques: 1 } };
+      return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(info) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/x-protobuf', headers: CORS, body: zonesTile() });
+  });
   // Serveur de mesure (adresse fictive définie au build des tests) : on garde les envois.
   await page.route('https://mesures.test/**', (route) => {
     const request = route.request();

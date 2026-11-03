@@ -75,6 +75,7 @@ export function trackMapRequest(url: string, resourceType?: string): void {
   if (resourceType !== 'Tile') return;
   if (url.includes('LANDCOVER-TMS.FORESTINVENTORY.V2')) track('ign.tiles.forest');
   else if (url.includes('/data/geologie/')) track('pages.geology');
+  else if (url.includes('/data/zones/')) track('pages.zones');
   else if (url.includes('LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2')) track('ign.tiles.plan');
   else if (url.includes('LAYER=ORTHOIMAGERY.ORTHOPHOTOS')) track('ign.tiles.ortho');
   else if (url.includes('LAYER=LANDCOVER.FORESTINVENTORY.V2')) track('ign.tiles.forestRaster');

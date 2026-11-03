@@ -1,0 +1,51 @@
+# Vérifie chaque matin que les services utilisés par la carte répondent : IGN (tuiles, altitude,
+# recherche, polices), Open-Meteo et le site en ligne (tuiles de géologie et des zones). Une seule
+# requête par service. En cas d'échec, l'exécution apparaît en rouge dans l'onglet Actions et
+# GitHub envoie un e-mail de notification (réglage par défaut des notifications Actions).
+#
+# Attention : GitHub suspend les tâches planifiées d'un dépôt public sans activité depuis 60 jours ;
+# il suffit alors de la réactiver dans l'onglet Actions.
+name: Surveillance des services
+
+on:
+  schedule:
+    - cron: '17 4 * * *' # 5 h 17 l'hiver, 6 h 17 l'été, heure de Paris
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  services:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Interroger les services
+        run: |
+          set +e
+          echec=0
+          verifier() { # nom, adresse, texte attendu dans la réponse (facultatif)
+            local nom=$1 url=$2 motif=${3:-}
+            local code
+            code=$(curl -sS -m 30 --retry 2 -o reponse -w '%{http_code}' -H 'Origin: https://aligotaure.github.io' "$url")
+            if [ "$code" != 200 ] || { [ -n "$motif" ] && ! grep -q -- "$motif" reponse; }; then
+              echo "::error::$nom ne répond pas correctement (HTTP $code) : $url"
+              echec=1
+            else
+              echo "OK  $nom ($(wc -c < reponse) octets)"
+            fi
+          }
+          W='https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&STYLE=normal'
+          verifier 'BD Forêt (tuiles vectorielles)' 'https://data.geopf.fr/tms/1.0.0/LANDCOVER-TMS.FORESTINVENTORY.V2/10/529/364.pbf'
+          verifier 'BD Forêt (aperçu raster)' "$W&LAYER=LANDCOVER.FORESTINVENTORY.V2&TILEMATRIXSET=PM_6_16&FORMAT=image/png&TILEMATRIX=10&TILEROW=364&TILECOL=529"
+          verifier 'Plan IGN' "$W&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&TILEMATRIXSET=PM&FORMAT=image/png&TILEMATRIX=12&TILEROW=1455&TILECOL=2118"
+          verifier 'Photographies aériennes' "$W&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&TILEMATRIXSET=PM&FORMAT=image/jpeg&TILEMATRIX=12&TILEROW=1455&TILECOL=2118"
+          verifier 'Altitude IGN' 'https://data.geopf.fr/altimetrie/1.0/calcul/alti/rest/elevation.json?lon=6.19&lat=45.92&resource=ign_rge_alti_wld&zonly=true' 'elevations'
+          verifier 'Recherche de lieu IGN' 'https://data.geopf.fr/geocodage/completion?text=Annecy&type=StreetAddress,PositionOfInterest&maximumResponses=1' 'results'
+          verifier 'Polices des étiquettes' 'https://data.geopf.fr/annexes/ressources/vectorTiles/fonts/Source%20Sans%20Pro%20Regular/0-255.pbf'
+          verifier 'Open-Meteo' 'https://api.open-meteo.com/v1/forecast?latitude=45.92&longitude=6.19&daily=precipitation_sum&past_days=1&forecast_days=1&timezone=Europe/Paris' 'precipitation_sum'
+          verifier 'Site en ligne' 'https://aligotaure.github.io/foret-explorer/' 'Forêt Explorer'
+          verifier 'Page À propos' 'https://aligotaure.github.io/foret-explorer/a-propos.html' 'Mentions légales'
+          verifier 'Tuiles de géologie' 'https://aligotaure.github.io/foret-explorer/data/geologie/info.json'
+          verifier 'Zones protégées et forêts publiques' 'https://aligotaure.github.io/foret-explorer/data/zones/info.json' 'genere'
+          exit $echec

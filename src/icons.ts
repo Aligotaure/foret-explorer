@@ -23,6 +23,9 @@ export const ICONS = {
   mushroom: svg('<path d="M3.5 11.5a8.5 7.5 0 0 1 17 0z"/><path d="M9.5 11.5v6.5a2.5 2.5 0 0 0 5 0v-6.5"/>'),
   rain: svg('<path d="M7 14.5a4 4 0 0 1-.6-7.95A5.5 5.5 0 0 1 17 7.5a3.5 3.5 0 0 1 0 7z"/><path d="m8.5 18-1 2.5M12.5 18l-1 2.5M16.5 18l-1 2.5"/>'),
   strata: svg('<path d="M3 7.5c3-2 6 2 9 0s6 2 9 0M3 12.5c3-2 6 2 9 0s6 2 9 0M3 17.5c3-2 6 2 9 0s6 2 9 0"/>'),
+  info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.01"/>'),
+  shield: svg('<path d="M12 3 5 6v5.2c0 4.4 2.9 8.1 7 9.8 4.1-1.7 7-5.4 7-9.8V6z"/><path d="m9 12 2 2 4-4"/>'),
+  alert: svg('<path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.4v.01"/>'),
 } as const;
 
 export type IconName = keyof typeof ICONS;

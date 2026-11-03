@@ -1,4 +1,4 @@
-# Sonde temporaire n°10 : forêts publiques, parcs et réserves, PatriNat, PRSF.
+# Sonde temporaire n°11 : vérification complète des protections (zones réelles, tests, aperçus).
 name: Sonde des sources de données
 
 on:
@@ -6,12 +6,54 @@ on:
     branches: [data-probe]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   probe:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      WRANGLER_SEND_METRICS: 'false'
     steps:
-      - uses: actions/checkout@v4
-      - name: Zones protégées et forêts publiques
-        run: python3 -u probe10/sonde.py
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: GDAL
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null && ogr2ogr --version
+      - name: Tuiles des zones (vraies données)
+        run: |
+          mkdir -p verif
+          { time bash scripts/zones/construire.sh; } 2>&1 | tee verif/zones.txt
+          cat public/data/zones/info.json | tee -a verif/zones.txt
+          find public/data/zones -name '*.pbf' | sed -E 's#.*/zones/([0-9]+)/.*#\1#' | sort | uniq -c | tee -a verif/zones.txt
+          ogrinfo -so .cache/zones/zones.gpkg protection | grep -E 'Feature Count|Extent' | tee -a verif/zones.txt
+          ogrinfo -so .cache/zones/zones.gpkg foret_publique | grep -E 'Feature Count|Extent' | tee -a verif/zones.txt
+      - name: Types et build
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check 2>&1 | tail -25 | tee verif/build.txt
+          ls -la dist | tee -a verif/build.txt
+          du -sh dist/data/zones | tee -a verif/build.txt
+      - name: Serveur de mesure
+        working-directory: worker
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm test 2>&1 | tail -8 | tee ../verif/worker.txt
+      - name: Tests de bout en bout
+        run: |
+          npx playwright install --with-deps chromium > /dev/null
+          set -o pipefail
+          npm run test:e2e 2>&1 | tee verif/e2e.txt || echo "E2E_ECHEC" >> verif/e2e.txt
+          mkdir -p verif/e2e && cp tests/e2e/shots/*.png verif/e2e/
+      - name: Aperçus avec les vraies données
+        run: node probe11/apercu.mjs 2>&1 | tee verif/apercu.txt || true
+      - name: Publier les résultats sur la branche de sonde
+        if: always()
+        run: |
+          git config user.name 'sonde'
+          git config user.email 'sonde@users.noreply.github.com'
+          git add -f verif
+          git commit -qm "Résultats de la sonde n°11" && git push -q origin HEAD:data-probe || echo "rien à publier"
