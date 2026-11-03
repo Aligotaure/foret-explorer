@@ -1,0 +1,36 @@
+# Sonde temporaire n°17 bis : zones de toute la France (après correction du dépassement de pile).
+name: Sonde n°17 bis
+
+on:
+  push:
+    branches: [data-probe-2]
+    paths: [.github/workflows/probe17-zones.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  zones:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Zones de toute la France (durée et tailles)
+        run: |
+          mkdir -p verif
+          sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
+          debut=$(date +%s)
+          { bash scripts/zones/construire.sh 2>&1 | tail -30; } > verif/zones-france17.txt
+          echo "durée : $(( $(date +%s) - debut )) s" >> verif/zones-france17.txt
+          ls -la .cache/zones >> verif/zones-france17.txt
+          bash probe17/tailles.sh public/data/zones >> verif/zones-france17.txt
+          cat public/data/zones/info.json >> verif/zones-france17.txt
+          cat verif/zones-france17.txt
+      - name: Publier
+        if: always()
+        run: bash probe17/publier.sh zones
+
