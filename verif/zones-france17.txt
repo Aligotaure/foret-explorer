@@ -4,9 +4,46 @@ patrinat_pprnn:pprnn : 16 objets
 patrinat_pprnr:pprnr : 2 objets
 patrinat_rb:rb : 267 objets
 patrinat_pn:parc_national : 16 objets
-Zones : Maximum call stack size exceeded
-durée : 14 s
-total 8
-drwxr-xr-x 2 runner runner 4096 Nov  3 11:49 .
-drwxr-xr-x 3 runner runner 4096 Nov  3 11:49 ..
-total : 0 tuiles, 
+patrinat_apb:apb : 1062 objets
+patrinat_aphn:aphn : 26 objets
+patrinat_cdl:conservatoire_littoral : 623 objets
+patrinat_cen:cen : 2552 objets
+BDTOPO_V3:foret_publique : 17071 objets
+Zones : {"perimetre":18,"rnn":151,"rnr":191,"rb":267,"pn":8,"apb":1062,"aphn":26,"cdl":623,"cen":2552,"forets_domaniales":1285,"autres_forets_publiques":15786}
+Découpage en tuiles vectorielles…
+Tuiles écrites dans /home/runner/work/foret-explorer/foret-explorer/public/data/zones (13366 fichiers, 83M).
+durée : 155 s
+total 565304
+drwxr-xr-x 2 runner runner      4096 Nov  3 11:52 .
+drwxr-xr-x 3 runner runner      4096 Nov  3 11:50 ..
+-rw-r--r-- 1 runner runner    797834 Nov  3 11:52 etiquettes.geojsonl
+-rw-r--r-- 1 runner runner 360899673 Nov  3 11:52 forets.geojsonl
+-rw-r--r-- 1 runner runner 126517038 Nov  3 11:52 protection.geojsonl
+-rw-r--r-- 1 runner runner       475 Nov  3 11:52 resume.json
+-rw-r--r-- 1 runner runner  90632192 Nov  3 11:52 zones.gpkg
+total : 13366 tuiles, 83M
+  z9 : 245 tuiles, 8.9M, médiane 17691 octets, plus grosse 161041 octets
+  z10 : 878 tuiles, 13M, médiane 6565 octets, plus grosse 73196 octets
+  z11 : 3019 tuiles, 21M, médiane 2322 octets, plus grosse 35933 octets
+  z12 : 9224 tuiles, 41M, médiane 1062 octets, plus grosse 20949 octets
+{
+ "genere": "2026-11-03T11:52:33.483Z",
+ "emprise": "41.2,-5.3,51.2,9.7",
+ "compteurs": {
+  "perimetre": 18,
+  "rnn": 151,
+  "rnr": 191,
+  "rb": 267,
+  "pn": 8,
+  "apb": 1062,
+  "aphn": 26,
+  "cdl": 623,
+  "cen": 2552,
+  "forets_domaniales": 1285,
+  "autres_forets_publiques": 15786
+ },
+ "sources": [
+  "PatriNat (OFB, MNHN), espaces protégés, via le WFS de la Géoplateforme",
+  "IGN, BD TOPO® V3, forêts publiques (d’après l’ONF), Licence Ouverte Etalab 2.0"
+ ]
+}
