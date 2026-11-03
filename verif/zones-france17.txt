@@ -1,0 +1,12 @@
+patrinat_rnn:rnn : 167 objets
+patrinat_rnr:rnr : 193 objets
+patrinat_pprnn:pprnn : 16 objets
+patrinat_pprnr:pprnr : 2 objets
+patrinat_rb:rb : 267 objets
+patrinat_pn:parc_national : 16 objets
+Zones : Maximum call stack size exceeded
+durée : 14 s
+total 8
+drwxr-xr-x 2 runner runner 4096 Nov  3 11:49 .
+drwxr-xr-x 3 runner runner 4096 Nov  3 11:49 ..
+total : 0 tuiles, 
