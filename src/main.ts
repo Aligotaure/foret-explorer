@@ -3,22 +3,38 @@ import './style.css';
 import maplibregl from 'maplibre-gl';
 import { BDFORET, INITIAL_VIEW, MAP_MAX_ZOOM, MAP_MIN_ZOOM } from './config';
 import { countClasses } from './counts';
+import { showDisclaimer } from './disclaimer';
 import { byId, h, toast } from './dom';
 import { registerSoilPatterns } from './geology';
 import { LegendPanel } from './legend';
-import { LAYERS, SOURCES, applyBasemap, applyGeology, applyOpacity, applySelection, applyState, buildStyle } from './mapStyle';
+import {
+  LAYERS,
+  SOURCES,
+  applyBasemap,
+  applyGeology,
+  applyOpacity,
+  applySelection,
+  applyState,
+  applyZones,
+  buildStyle,
+} from './mapStyle';
 import { MeteoLayer } from './meteoLayer';
 import { flush, sessionTotals, startMetrics, track, trackMapRequest } from './metrics';
 import { initSearch } from './search';
 import { SpotPanel } from './spot';
 import { Store, loadInitialState, persistState } from './state';
 import { initLegendToggle, initToolbar } from './toolbar';
+import { loadZonesInfo, noteZonesError, registerZonePattern } from './zones';
+
+// ── Avertissement : bloque la carte au moins 3 s tant qu'il n'est pas accepté ──
+void showDisclaimer();
 
 // ── État ──────────────────────────────────────────────────────────────────────
 const wideScreen = window.matchMedia('(min-width: 641px)').matches;
 const store = new Store(loadInitialState(wideScreen)); // légende ouverte d'office sur grand écran
 persistState(store);
 startMetrics(!wideScreen);
+void loadZonesInfo();
 
 // ── Carte ─────────────────────────────────────────────────────────────────────
 const map = new maplibregl.Map({
@@ -50,6 +66,7 @@ if (!wideScreen) {
   );
 }
 registerSoilPatterns(map);
+registerZonePattern(map);
 
 // ── Interface ─────────────────────────────────────────────────────────────────
 const app = byId('app');
@@ -88,6 +105,7 @@ map.on('load', () => {
     if (state.opacity !== prev.opacity) applyOpacity(map, state.opacity, meteo.dimsForests);
     if (state.basemap !== prev.basemap) applyBasemap(map, state.basemap);
     if (state.geology !== prev.geology) applyGeology(map, state.geology);
+    if (state.zones !== prev.zones || state.publicForests !== prev.publicForests) applyZones(map, state);
     if (state.weatherMode !== prev.weatherMode || state.mushroom !== prev.mushroom) meteo.applyMode();
   });
 });
@@ -127,7 +145,11 @@ map.on('error', (event) => {
   const sourceId = (event as { sourceId?: string }).sourceId;
   console.warn('[carte]', sourceId ?? '', event.error?.message ?? event.error);
   if (sourceId === SOURCES.geologie) track('pages.geology.errors');
-  else if (sourceId) track('ign.tiles.errors');
+  else if (sourceId === SOURCES.zones) {
+    // Tuile des zones manquante (réseau…) : le bilan ne doit plus affirmer qu'une forêt est privée.
+    track('pages.zones.errors');
+    if ((event.error as { status?: number } | undefined)?.status !== 404) noteZonesError();
+  } else if (sourceId) track('ign.tiles.errors');
   if (sourceId === SOURCES.bdForet && !shownErrors.has(sourceId)) {
     shownErrors.add(sourceId);
     toast('La BD Forêt ne répond pas pour le moment (réseau ou service IGN).', 5000);

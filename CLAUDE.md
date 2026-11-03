@@ -3,7 +3,9 @@
 Carte web des types de forêt de la **BD Forêt® V2** (IGN) avec une légende à cases à cocher pour
 choisir les types affichés, enrichie pour la cueillette : nature du sol (géologie BRGM), météo des
 20 derniers jours (Open-Meteo), altitude (IGN) et indice de pousse par champignon, en cases de 4,5 km
-puis en carrés de 500 m quand on zoome. Interface inspirée du panneau « Légendes » de cartes.gouv.fr
+puis en carrés de 500 m quand on zoome ; zones protégées et forêts publiques (droit de cueillir).
+Avertissement bloquant à l'ouverture (3 s) et page « À propos » (conditions, mentions légales,
+confidentialité). Interface inspirée du panneau « Légendes » de cartes.gouv.fr
 (thème sombre bleu nuit, icônes lavande, légende sur carte blanche). Une page privée (serveur
 Cloudflare, `worker/`) suit la consommation des API.
 
@@ -12,8 +14,11 @@ en tube, morilles) autour d'Annecy. La carte sert aussi sur téléphone, en for�
 le bureau.
 
 En ligne : https://aligotaure.github.io/foret-explorer/ (GitHub Pages, republié à chaque push sur
-`main` par `.github/workflows/deploy.yml` : tuiles de géologie, tests et publication du serveur de
-mesure s'il est configuré, `npm run check`, publication de `dist/`).
+`main` par `.github/workflows/deploy.yml` : tuiles de géologie et des zones, tests et publication du
+serveur de mesure s'il est configuré, `npm run check`, publication de `dist/`). Autres workflows :
+`verification.yml` (chaque pull request, Dependabot compris), `surveillance.yml` (chaque matin : les
+services répondent-ils ?). Liste des risques du site (document à part) :
+https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
 
 ## Commandes
 
@@ -21,13 +26,16 @@ mesure s'il est configuré, `npm run check`, publication de `dist/`).
   `package-lock.json` ; `npm install <paquet>` pour en ajouter un, puis committer le lockfile)
 - `npm run typecheck` : TypeScript strict, sans émission
 - `npm run build` : build statique dans `dist/` ; `npm run check` = typecheck + build
-- `npm run test:e2e` : test de bout en bout (Playwright + vrai MapLibre, services simulés,
-  59 vérifications). Première fois : `npx playwright install chromium`. Captures dans `tests/e2e/shots/`.
+- `npm run test:e2e` : test de bout en bout (Playwright + vrai MapLibre, services simulés ; avertissement,
+  À propos et zones compris). Première fois : `npx playwright install chromium`. Captures dans `tests/e2e/shots/`.
 - `cd worker && npm ci && npm test` : serveur de mesure (26 vérifications, Durable Object simulé sur
   `node:sqlite`, Node ≥ 22.18 qui lit le TypeScript directement) ; aperçus HTML dans `worker/test/apercus/`.
   `npm run typecheck` (types Cloudflare), `npm run dev` (wrangler, secrets dans `worker/.dev.vars`).
 - `bash scripts/geologie/construire.sh` : tuiles « nature du sol » dans `public/data/geologie/`
   (GDAL ≥ 3.8, ~120 Mo téléchargés). Inutile en dev : la carte lit alors celles du site en ligne.
+- `bash scripts/zones/construire.sh` : tuiles des zones protégées et forêts publiques dans
+  `public/data/zones/` (GDAL ≥ 3.8, Node ; ~35 Mo depuis le WFS, retéléchargés au plus une fois par
+  semaine). Même remarque en dev.
 
 Après chaque modification : `npm run check` puis `npm run test:e2e` (et `npm test` dans `worker/`
 si le serveur de mesure ou `src/metricsSchema.ts` change).
@@ -40,7 +48,11 @@ Vite + TypeScript strict + MapLibre GL JS 5, sans framework. Pas de nouvelle dé
 
 | Fichier | Rôle |
 |---|---|
-| `main.ts` | Point d'entrée : carte, modules, état → carte, clic → bilan du coin, comptages |
+| `main.ts` | Point d'entrée : avertissement, carte, modules, état → carte, clic → bilan du coin, comptages |
+| `disclaimer.ts` | Avertissement bloquant (`<dialog>` modal, 3 s, ni Échap ni clic à côté), mémorisé par version des conditions, 30 jours au plus |
+| `legal.ts` | Version des conditions (`TERMS_VERSION`), adresse de « À propos », données gardées dans le navigateur, effacement |
+| `apropos.ts`, `apropos.css` | Page `a-propos.html` (conseils, règles, conditions, mentions légales, confidentialité) : état de la mesure, « Effacer mes données » |
+| `zones.ts` | Zones protégées et forêt publique sous un point, hachures, `info.json` (sans lui : statut inconnu) |
 | `config.ts` | URLs des services, zooms, emprise de la géologie, vue initiale, clé localStorage |
 | `forestClasses.ts` | Nomenclature : 32 codes `code_tfv`, libellés, couleurs officielles, groupes, préréglages |
 | `mapStyle.ts` | Style MapLibre (sources + couches), expressions couleur/filtre/motif, fonctions `apply*()` |
@@ -56,7 +68,7 @@ Vite + TypeScript strict + MapLibre GL JS 5, sans framework. Pas de nouvelle dé
 | `fineGrid.ts` | Carrés de 500 m : découpage, relevé forêt/sol (index spatial sur `queryRenderedFeatures`), altitudes en cache permanent, indice par carré |
 | `metrics.ts` | Compteurs de consommation des API (en mémoire) et envoi groupé au serveur de mesure |
 | `metricsSchema.ts` | Liste des compteurs, partagée avec `worker/` (un compteur absent est refusé par le serveur) |
-| `spot.ts` | Bilan d'un coin au clic : forêt, sol, altitude, histogramme de pluie, verdicts expliqués |
+| `spot.ts` | Bilan d'un coin au clic : forêt, sol, altitude, droit de cueillir, histogramme de pluie, verdicts expliqués |
 | `search.ts` | Recherche de lieu (autocomplétion de la Géoplateforme) |
 | `toolbar.ts` | Boutons : légende, fond de carte, géolocalisation, plein écran, zoom |
 | `counts.ts` | Nombre de polygones par type dans les tuiles affichées |
@@ -65,6 +77,10 @@ Vite + TypeScript strict + MapLibre GL JS 5, sans framework. Pas de nouvelle dé
 `scripts/geologie/` : `construire.sh` (téléchargement BRGM → GeoJSONSeq WGS84 → classement → MVT),
 `regles.mjs` (règles de classement des descriptions géologiques en natures de sol), `classer.mjs`,
 `info.mjs` (écrit `info.json` : provenance, emprise, surfaces par sol).
+`scripts/zones/` : `telecharger.mjs` (WFS → GeoJSONSeq Lambert-93, noms nettoyés, `resume.json`),
+`construire.sh` (GPKG simplifié à 5 m → MVT, couches `protection`, `protection_nom` (un point par zone,
+pour n'afficher son nom qu'une fois : les sites des conservatoires sont faits de dizaines de parcelles)
+et `foret_publique`, `info.json`).
 
 Flux : l'interface ne touche jamais la carte. Elle appelle `store.update()` ; `main.ts` est abonné au
 store et appelle `applySelection` / `applyOpacity` / `applyBasemap` / `applyGeology` /
@@ -74,9 +90,12 @@ vérification dans `tests/e2e/run.mjs`.
 
 Couches (ordre) : `base-plan`, `base-ortho`, `bdforet-overview` (raster, zoom < 10), `bdforet-fill`
 (filtrée), `bdforet-hit` (invisible, non filtrée : forêt sous un clic), `geologie-motifs`,
-`geologie-hit` (invisible : sol sous un clic), `bdforet-outline`, `meteo-cellules`, `meteo-contours`,
-`meteo-fin-cellules`, `meteo-fin-contours` (carrés de 500 m, zoom ≥ 12, mode indice),
-`meteo-etiquettes`, `meteo-fin-etiquettes`, `bdforet-highlight-casing`, `bdforet-highlight`.
+`geologie-hit` (invisible : sol sous un clic), `bdforet-outline`, `zones-protegees` (hachures),
+`forets-publiques` (tirets, sur demande), `zones-protegees-hit`, `forets-publiques-hit` (invisibles :
+statut sous un clic, zoom ≥ 10), `meteo-cellules`, `meteo-contours`, `meteo-fin-cellules`,
+`meteo-fin-contours` (carrés de 500 m, zoom ≥ 12, mode indice), `meteo-etiquettes`,
+`meteo-fin-etiquettes`, `zones-protegees-contours`, `zones-protegees-etiquettes` (au-dessus de
+l'indice), `bdforet-highlight-casing`, `bdforet-highlight`.
 
 Grille fine (`fineGrid.ts`, zoom ≥ `FINE_MIN_ZOOM` = 12, mode indice) : chaque case de 4,5 km
 (0,04° × 0,056°) est découpée en 9 × 9 carrés (id « I:J »). Forêt et sol relevés sur 3 × 3 points par
@@ -132,6 +151,19 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   `geoservices.brgm.fr` n'a pas de CORS (et filtre les robots) : ne pas l'appeler depuis le navigateur.
   Tuiles produites : couche `geologie`, champs `sol`, `notation`, `descr`, zooms 9 à 13, ~26 Mo
   pour 73 + 74, servies sous `data/geologie/{z}/{x}/{y}.pbf` avec `info.json`.
+- **Zones protégées et forêts publiques** (WFS de la Géoplateforme, sans clé, vérifié le 03/11/2026
+  depuis GitHub Actions ; **pas de CORS** : seulement au build) : `TYPENAMES=patrinat_rnn:rnn`,
+  `patrinat_rnr:rnr`, `patrinat_pprnn:pprnn`, `patrinat_pprnr:pprnr`, `patrinat_rb:rb` (champ `zone` :
+  Intégrale / Dirigée), `patrinat_pn:parc_national` (champ `zone` : Cœur / Adhesion, on garde le cœur),
+  `patrinat_apb:apb`, `patrinat_aphn:aphn`, `patrinat_cdl:conservatoire_littoral`, `patrinat_cen:cen`
+  (champs `nom_site`, `url_fiche` vers l'INPN, `id_mnhn`) ; `BDTOPO_V3:foret_publique` (`nature` : Forêt
+  domaniale / Autre forêt publique, `toponyme`, source ONF 2021). Requête : `OUTPUTFORMAT=application/json`,
+  `SRSNAME=EPSG:2154`, `BBOX=45.0,5.6,46.45,7.25,urn:ogc:def:crs:EPSG::4326` (lat/lon en WFS 2.0),
+  `COUNT=5000` + `STARTINDEX`. Sur l'emprise : 21 RNN, 7 RNR, 16 réserves biologiques, 128 arrêtés de
+  biotope, 32 sites du Conservatoire du littoral, 130 sites des CEN ; 949 forêts publiques (22 Mo).
+  Exclus exprès : Natura 2000, ZNIEFF, PNR, sites classés, réserves de chasse (pas d'interdiction de
+  cueillette en soi). Aussi disponible : `PROTECTEDAREAS.PRSF:prsf` (points de rencontre des secours en
+  forêt, ONF, 3 281 points sur l'emprise).
 - **WFS BD Forêt** (pas utilisé, utile pour un export) : `https://data.geopf.fr/wfs`,
   `TYPENAMES=LANDCOVER.FORESTINVENTORY.V2:formation_vegetale`, `OUTPUTFORMAT=application/json`,
   `CQL_FILTER` et `PROPERTYNAME` acceptés. Avec GeoServer, `BBOX=` et `CQL_FILTER=` ne se combinent
@@ -154,6 +186,20 @@ Worker et passe son adresse au build (`VITE_METRICS_URL`). Un échec côté Clou
 carte (`continue-on-error`). Vérifié le 01/11/2026 en CI : `wrangler deploy --dry-run` et `wrangler
 dev` (wrangler 4.156, `@cloudflare/workers-types` 5). GitHub Pages ne doit pas recevoir de mot de
 passe : la page privée est servie par le Worker.
+
+## Avertissement, conditions et droit de cueillir
+
+- Changer `TERMS_VERSION` (`src/legal.ts`) dès que le texte de l'avertissement ou des conditions
+  (`a-propos.html`) change : la carte redemande alors l'accord. Garder les deux textes cohérents.
+- Textes vérifiés le 03/11/2026 : conseils Anses (25/09/2025) et Santé.fr (06/07/2026), centre
+  antipoison de Lyon 04 72 11 69 11 (Santé.fr, Auvergne-Rhône-Alpes), article 547 du Code civil,
+  articles L163-11 et R163-5 du Code forestier (réponse ministérielle, JO du 25/12/2012), LCEN
+  article 1-1 (II) pour l'éditeur non professionnel anonyme (loi SREN de 2024), hébergeur GitHub, Inc.
+- Wording : ne jamais écrire qu'un champignon est comestible, ni qu'un lieu est autorisé ; parler
+  d'estimation ; la limitation de responsabilité vaut « dans les limites permises par la loi » (une
+  clause ne peut pas écarter la responsabilité pour faute ou dommage corporel).
+- Bilan d'un coin : ne dire « sans doute privée » que si les zones sont chargées (`info.json` lu,
+  aucune erreur réseau, zoom ≥ 10, dans l'emprise) et qu'une forêt BD Forêt est sous le point.
 
 ## Nomenclature et règles
 
@@ -186,7 +232,12 @@ passe : la page privée est servie par le Worker.
 - En développement, `window.map`, `window.store`, `window.spot` et `window.metrics` (totaux de la
   visite, `flush()`) sont exposés (console, tests e2e).
 - Mesure : seulement des totaux par jour, jamais d'identifiant de visiteur ni de cookie ; envoi coupé
-  si le navigateur signale « Global Privacy Control ». Nouveau compteur : l'ajouter dans
+  si le navigateur signale « Global Privacy Control ». Coordonnées envoyées à Open-Meteo par le bilan
+  arrondies à 0,01° (vie privée) ; l'altitude IGN garde le point exact.
+- Toute nouvelle clé `localStorage` commence par `foret-explorer:` (« Effacer mes données ») et prend
+  un libellé dans `src/apropos.ts`.
+- Actions GitHub épinglées sur leur identifiant de commit (`# vX.Y.Z` en commentaire), mises à jour par
+  Dependabot (une fois par semaine, versions d'au moins 7 jours). Nouveau compteur : l'ajouter dans
   `metricsSchema.ts` (avec son plafond par envoi), puis `track()` au bon endroit.
 - Chaque fiche champignon rappelle que l'indice ne dit pas ce qui se mange ; une espèce ajoutée
   prend un champ `caution` si elle a un sosie dangereux.
@@ -206,8 +257,8 @@ passe : la page privée est servie par le Worker.
 
 ## Pistes pour la suite
 
-1. Épingler les actions GitHub sur leur identifiant de commit, activer Dependabot (voir la liste des
-   risques du site).
+1. Étendre les zones et la géologie à d'autres départements (`EMPRISE` de `scripts/zones/`,
+   `DEPARTEMENTS` de la géologie) ; ajouter les points de rencontre des secours en forêt (PRSF).
 2. Étendre la géologie à d'autres départements (`DEPARTEMENTS="074 073 001 038"` dans le workflow).
 3. Recaler l'indice avec des sorties réelles (journal de cueillette : date, lieu, trouvé ou non).
 4. Prévisions : ajouter `forecast_days` pour annoncer les jours favorables à venir.
@@ -216,5 +267,4 @@ passe : la page privée est servie par le Worker.
 7. Mode hors ligne (PWA + cache de tuiles) pour les zones sans réseau.
 8. Exposition des versants (nord/sud) à partir du relief IGN, et enneigement pour les morilles.
 9. Si Open-Meteo approche son plafond : faire passer la météo par le Worker avec un cache commun.
-10. Page « À propos » : mentions légales (hébergeur), confidentialité, bonnes pratiques, effacer ses
-    données ; couche des réserves naturelles.
+10. Garder une copie des tuiles géologiques dans une release du dépôt (si le miroir disparaît).

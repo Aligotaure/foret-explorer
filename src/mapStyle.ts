@@ -9,6 +9,8 @@ import {
   FINE_MIN_ZOOM,
   TILES,
   WEATHER_MIN_ZOOM,
+  ZONES,
+  ZONES_BASE,
 } from './config';
 import { ALL_CODES, FALLBACK_COLOR, FOREST_CLASSES } from './forestClasses';
 import { SOIL_CLASSES, patternImageId } from './soils';
@@ -22,7 +24,11 @@ export const SOURCES = {
   geologie: 'geologie',
   meteo: 'meteo',
   meteoFine: 'meteo-fin',
+  zones: 'zones',
 } as const;
+
+/** Hachures des zones protégées (image dessinée par zones.ts à la demande de MapLibre). */
+export const ZONE_PATTERN = 'zone-hachures';
 
 export const LAYERS = {
   basePlan: 'base-plan',
@@ -38,6 +44,13 @@ export const LAYERS = {
   /** Copie invisible de la géologie, toujours chargée, pour le bilan d'un coin. */
   geologyHit: 'geologie-hit',
   outline: 'bdforet-outline',
+  /** Zones protégées (hachures, contour, nom) et forêts publiques (tirets), plus leurs copies invisibles. */
+  protectedFill: 'zones-protegees',
+  publicForestLine: 'forets-publiques',
+  protectedHit: 'zones-protegees-hit',
+  publicForestHit: 'forets-publiques-hit',
+  protectedLine: 'zones-protegees-contours',
+  protectedLabel: 'zones-protegees-etiquettes',
   meteoFill: 'meteo-cellules',
   meteoLine: 'meteo-contours',
   /** Grille fine de l'indice (carrés de 500 m, zoom 13 et plus). */
@@ -90,6 +103,7 @@ export function buildStyle(state: AppState): StyleSpecification {
   const forestFilter = filter ? { filter } : {};
   const vector = { source: SOURCES.bdForet, 'source-layer': BDFORET.sourceLayer } as const;
   const geology = { source: SOURCES.geologie, 'source-layer': GEOLOGY.sourceLayer } as const;
+  const zone = (layer: string) => ({ source: SOURCES.zones, 'source-layer': layer }) as const;
   const meteoOn = state.weatherMode !== 'off';
 
   return {
@@ -139,6 +153,14 @@ export function buildStyle(state: AppState): StyleSpecification {
         attribution: ATTRIBUTION.meteo,
       },
       [SOURCES.meteoFine]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+      [SOURCES.zones]: {
+        type: 'vector',
+        tiles: [`${ZONES_BASE}{z}/{x}/{y}.pbf`],
+        minzoom: ZONES.minZoom,
+        maxzoom: ZONES.maxZoom,
+        bounds: ZONES.bounds,
+        attribution: ATTRIBUTION.zones,
+      },
     },
     layers: [
       { id: LAYERS.basePlan, type: 'raster', source: SOURCES.planIgn, layout: { visibility: visibility(state.basemap === 'plan') } },
@@ -180,6 +202,30 @@ export function buildStyle(state: AppState): StyleSpecification {
         },
         ...forestFilter,
       },
+      {
+        id: LAYERS.protectedFill,
+        type: 'fill',
+        ...zone(ZONES.protectedLayer),
+        minzoom: ZONES.minZoom,
+        layout: { visibility: visibility(state.zones) },
+        paint: { 'fill-pattern': ZONE_PATTERN },
+      },
+      {
+        id: LAYERS.publicForestLine,
+        type: 'line',
+        ...zone(ZONES.publicForestLayer),
+        minzoom: ZONES.minZoom,
+        layout: { visibility: visibility(state.publicForests), 'line-join': 'round' },
+        paint: {
+          'line-color': '#0f4d3a',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 9, 1, 14, 2.4],
+          'line-dasharray': [3, 2],
+          'line-opacity': 0.9,
+        },
+      },
+      // Copies invisibles, toujours chargées : statut du terrain dans le bilan d'un coin.
+      { id: LAYERS.protectedHit, type: 'fill', ...zone(ZONES.protectedLayer), minzoom: ZONES.queryMinZoom, paint: { 'fill-opacity': 0 } },
+      { id: LAYERS.publicForestHit, type: 'fill', ...zone(ZONES.publicForestLayer), minzoom: ZONES.queryMinZoom, paint: { 'fill-opacity': 0 } },
       {
         id: LAYERS.meteoFill,
         type: 'fill',
@@ -240,6 +286,36 @@ export function buildStyle(state: AppState): StyleSpecification {
         },
         paint: { 'text-color': '#0b1f44', 'text-halo-color': 'rgba(255,255,255,0.9)', 'text-halo-width': 1.2 },
       },
+      // Contour et nom des zones protégées par-dessus la grille de l'indice : on les voit toujours.
+      {
+        id: LAYERS.protectedLine,
+        type: 'line',
+        ...zone(ZONES.protectedLayer),
+        minzoom: ZONES.minZoom,
+        layout: { visibility: visibility(state.zones), 'line-join': 'round' },
+        paint: {
+          'line-color': '#b71c1c',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 9, 0.8, 14, 2],
+          'line-opacity': 0.85,
+        },
+      },
+      {
+        id: LAYERS.protectedLabel,
+        type: 'symbol',
+        ...zone(ZONES.protectedNameLayer),
+        minzoom: 11.5,
+        layout: {
+          visibility: visibility(state.zones),
+          'text-field': ['get', 'nom'],
+          'text-font': [LABEL_FONT],
+          'text-size': 11,
+          'text-max-width': 10,
+          'text-allow-overlap': false,
+          // Réserves et cœurs de parc d'abord, terrains des conservatoires ensuite.
+          'symbol-sort-key': ['get', 'rang'],
+        },
+        paint: { 'text-color': '#8b1515', 'text-halo-color': 'rgba(255,255,255,0.92)', 'text-halo-width': 1.4 },
+      },
       { id: LAYERS.highlightCasing, type: 'line', ...vector, filter: NO_HIGHLIGHT, paint: { 'line-color': '#ffffff', 'line-width': 5, 'line-opacity': 0.9 } },
       { id: LAYERS.highlight, type: 'line', ...vector, filter: NO_HIGHLIGHT, paint: { 'line-color': '#6a6af4', 'line-width': 2.5 } },
     ],
@@ -270,6 +346,14 @@ export function applyGeology(map: MapLibreMap, on: boolean): void {
   map.setLayoutProperty(LAYERS.geology, 'visibility', visibility(on));
 }
 
+/** Zones protégées (affichées par défaut) et forêts publiques (sur demande). */
+export function applyZones(map: MapLibreMap, state: Pick<AppState, 'zones' | 'publicForests'>): void {
+  for (const layer of [LAYERS.protectedFill, LAYERS.protectedLine, LAYERS.protectedLabel]) {
+    map.setLayoutProperty(layer, 'visibility', visibility(state.zones));
+  }
+  map.setLayoutProperty(LAYERS.publicForestLine, 'visibility', visibility(state.publicForests));
+}
+
 export function setMeteoVisible(map: MapLibreMap, on: boolean): void {
   for (const layer of METEO_LAYERS) map.setLayoutProperty(layer, 'visibility', visibility(on));
 }
@@ -284,6 +368,7 @@ export function applyState(map: MapLibreMap, state: AppState): void {
   applyOpacity(map, state.opacity);
   applyBasemap(map, state.basemap);
   applyGeology(map, state.geology);
+  applyZones(map, state);
 }
 
 /** Entoure le polygone `id` (les morceaux répartis sur plusieurs tuiles partagent le même `id`). */

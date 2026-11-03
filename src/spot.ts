@@ -9,6 +9,7 @@ import { setHighlight } from './mapStyle';
 import { patternImageId, drawPattern } from './soils';
 import type { Store } from './state';
 import { fetchAltitude, fetchDaily, summarize, type WeatherSummary } from './weather';
+import { zonesAt, type ZonesAtPoint } from './zones';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -69,6 +70,82 @@ function row(label: string, ...value: (Node | string)[]): HTMLElement {
   return h('div', { class: 'spot__row' }, h('dt', {}, label), h('dd', {}, ...value));
 }
 
+/** De septembre à février, les battues sont fréquentes. */
+const huntingSeason = (month = new Date().getMonth() + 1): boolean => month >= 9 || month <= 2;
+
+/**
+ * Droit de cueillir ici : zones protégées, forêt publique ou sans doute privée, et rappel des
+ * règles. Les données sont indicatives : on ne parle du statut que si elles sont bien chargées.
+ */
+function rulesSection(zones: ZonesAtPoint, forest: ForestAtPoint | null): HTMLElement {
+  const items: Node[] = [];
+  if (!zones.known) {
+    items.push(h('p', { class: 'spot__rule' }, `Statut du terrain inconnu : ${zones.reason ?? 'données absentes'}.`));
+  } else {
+    for (const zone of zones.protections) {
+      items.push(
+        h(
+          'div',
+          { class: 'spot__alert', role: 'note' },
+          h('span', { class: 'spot__alert-icon' }, icon('alert')),
+          h(
+            'div',
+            {},
+            h('strong', {}, zone.label),
+            zone.name ? ` « ${zone.name} »` : '',
+            h('p', {}, 'Son règlement peut interdire ou limiter la cueillette : consultez-le avant de cueillir.'),
+            zone.url ? h('a', { href: zone.url, target: '_blank', rel: 'noopener' }, 'Fiche officielle de la zone (INPN) ↗') : null,
+          ),
+        ),
+      );
+    }
+    if (zones.publicForest) {
+      items.push(
+        h(
+          'p',
+          { class: 'spot__rule' },
+          h('strong', {}, zones.publicForest.name),
+          ` : forêt publique${zones.publicForest.domaniale ? ' (domaniale)' : ''}, gérée par l’ONF. Une cueillette familiale y est en général tolérée, sauf interdiction (arrêté, panneau).`,
+        ),
+      );
+    } else if (zones.protections.some((z) => z.type === 'cdl')) {
+      items.push(
+        h('p', { class: 'spot__rule' }, h('strong', {}, 'Propriété publique'), ' (Conservatoire du littoral) : suivez le règlement affiché sur place.'),
+      );
+    } else if (zones.protections.length) {
+      // Dans une zone protégée, le propriétaire peut être public ou privé : on ne devine pas.
+      items.push(
+        h('p', { class: 'spot__rule' }, h('strong', {}, 'Propriétaire non identifié'), ' : demandez l’accord du propriétaire ou du gestionnaire de la zone.'),
+      );
+    } else if (forest) {
+      items.push(
+        h(
+          'p',
+          { class: 'spot__rule' },
+          h('strong', {}, 'Forêt sans doute privée'),
+          ' : elle ne figure pas parmi les forêts publiques de l’IGN. Il faut l’accord du propriétaire pour cueillir.',
+        ),
+      );
+    } else {
+      items.push(
+        h('p', { class: 'spot__rule' }, h('strong', {}, 'Hors forêt cartographiée'), ' : la cueillette demande l’accord du propriétaire du terrain.'),
+      );
+    }
+  }
+  items.push(
+    h(
+      'p',
+      { class: 'spot__rule spot__rule--muted' },
+      'Sans autorisation, cueillir est une contravention, et un délit au-delà de 10 litres. Des arrêtés limitent souvent les quantités : renseignez-vous en mairie.',
+      huntingSeason() ? ' Saison de chasse : portez une couleur vive.' : '',
+    ),
+  );
+  return h('section', { class: 'spot__section' }, h('h3', { class: 'spot__title' }, 'Droit de cueillir'), ...items);
+}
+
+/** Open-Meteo n'a besoin que de la case météo : coordonnées arrondies à 0,01° (≈ 1 km) pour la vie privée. */
+const round2 = (x: number): number => Math.round(x * 100) / 100;
+
 /**
  * Bilan d'un coin : forêt, sol, altitude, pluie des 20 derniers jours et, pour chaque
  * champignon, un verdict expliqué. Panneau à droite sur grand écran, tiroir bas sur mobile.
@@ -119,6 +196,7 @@ export class SpotPanel {
 
     const forest = forestAt(this.map, point);
     const soil = soilAt(this.map, point);
+    const zones = zonesAt(this.map, point, lngLat);
     setHighlight(this.map, forest?.id ?? null);
     this.marker ??= new maplibregl.Marker({ color: '#6a6af4', scale: 0.7 });
     this.marker.setLngLat(lngLat).addTo(this.map);
@@ -127,26 +205,27 @@ export class SpotPanel {
     const lng = lngLat.lng.toFixed(5);
     this.coords.textContent = `${lat}, ${lng}`;
     this.root.hidden = false;
-    this.render(forest, soil, null, null, 'loading');
+    this.render(forest, soil, zones, null, null, 'loading');
 
     try {
       const altitude = await fetchAltitude(lngLat.lng, lngLat.lat, controller.signal).catch(() => null);
       const [series] = await fetchDaily(
-        [{ lat: lngLat.lat, lon: lngLat.lng, ...(altitude !== null ? { elevation: altitude } : {}) }],
+        [{ lat: round2(lngLat.lat), lon: round2(lngLat.lng), ...(altitude !== null ? { elevation: altitude } : {}) }],
         controller.signal,
       );
       if (controller.signal.aborted) return;
-      this.render(forest, soil, altitude, series ? summarize(series) : null, 'ok');
+      this.render(forest, soil, zones, altitude, series ? summarize(series) : null, 'ok');
     } catch (error) {
       if (controller.signal.aborted) return;
       console.warn('[bilan]', error);
-      this.render(forest, soil, null, null, 'error');
+      this.render(forest, soil, zones, null, null, 'error');
     }
   }
 
   private render(
     forest: ForestAtPoint | null,
     soil: SoilAtPoint | null,
+    zones: ZonesAtPoint,
     altitude: number | null,
     weather: WeatherSummary | null,
     status: 'loading' | 'ok' | 'error',
@@ -168,7 +247,7 @@ export class SpotPanel {
       row('Altitude', status === 'loading' ? '…' : altitude !== null ? `${altitude} m` : 'inconnue'),
     );
 
-    const parts: Node[] = [h('section', { class: 'spot__section' }, terrain)];
+    const parts: Node[] = [h('section', { class: 'spot__section' }, terrain), rulesSection(zones, forest)];
 
     if (status === 'loading') {
       parts.push(h('p', { class: 'spot__status' }, 'Calcul de la météo des 20 derniers jours…'));
@@ -222,7 +301,17 @@ export class SpotPanel {
           ),
         );
       }
-      parts.push(h('section', { class: 'spot__section' }, h('h3', { class: 'spot__title' }, 'Champignons'), list));
+      parts.push(
+        h(
+          'section',
+          { class: 'spot__section' },
+          h('h3', { class: 'spot__title' }, 'Champignons'),
+          zones.protections.length
+            ? h('p', { class: 'spot__warning' }, 'Zone protégée : même avec un indice favorable, la cueillette peut y être interdite.')
+            : null,
+          list,
+        ),
+      );
     }
 
     const lat = this.coords.textContent?.split(', ')[0] ?? '';
@@ -248,7 +337,7 @@ export class SpotPanel {
       h(
         'p',
         { class: 'spot__note' },
-        'Indice indicatif, fondé sur des règles de cueilleur : délai après la pluie, températures à cette altitude, arbres hôtes et sol. Il dit où chercher, pas ce qui se mange. Météo : Open-Meteo.',
+        'Indice expérimental, fondé sur des règles de cueilleur : délai après la pluie, températures à cette altitude, arbres hôtes et sol. Il dit où chercher, pas ce qui se mange ni si l’on peut cueillir. Météo : Open-Meteo.',
       ),
     );
     this.body.replaceChildren(...parts);

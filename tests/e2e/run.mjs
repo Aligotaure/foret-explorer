@@ -6,13 +6,26 @@
 // Variables : BASE_URL=http://… pour tester un serveur déjà lancé (il doit exposer
 // window.map, c.-à-d. tourner en mode développement, avec VITE_METRICS_URL=https://mesures.test) ;
 // HEADED=1 pour voir le navigateur.
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { installMocks } from './mocks.mjs';
 
 const OUT = fileURLToPath(new URL('./shots/', import.meta.url));
 mkdirSync(OUT, { recursive: true });
+
+// Version des conditions (src/legal.ts) : les tests qui ne portent pas sur l'avertissement le
+// considèrent comme déjà accepté.
+const TERMS_VERSION = readFileSync(new URL('../../src/legal.ts', import.meta.url), 'utf8').match(/TERMS_VERSION = '([^']+)'/)[1];
+const preAccept = (context) =>
+  context.addInitScript((v) => {
+    try {
+      localStorage.setItem('foret-explorer:avertissement', JSON.stringify({ v, t: Date.now() }));
+    } catch {
+      /* rien */
+    }
+  }, TERMS_VERSION);
+const disclaimerOpen = (page) => page.evaluate(() => document.querySelector('dialog.disclaimer')?.open === true);
 
 const results = [];
 function check(name, ok, detail = '') {
@@ -48,8 +61,100 @@ async function startServer() {
   return { url, close: () => server.close() };
 }
 
+/** Avertissement bloquant à l'ouverture, page « À propos » et effacement des données. */
+async function disclaimerTests(browser, base) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => m.type() === 'error' && errors.push(`console.error: ${m.text()}`));
+  await installMocks(page, { tms: [], wmts: [], geocode: [], other: [] });
+
+  await page.goto(base);
+  await page.waitForSelector('dialog.disclaimer[open]', { timeout: 10000 });
+  const first = await page.evaluate(() => {
+    const d = document.querySelector('dialog.disclaimer');
+    const b = d.querySelector('.disclaimer__accept');
+    return {
+      modal: d.matches(':modal'),
+      role: d.getAttribute('role'),
+      label: document.getElementById(d.getAttribute('aria-labelledby'))?.textContent,
+      disabled: b.disabled,
+      button: b.textContent,
+      text: d.textContent.replace(/\s+/g, ' '),
+      link: d.querySelector('.disclaimer__terms a')?.getAttribute('href'),
+    };
+  });
+  check('avertissement : fenêtre modale à l’ouverture', first.modal && first.role === 'alertdialog' && first.label === 'Avant de partir en forêt', JSON.stringify({ modal: first.modal, role: first.role }));
+  check('avertissement : bouton bloqué avec compte à rebours', first.disabled && /Lisez d’abord… [123]/.test(first.button), first.button);
+  check(
+    'avertissement : identification, centre antipoison, propriétaire, responsabilité',
+    ['pharmacien', 'entiers', 'application', '04 72 11 69 11', 'propriétaire', 'seul responsable', 'limites permises par la loi'].every((w) => first.text.includes(w)),
+    first.text.slice(0, 80),
+  );
+  check('avertissement : lien vers les conditions', first.link === 'a-propos.html#conditions', first.link);
+  await page.screenshot({ path: `${OUT}00-avertissement.png` });
+
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page.mouse.click(60, 500);
+  await page.waitForTimeout(200);
+  const blocked = await page.evaluate(() => ({ open: document.querySelector('dialog.disclaimer')?.open, spotHidden: document.getElementById('spot').hidden }));
+  check('avertissement : Échap et clic à côté ne le ferment pas, la carte reste bloquée', blocked.open && blocked.spotHidden, JSON.stringify(blocked));
+
+  await page.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
+  const delay = await page.evaluate(() => {
+    const d = document.querySelector('dialog.disclaimer');
+    return Number(d.dataset.actif) - Number(d.dataset.ouvert);
+  });
+  check('avertissement : acceptation possible au bout de 3 secondes', delay >= 2950 && delay < 6000, `${delay} ms`);
+  await page.locator('.disclaimer__accept').click();
+  const after = await page.evaluate(() => ({
+    gone: !document.querySelector('dialog.disclaimer'),
+    saved: JSON.parse(localStorage.getItem('foret-explorer:avertissement') ?? 'null'),
+  }));
+  check('avertissement : accepté et mémorisé avec la version des conditions', after.gone && after.saved?.v === TERMS_VERSION && typeof after.saved?.t === 'number', JSON.stringify(after.saved));
+  await page.reload();
+  await waitForMap(page);
+  await page.waitForTimeout(500);
+  check('avertissement : pas redemandé à la visite suivante', !(await disclaimerOpen(page)));
+
+  // Page « À propos »
+  await page.goto(new URL('a-propos.html', base).href);
+  await page.waitForSelector('[data-stored-list] li');
+  const about = await page.evaluate(() => ({
+    ids: [...document.querySelectorAll('main section[id]')].map((s) => s.id),
+    host: document.body.textContent.includes('GitHub, Inc., 88 Colin P. Kelly Jr. Street'),
+    law: document.body.textContent.includes('1-1 (II)') && document.body.textContent.includes('L163-11'),
+    stored: [...document.querySelectorAll('[data-stored-list] li')].map((li) => li.textContent),
+    metrics: document.querySelector('[data-metrics-state]')?.textContent,
+    back: document.querySelector('.top__back')?.getAttribute('href'),
+    overflow: document.documentElement.scrollWidth > window.innerWidth,
+  }));
+  check(
+    'À propos : cueillette, règles, conditions, mentions légales, confidentialité, sources',
+    ['identifier', 'regles', 'securite', 'conditions', 'mentions-legales', 'confidentialite', 'sources'].every((id) => about.ids.includes(id)) && about.host && about.law,
+    about.ids.join(','),
+  );
+  check('À propos : ce que garde le navigateur, état de la mesure', about.stored.some((t) => /Acceptation de l’avertissement, le /.test(t)) && about.metrics === 'activée', `${about.stored.join(' | ')} — mesure ${about.metrics}`);
+  await page.screenshot({ path: `${OUT}10-a-propos.png` });
+  await page.locator('[data-clear]').click();
+  await page.locator('[data-clear]').click();
+  const cleared = await page.evaluate(() => ({
+    keys: Object.keys(localStorage).filter((k) => k.startsWith('foret-explorer:')),
+    status: document.querySelector('[data-clear-status]').textContent,
+  }));
+  check('À propos : « Effacer mes données » vide le stockage du site', cleared.keys.length === 0 && /effacé/.test(cleared.status), JSON.stringify(cleared));
+  await page.locator('.top__back').click();
+  await page.waitForSelector('dialog.disclaimer[open]', { timeout: 10000 });
+  check('après effacement : l’avertissement revient', await disclaimerOpen(page));
+  check('avertissement et À propos : aucune erreur JavaScript', errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
 async function desktopTests(browser, base) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await preAccept(context);
   const page = await context.newPage();
   const log = { tms: [], wmts: [], geocode: [], other: [] };
   const errors = [];
@@ -79,7 +184,81 @@ async function desktopTests(browser, base) {
   await page.screenshot({ path: `${OUT}01-bureau.png` });
 
   const sections = await page.evaluate(() => [...document.querySelectorAll('#legend .layer__title')].map((t) => t.textContent));
-  check('légende : 5 sections', sections.length === 5 && sections[0] === 'Je cherche…', sections.join(' | '));
+  check('légende : 6 sections, dont « Où cueillir »', sections.length === 6 && sections[0] === 'Je cherche…' && sections[2] === 'Où cueillir', sections.join(' | '));
+  const footer = await page.evaluate(() => [...document.querySelectorAll('#legend .legend-footer a')].map((a) => a.getAttribute('href')));
+  check('légende : liens vers conseils, conditions, mentions légales, confidentialité', footer.length === 4 && footer.every((h) => h.startsWith('a-propos.html#')), footer.join(', '));
+
+  // Zones protégées (par défaut) et forêts publiques (sur demande)
+  const zones = await page.evaluate(() => ({
+    protectedVis: window.map.getLayoutProperty('zones-protegees', 'visibility'),
+    lineVis: window.map.getLayoutProperty('zones-protegees-contours', 'visibility'),
+    publicVis: window.map.getLayoutProperty('forets-publiques', 'visibility'),
+    switches: [...document.querySelectorAll('#legend .zone-row .switch')].map((s) => s.checked),
+    hatch: window.map.hasImage('zone-hachures'),
+    drawn: window.map.queryRenderedFeatures({ layers: ['zones-protegees'] }).length,
+  }));
+  check(
+    'zones protégées affichées par défaut (hachures), forêts publiques sur demande',
+    zones.protectedVis === 'visible' && zones.lineVis === 'visible' && zones.publicVis === 'none' && zones.switches.join() === 'true,false' && zones.hatch && zones.drawn > 0,
+    JSON.stringify(zones),
+  );
+  check('tuiles des zones et info.json demandés', log.zones.some((p) => p.endsWith('/info.json')) && log.zones.some((p) => p.endsWith('.pbf')), log.zones.slice(0, 2).join(', '));
+  await page.locator('#legend .layer', { hasText: 'Où cueillir' }).locator('.layer__toggle').click();
+  await page.getByRole('switch', { name: 'Afficher les forêts publiques' }).check();
+  check('interrupteur « Forêts publiques »', (await page.evaluate(() => window.map.getLayoutProperty('forets-publiques', 'visibility'))) === 'visible');
+  await page.screenshot({ path: `${OUT}01b-bureau-zones.png` });
+
+  // Bilan d'un coin : droit de cueillir selon la zone touchée
+  const zonePoints = await page.evaluate(() => {
+    const m = window.map;
+    const W = m.getCanvas().clientWidth;
+    const H = m.getCanvas().clientHeight;
+    const out = {};
+    for (let y = 130; y < H - 80; y += 23) {
+      for (let x = 450; x < W - 520; x += 29) {
+        const at = (layer) => m.queryRenderedFeatures([x, y], { layers: [layer] }).length > 0;
+        const prot = at('zones-protegees-hit');
+        const pub = at('forets-publiques-hit');
+        const forest = at('bdforet-hit');
+        if (prot && !pub && forest) out.prot ??= { x, y };
+        if (pub && !prot && forest) out.pub ??= { x, y };
+        if (!pub && !prot && forest) out.priv ??= { x, y };
+      }
+    }
+    return out;
+  });
+  const rulesAt = async (pt) => {
+    await page.mouse.click(pt.x, pt.y);
+    await page.waitForSelector('#spot .verdict', { timeout: 10000 });
+    return page.evaluate(() => {
+      const section = [...document.querySelectorAll('#spot .spot__section')].find((s) => s.querySelector('.spot__title')?.textContent === 'Droit de cueillir');
+      return {
+        text: section?.textContent.replace(/\s+/g, ' ') ?? '',
+        link: section?.querySelector('.spot__alert a')?.getAttribute('href') ?? null,
+        warning: document.querySelector('#spot .spot__warning')?.textContent ?? null,
+      };
+    });
+  };
+  if (zonePoints.prot && zonePoints.pub && zonePoints.priv) {
+    const before = log.meteo.length;
+    const prot = await rulesAt(zonePoints.prot);
+    check(
+      'bilan : réserve naturelle signalée, fiche INPN, mise en garde sur l’indice',
+      /Réserve naturelle nationale « Réserve d’essai »/.test(prot.text) && /interdire ou limiter la cueillette/.test(prot.text) && prot.link?.startsWith('https://inpn.mnhn.fr/') && /Zone protégée/.test(prot.warning ?? ''),
+      prot.text.slice(0, 110),
+    );
+    const query = log.meteo.slice(before).pop() ?? '';
+    check('bilan : coordonnées arrondies à 0,01° pour Open-Meteo, altitude exacte', /latitude=\d+\.\d\d00&/.test(query) && /longitude=\d+\.\d\d00&/.test(query) && /elevation=930/.test(query), query.slice(0, 70));
+    await page.screenshot({ path: `${OUT}03b-bureau-bilan-reserve.png` });
+    const pub = await rulesAt(zonePoints.pub);
+    check('bilan : forêt publique, cueillette familiale tolérée', /Forêt communale d’essai : forêt publique/.test(pub.text) && /tolérée/.test(pub.text) && !pub.warning, pub.text.slice(0, 110));
+    const priv = await rulesAt(zonePoints.priv);
+    check('bilan : forêt sans doute privée, accord du propriétaire', /Forêt sans doute privée/.test(priv.text) && /accord du propriétaire/.test(priv.text) && /délit au-delà de 10 litres/.test(priv.text), priv.text.slice(0, 110));
+    await page.locator('#spot .panel__close').click();
+  } else {
+    check('bilan : points dans une réserve, une forêt publique et une forêt privée', false, JSON.stringify(zonePoints));
+  }
+  await page.getByRole('switch', { name: 'Afficher les forêts publiques' }).uncheck();
 
   // Comptages
   const counts = await page.evaluate(() =>
@@ -289,7 +468,8 @@ async function desktopTests(browser, base) {
       totals['ign.tiles.plan'] > 0 &&
       totals['ign.altitude.points'] > 20 &&
       totals['pages.geology'] > 0 &&
-      totals['app.spots'] === 1,
+      totals['pages.zones'] > 0 &&
+      totals['app.spots'] === 4,
     JSON.stringify(totals),
   );
   await page.evaluate(() => window.metrics.flush());
@@ -362,6 +542,17 @@ async function mobileTests(browser, base) {
   const page = await context.newPage();
   await installMocks(page, { tms: [], wmts: [], geocode: [], other: [] });
   await page.goto(base);
+  // Avertissement à l'ouverture : il tient dans l'écran, le bouton reste atteignable.
+  await page.waitForSelector('dialog.disclaimer[open]', { timeout: 10000 });
+  const dialog = await page.evaluate(() => {
+    const r = document.querySelector('dialog.disclaimer').getBoundingClientRect();
+    const b = document.querySelector('.disclaimer__accept').getBoundingClientRect();
+    return { left: Math.round(r.left), right: Math.round(r.right), bottom: Math.round(r.bottom), button: Math.round(b.bottom), height: Math.round(b.height) };
+  });
+  check('mobile : avertissement dans l’écran, bouton de 46 px visible', dialog.left >= 0 && dialog.right <= 390 && dialog.button <= 844 && dialog.height >= 46, JSON.stringify(dialog));
+  await page.screenshot({ path: `${OUT}06b-mobile-avertissement.png` });
+  await page.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
+  await page.locator('.disclaimer__accept').tap();
   await waitForMap(page);
   await idle(page);
   check('mobile : légende fermée au démarrage', await page.evaluate(() => document.getElementById('legend').hidden));
@@ -394,6 +585,7 @@ const browser = await chromium.launch({
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 });
 try {
+  await disclaimerTests(browser, server.url);
   await desktopTests(browser, server.url);
   await mobileTests(browser, server.url);
 } finally {

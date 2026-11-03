@@ -46,6 +46,7 @@ export const ATTRIBUTION = {
   bdForet: `${IGN} – BD Forêt® V2 (Licence Ouverte Etalab 2.0)`,
   geologie: '© <a href="https://www.brgm.fr/" target="_blank" rel="noopener">BRGM</a> – carte géologique 1/50 000 harmonisée',
   meteo: 'Météo <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0)',
+  zones: `Zones protégées : PatriNat (OFB, MNHN) ; forêts publiques : ${IGN} – BD TOPO®`,
 } as const;
 
 /** Autocomplétion d'adresses et de lieux-dits (Géoplateforme). */
@@ -101,6 +102,28 @@ export const GEOLOGY = {
   /** Emprise couverte : Savoie et Haute-Savoie (ouest, sud, est, nord). */
   bounds: [5.6, 45.0, 7.25, 46.45] as [number, number, number, number],
   coverage: 'Haute-Savoie et Savoie',
+} as const;
+
+/**
+ * Zones protégées (réserves, arrêtés de biotope…) et forêts publiques, produites par
+ * `scripts/zones/` à partir du WFS de la Géoplateforme et publiées avec le site.
+ */
+export const ZONES_BASE = import.meta.env.DEV
+  ? 'https://aligotaure.github.io/foret-explorer/data/zones/'
+  : new URL('data/zones/', document.baseURI).href;
+
+export const ZONES = {
+  protectedLayer: 'protection',
+  /** Un point par zone protégée, pour afficher son nom une seule fois. */
+  protectedNameLayer: 'protection_nom',
+  publicForestLayer: 'foret_publique',
+  minZoom: 9,
+  maxZoom: 13,
+  /** Zoom à partir duquel le bilan d'un coin donne le statut du terrain (celui de la BD Forêt). */
+  queryMinZoom: 10,
+  /** Emprise téléchargée : Savoie, Haute-Savoie et alentours (ouest, sud, est, nord). */
+  bounds: [5.6, 45.0, 7.25, 46.45] as [number, number, number, number],
+  coverage: 'Savoie, Haute-Savoie et alentours',
 } as const;
 
 /** Vue initiale : entre Annecy, le Parmelan et Thônes. */

@@ -2,6 +2,7 @@ import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl';
 import { byId, h, toast } from './dom';
 import { ALL_CODES } from './forestClasses';
 import { icon, type IconName } from './icons';
+import { ABOUT_URL } from './legal';
 import type { AppState, Store } from './state';
 
 function toolButton(name: IconName, label: string): HTMLButtonElement {
@@ -63,7 +64,11 @@ export function initToolbar(map: MapLibreMap, store: Store): void {
     toast('Position introuvable (autorisation refusée ou signal GPS absent)');
   });
 
-  byId('toolbar-top').append(basemap, locate);
+  // Conditions, mentions légales, confidentialité et conseils de cueillette.
+  const aboutLabel = 'À propos : conseils, conditions, mentions légales';
+  const about = h('a', { class: 'btn-square', href: ABOUT_URL, 'aria-label': aboutLabel, title: aboutLabel }, icon('info'));
+
+  byId('toolbar-top').append(basemap, locate, about);
 
   const bottom = byId('toolbar-bottom');
   if (document.fullscreenEnabled) {
