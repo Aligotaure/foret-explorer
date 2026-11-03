@@ -1,0 +1,132 @@
+{
+  "formations": 15063,
+  "conservees": 13005,
+  "sols": {
+    "cristallin": {
+      "polygones": 5258,
+      "km2": 3696.5,
+      "exemples": [
+        "361 km² — Leucogranite de la Pointe du Raz-Quimper: localement faciès à grains grossiers, Granite de Pluguffan - 318 +/- 4 Ma (U-T",
+        "190.3 km² — Schistes; micaschistes et quartzites (séries du nord de Quimper) - Briovérien?",
+        "168.1 km² — Phyllades de la baie de Douarnenez: formation schisto gréseuse composée de schistes gris-bleus et de grauwackes verts mé",
+        "159.4 km² — Granite de Kersaint: granite calco-alcalin à dominante portassique à faciès fin, grossier ou porphyroïde; localement myl",
+        "138.7 km² — Gneiss de Brest : (1) partie méridionale (orthodérivés): granodiorite calco-alcaline déformée; (2) partie septentrionale",
+        "115.7 km² — Orthogneiss de Plougonven: Orthogneiss monzonitique et gneiss à tendance alumineuse - Ordovicien?",
+        "111.4 km² — Granite d'Ergué: faciès Gourlizon, faciès Kerfeunteun, faciès Ergué s.s. - Carbonifère?",
+        "108.6 km² — Granite porphyrique de Ponthou: Granite monzonitique à biotite porphyroïde, à grains grossiers ou à grains fins  (massif"
+      ]
+    },
+    "gres": {
+      "polygones": 3298,
+      "km2": 1562.1,
+      "exemples": [
+        "504.2 km² — Formations de Pont de Buis-Châteaulin: Schistes, silstones et grauwackes, wackes, shales, grès (membres de Pont Keryau e",
+        "411.7 km² — Schistes et quartzites de Plougastel: alternances de schistes +/- sombres et de quartzites verdâtres, pauvres en micas d",
+        "74.6 km² — Grès de Landevennec: bancs de grès et quartzites à joints schisteux (\"grès de Kerdaniel\"), partie supérieure carbonatée ",
+        "51 km² — Grès Armoricain: dépôts indifférenciés: quartzites massifs blancs, ou à lits graveleux, schistes - Arenig",
+        "41.1 km² — Domaine de St-Ambroise-Fréau: Schistes à nodules, siltites et grès quartzitiques; schistes et pélites à lits silteux et ",
+        "40.1 km² — Groupe de Kerguillé : Grès, \"Grès de Roudou-Hir\" (grès et quartzites blancs micacés, quartzarénites, subarkoses), ampéli",
+        "38.7 km² — Sables dunaires \"flandriens\" (formations éoliennes littorales) - Holocène",
+        "32.2 km² — Schistes de Postolonnec et \"Grès de Kermeur\" indifférenciés: Schistes ardoisiers sombres à passées gréseuses - Llanvirn "
+      ]
+    },
+    "humide": {
+      "polygones": 761,
+      "km2": 429,
+      "exemples": [
+        "401 km² — Alluvions et colluvions post-glaciaires (formations lacutres et fluviatiles), alluvions des vallées, limons de débordeme",
+        "15.1 km² — Tourbes et zones hydromorphes, dépôts fluvio-lacustres tourbeux - Holocène",
+        "10.9 km² — Alluvions anciennes, nappes alluviales perchées: argiles, sables, graviers et cailloux - Pléistocène sup. à Holocène inf",
+        "2 km² — Dépôts lacustres: sable éolien, limons, lits de matière organique, marais littoraux (\"paluds\")   - Holocène",
+        "0 km² — Dépôts marins, lacustres et tourbeux interstratifiés dans les dépôts périglaciaires - Pléistocène sup."
+      ]
+    },
+    "eboulis": {
+      "polygones": 2765,
+      "km2": 321.2,
+      "exemples": [
+        "200.4 km² — Dépôts de pentes et de versant liés aux phénomènes de gélifraction (\"heads\" et sols associés); coulées de gélifluxion (a",
+        "115.2 km² — Colluvions: sables argileux, limons et formations de solifluxion à blocs; alluvions et colluvions des têtes de vallées, ",
+        "4.7 km² — Coulées de solifluxion à matrice argileuse abondante (argiles, schistes, petits cailloux, grès) - Würm à Holocène",
+        "0.9 km² — Colluvions littorales passant aux dépôts marins : colluvions, blocs, éboulis - Holocène"
+      ]
+    },
+    "marne": {
+      "polygones": 474,
+      "km2": 286.5,
+      "exemples": [
+        "230 km² — Limons (parfois \"ocre\"), limons pléniglaciaires, loess, formations résiduelles des plateaux - Pléistocène sup.à Holocène",
+        "9.6 km² — Limons hydromorphes (formations périglaciaires) - Pléistocène sup.",
+        "6.9 km² — Formation de Toulgoat (Lanleya-Toulgoat): Séricito-chlorito-schistes tuffitiques à arkosiques, argilo-siltites rubanées ",
+        "6 km² — Formation de Plestin : Grauwackes feldspathiques, méta-argilites, siltites noires - Briovérien?",
+        "5.9 km² — Argiles, sables, sables argileux, galets; \"argile de Kerleven\" - Eocène",
+        "5.1 km² — Formation de Garlan : Schistes gréso-pélitiques, argilo-siltites homogènes - Briovérien?",
+        "4.9 km² — Complexe argilo-sableux à cailloutis quartzeux (épandages continentaux) - Quaternaire",
+        "4.1 km² — Phyllades à fines séquences rythmiques à imprégnations ferrugineuses, alternances rythmiques argilo-silteuses - Lochkovi"
+      ]
+    },
+    "calcaire": {
+      "polygones": 448,
+      "km2": 129.2,
+      "exemples": [
+        "90.9 km² — Groupe de Troaon et calcaires de Kergarvan indifférenciés: alternances de schistes, calcaires et grès- Emsien sup. à Giv",
+        "12.5 km² — Schistes du Cosquer et \"Formation du Cosquer ou tufs et calcaires de Rozan\" indifférenciés: schistes zonés à minces lits",
+        "5.5 km² — Formation de l'Armorique : Laves et tufs spilitiques à intercalaires sédimentaires, spilites (Baie de Lannion) - Briovér",
+        "4.4 km² — Formation du Rugunay : Laves et tufs kératophyriques à intercalaires sédimentaires - Briovérien?",
+        "4 km² — Laves, tufs et tuffites acides; alternances de quartzites, tuffites et argilites (\"formation de Buelhars-Bolazec\"), rhyo",
+        "2.2 km² — Formation de Locquirec : Tufs kératophyriques grossiers à niveau basal arkosique - Briovérien?",
+        "2 km² — Formation de Kermerrien: Tuffites (volcanites acides; débris de qtz, plg, micas), tufs, brèches et tufs kératophyriques,",
+        "1.9 km² — Schistes kérabitumineux de Porsguen: schistes noirs organiques à nodules de calcaires noirs - Frasnien sup. - Famménien "
+      ]
+    },
+    "moraine": {
+      "polygones": 1,
+      "km2": 0,
+      "exemples": [
+        "0 km² — Dépôts de pente consolidés ferruginés (formations périglaciaires)"
+      ]
+    }
+  },
+  "nonClassees": [
+    "95.5 km² — d1b-3 | Formations de l'Armorique, du Faou et de Reun-ar-C'Hrank indifférenciées (=Groupe de Seillou) - Lochkovien sup. (\"Gédinien\" sup.) à ",
+    "54.7 km² — b(3) | Phyllades de la baie de Douarnenez: Briovérien du Sud de l'Unité de Briec - Briovérien",
+    "47.8 km² — Lã5CS | (méta)Trondhjémite de Douarnenez et tonalites subordonnées (complexe trondhjémitique du Cap Sizun) - 472+/-24 Ma",
+    "20.6 km² — h2b-3(1) | Formations de Pont de Buis-Châteaulin: Wackes et shales à passées gréseuses (\"membre de Keryau\") - Viséen sup. à Namurien",
+    "15.3 km² — X | Remblais, dépôts anthropiques, dépôts artificiels",
+    "14.3 km² — Dzb | Epandages des paluds (formations éoliennes) - Holocène",
+    "11.1 km² — o-s(2) | Formations sédimentaires indifférenciées (Sud du CNA) - Ordovicien à Silurien",
+    "5 km² — Hydro | Réseau hydrologique",
+    "4.1 km² — HeIV | Epandages complexes remaniant les formations tertiaires et plio-quaternaires - Quaternaire",
+    "3.6 km² — MzG | Grève, cordon de galets, blocs et galets marins des estrans - Holocène",
+    "3.1 km² — MzV | Slikke vaseuse, schorre des estuaires, estran vaseux - Holocène",
+    "2 km² — RÁÁÁ | Epandage résiduel de dépôts tertiaires indifférenciés - Tertiaire",
+    "1.6 km² — h1b(å) | Formation de Lostenvern : dolérites et métadolérites - Tournaisien sup.",
+    "1.1 km² — h1-2(Û2) | Formation de Kerroc'h: Métabasaltes - Tournaisien à Viséen",
+    "0.9 km² — ã1P | Albitite quartzique de Ploujean et microalbitites quartziques associées: roches blanches, grenus (massif du petit Trégor) - Dévonien à",
+    "0.9 km² — FMz(2) | Dépôts fluvio-marins et marins : Dépôts estuariens silteux (vases) - Holocène",
+    "0.8 km² — ï2(b) | Kersantites sombres ou claires - Dévonien",
+    "0.8 km² — FMz(1) | Dépôts fluvio-marins et marins : Dépôts estuariens sablo-silteux - Holocène",
+    "0.7 km² — ï1(b) | Filons de lamprophyres - Dévonien",
+    "0.7 km² — ¡K | Kaolin - Néogène",
+    "0.7 km² — å1 | Filons de dolérites liés à la faille de Kerforne, dolérite de Brenterc'h, dolérites de Douarnenez (200-205 Ma (K-Ar)) - Trias terminal ",
+    "0.5 km² — h1-2(Û1) | Formation de Kerroc'h: Jaspes à hématite et magnétite - Tournaisien à Viséen",
+    "0.4 km² — å2 | Filons de dolérites: roches sombres, dolérite de Primel (baie de Morlaix), de Logonna, de Dinéault-Tregarvan, de la pointe du Bellec - ",
+    "0.4 km² — å4 | Filons de dolérites, dolérite de Lardanva (Crozon) - Ordovicien",
+    "0.4 km² — ï1(a) | Filons de lamprophyres, lamprophyres microgrenus, lamprophyres quartziques - Carbonifère",
+    "0.4 km² — ÛP | Formation de Peumerit: Pyroxénites à grenat (Groupe de Peumerit-Tréogat) - Age?",
+    "0.4 km² — îã4 | Roches microgrenues acides indéterminées - Age indéterminé",
+    "0.2 km² — Lã5T(1) | Trondhjémite de Plougasnou et microtrondhjémites associées (massif du petit Trégor) - Dévonien à Carbonifère inf. (\"Dinantien\")",
+    "0.2 km² — fil | Filon minéralisé",
+    "0.2 km² — m-p | Galets et graviers littoraux - Néogène ?",
+    "0.2 km² — îëOu | Intrusions sodiques, à affinité trondhjémitique, faciès microgrenus et grenus (Ouessant) - Age?",
+    "0.2 km² — d7-h1(óá) | Formation de Kermerrien: Rhyodacites - Fammenien sup. à Tournaisien inf. (\"Strunien\")",
+    "0.2 km² — ï1© | Lamprophyres indéterminés - Age indéterminé",
+    "0.1 km² — ï2(a) | Kersantites à biotite, sombres, kersantites de la rade de Brest, de Trez Bellec (254 +/- 10 Ma) - Carbonifère",
+    "0.1 km² — Ã2 | Kératophyres : roches claires à grains fins - Dévonien",
+    "0.1 km² — ï1 | Filons de lamprophyres: Lamprophyres de Melon (242,9 +/- 12,1 Ma (K-Ar) - Trias",
+    "0.1 km² — Ã1 | Kératophyres quartziques, kératophyres - Carbonifère",
+    "0.1 km² — îô | Filons de microsyénite : microsyénite de Molène (304 +/- 5Ma), microsyénites de Ouessant (286 +/- 14 Ma) - Carbonifère à Permien",
+    "0.1 km² — ï2 | Kersantites - Permien à Trias",
+    "0.1 km² — å5 | Filons de dolérites - Briovérien"
+  ]
+}

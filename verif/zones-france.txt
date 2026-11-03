@@ -1,0 +1,11 @@
+patrinat_rnn:rnn 167
+patrinat_rnr:rnr 193
+patrinat_pprnn:pprnn 16
+patrinat_pprnr:pprnr 2
+patrinat_rb:rb 267
+patrinat_pn:parc_national 16
+patrinat_apb:apb 1062
+patrinat_aphn:aphn 26
+patrinat_cdl:conservatoire_littoral 623
+patrinat_cen:cen 2552
+BDTOPO_V3:foret_publique 17071

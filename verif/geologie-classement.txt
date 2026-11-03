@@ -1,0 +1,3 @@
+033 classées : gres 6130, marne 1402, humide 816, calcaire 635, eboulis 542 | non classées : 0 km²
+063 classées : cristallin 3970, eboulis 1159, marne 782, humide 778, calcaire 234, gres 121, moraine 108 | non classées : 0 km²
+029 classées : cristallin 3697, gres 1562, humide 429, eboulis 321, marne 287, calcaire 129, moraine 0 | non classées : 0 km²

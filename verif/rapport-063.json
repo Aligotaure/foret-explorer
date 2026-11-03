@@ -1,0 +1,144 @@
+{
+  "formations": 16216,
+  "conservees": 14036,
+  "sols": {
+    "cristallin": {
+      "polygones": 6389,
+      "km2": 3970.3,
+      "exemples": [
+        "318.2 km² — Socle hercynien. Massif de Saint-Dier : Granites calco-alcalins à biotite et cordièrite de Saint-Dier",
+        "188.1 km² — Série métamorphique d'Ussel-Chavanon (Aubusson) : Diatexites-anatexites à cordiérite-biotite",
+        "184.7 km² — Unité supérieure des Gneiss : Diatexites-Anatexites granitoïdes à biotite et cordiérite.",
+        "167.1 km² — Socle hercynien. Massif granitique de Guéret : Monzogranites à biotite +/-  cordiérite, localement riches en biotite",
+        "136.1 km² — Socle hercynien. Granite type Massif des Bois-Noirs: Granite à gros grain, riche en quartz (ou granite de Lachaux, grani",
+        "129.7 km² — Socle hercynien. Ceinture granitique du Forez-granites bordiers : Granites à deux micas, leuco à mésocrates (Monestier, ",
+        "115.4 km² — Socle hercynien. Massif du Forez : Granites hétérogènes à biotite +/- sillimanite.",
+        "101.3 km² — Série métamorphique de la Moyenne Dordogne (prolongement) (ou de Bourg-Lastic) : Micaschistes alumineux"
+      ]
+    },
+    "eboulis": {
+      "polygones": 3218,
+      "km2": 1158.6,
+      "exemples": [
+        "337.1 km² — Colluvions s. l. de versants, de fonds de vallées",
+        "278.8 km² — Colluvions argilo-calcaires, parfois sableuses (Oligocène marno-calcaire démantelé)",
+        "173.1 km² — Colluvions alimentées par des roches volcaniques diverses (pyroclastites, scories basaltiques, basaltes, rhyolites, picr",
+        "164.7 km² — Colluvions-nappes de blocs de roches plutoniques et/ou métamorphiques et/ou volcaniques",
+        "39 km² — Volcanisme du Quaternaire récent de la Chaîne des Puys : Projections scoriacées (cônes volcaniques, lapilli de saupoudra",
+        "32.7 km² — Éboulis alimentés par des roches volcaniques diverses selon le contexte local (basanites, basaltes, pyroclastites, tephr",
+        "25.4 km² — Colluvions alimentées par les altérites de roches granitiques",
+        "24.7 km² — Complexe de versant des Formations superficielles, loupes de glissements de terrains"
+      ]
+    },
+    "marne": {
+      "polygones": 820,
+      "km2": 781.9,
+      "exemples": [
+        "266 km² — Bassins des Limagnes, bassins de Laschamp-la Jugie, Chapuzat-Sauvagnat, Herment-Lastic, Olby, Ambert, Billom : Argiles e",
+        "182.7 km² — Complexe des Limagnes (\"Terres Noires\") (type marais d'Ussel-d'Allier, de Saulzet, du Buron, de Saint-André-de-Coq, de S",
+        "125.7 km² — Bassins des Limagnes : Marnes et argiles beiges à vertes, calcaires argileux, à Cypris",
+        "67.5 km² — Complexe argilo-calcaire (Châteaugay, Cournon d'Auvergne, Lempdes) : Marnes, argiles, calcaires, sables",
+        "40.1 km² — Bassins des Limagnes, bassins d'Ebreuil, Olby : Argiles et sables argileux quartzo-feldspathiques bariolés rouges et ver",
+        "31.5 km² — Formation résiduelle dérivée de l'Oligocène des Limagnes : Matériaux fins argilo-calcaires, cailloutis cryoclastiques, s",
+        "26.2 km² — Formation résiduelle dérivée de l'Oligocène des Limagnes : Matériaux fins argilo-calcaires, cailloutis cryoclastiques, s",
+        "21.1 km² — Bassins des Limagnes, bassins de Laschamp-la Jugie, Chapuzat-Sauvagnat, Herment-Lastic, Olby : Alternances d'argile sabl"
+      ]
+    },
+    "humide": {
+      "polygones": 1739,
+      "km2": 777.6,
+      "exemples": [
+        "393.6 km² — Alluvions fluviatiles actuelles à récentes (Holocène)",
+        "75.6 km² — Alluvions fluviatiles anciennes de moyenne terrasse (Pleistocène moyen-Riss)",
+        "67.7 km² — Alluvions fluviatiles anciennes de basse terrasse (Pleistocène supérieur-Würm)",
+        "51.2 km² — Alluvions fluviatiles anciennes indifférenciées, alluvions anciennes résiduelles",
+        "49.8 km² — Alluvions fluviatiles anciennes de très haute terrasse (Pleistocène inférieur-Günz)",
+        "49.6 km² — Alluvions fluviatiles anciennes de haute terrasse (Pleistocène moyen-Mindel)",
+        "45.8 km² — Tourbe (tourbières, marécages)",
+        "16.6 km² — Alluvions fluviatiles anciennes (Pleistocène inférieur-Donau)"
+      ]
+    },
+    "calcaire": {
+      "polygones": 739,
+      "km2": 233.9,
+      "exemples": [
+        "75.5 km² — Complexe volcanique et volcano-sédimentaire viséen type Manzat, Ferrières-sur-Sichon : Tufs rhyolitiques, ignimbritiques",
+        "40.5 km² — Bassins des Limagnes, bassins de Châtelguyon, Gimeaux : Calcaires argileux, marnes, schistes papyracés",
+        "33.7 km² — Bassins des Limagnes, bassin d'Ebreuil (de Moulins au Nord) : Calcaires, calcaires construits, calcaires dolomitiques, c",
+        "28.3 km² — Complexe volcanique et volcano-sédimentaire viséen type Châteauneuf, Ceyssat : Tufs et laves rhyolitiques à ignimbritiqu",
+        "15.1 km² — Volcanisme du Miocène inférieur à moyen  des Limagnes et/ou du plateau des Dômes : Tufs et brèches pépéritiques (Miocène",
+        "10.7 km² — Complexe volcanique et volcano-sédimentaire viséen type Châteauneuf, Ceyssat : Tufs ignimbritiques à enclaves",
+        "8.4 km² — Complexe volcanique et volcano-sédimentaire viséen type Châteauneuf, Ceyssat : Tufs rhyodacitiques, tufs conglomératique",
+        "7.4 km² — Complexe éruptif, volcanique et volcano-sédimentaire viséen type Saint-Gervais-d'Auvergne - Pontgibaud - Evaux-les-Bains"
+      ]
+    },
+    "gres": {
+      "polygones": 925,
+      "km2": 121,
+      "exemples": [
+        "20.9 km² — Complexe volcanique et volcano-sédimentaire stéphanien du Sillon houiller : Formation des Grès feldspathiques, schistes,",
+        "19.7 km² — Bassins des Limagnes : Grès arkosiques, arkoses (arkoses du Bois-de-Bas)",
+        "8.3 km² — Formation des Sables et argiles du Bourbonnais : Niveau à sables grossiers à galets et graviers (silex, granite, etc. se",
+        "7.9 km² — Filon de quartz",
+        "7 km² — Ensemble calcaréo-détritique de Saint-Agoulin : sables, argiles et calcaires",
+        "6.8 km² — Formation résiduelle dérivée du Tertiaire indifférencié des Limagnes: Sables feldspathiques, argiles et marnes, plus ou ",
+        "6.1 km² — Complexe volcanique et volcano-sédimentaire stéphanien de Brassac : Formation des Schistes, grès, conglomérats, tufs, ch",
+        "5.8 km² — Bassins des Limagnes, bassins de Laschamp-la Jugie, Chapuzat-Sauvagnat, de Herment-Lastic, Olby : Conglomérats intercalé"
+      ]
+    },
+    "moraine": {
+      "polygones": 206,
+      "km2": 107.5,
+      "exemples": [
+        "41.6 km² — Moraines récentes",
+        "36.5 km² — Formation à blocailles périglaciaires : Blocs hétérométriques, sables argileux",
+        "17.5 km² — Dépôts glaciaires indifférenciés : dépôts morainiques, fluvio-glaciaires, limno-glaciaires",
+        "8.6 km² — Dépôts fluvio-glaciaires",
+        "2 km² — Dépôts limno-glaciaires",
+        "1.3 km² — Moraines indifférenciées"
+      ]
+    }
+  },
+  "nonClassees": [
+    "132.3 km² — pâ-â7CZ | Volcanisme du Pliocène du Cézallier : Basaltes, basanites, indifférenciés",
+    "100.2 km² — p2-q1¶âMD | Volcanisme du Pliocène supérieur à Pleistocène inférieur du Mont-Dore : Ankaramites à phénocristaux d'olivine et de pyroxène",
+    "86.3 km² — p2-q1âMD | Volcanisme du Pliocène supérieur à Pleistocène inférieur du Mont-Dore : Basaltes s.l.  (basaltes demi-deuil, basaltes à phénocris",
+    "47.9 km² — pyâCZ | Volcanisme du Pliocène du Cézallier : Pyroclastites basaltiques de maars (en place ou remaniées)",
+    "44.3 km² — p2-q1öáMD | Volcanisme du Pliocène supérieur à Pleistocène inférieur du Mont-Dore : Trachyandésites s. l.",
+    "41.2 km² — p2-q2AvMD-SY | Volcanisme du Sancy (Pleistocène inférieur à moyen) ou du Mont-Dore (Pliocène supérieur à Pleistocène inférieur) : Dépôts d'a",
+    "37.8 km² — p2-q1öáâMD | Volcanisme du Pliocène supérieur à Pleistocène inférieur du Mont-Dore : Mugéarites : doréites (trachyandésites basaltiques)",
+    "37.2 km² — p2-q1öâMD | Volcanisme du Pliocène supérieur à Pleistocène inférieur du Mont-Dore : Trachybasaltes (Hawaïtes, labradorites)",
+    "28.6 km² — p2-q1pMD | Volcanisme du Pliocène supérieur à Pleistocène inférieur du Mont-Dore :  Nappes de ponces inférieures à supérieures",
+    "24.4 km² — pdâ-âCZ | Volcanisme du Pliocène du Cézallier : Basaltes doléritiques, dolérites",
+    "20.1 km² — p2-q1ÈMD | Volcanisme du Pliocène supérieur à Pleistocène inférieur du Mont-Dore : Mugéarites : ordanchites",
+    "17.9 km² — pâPD | Volcanisme du Pliocène du plateau des Dômes : Basaltes indifférenciés, basaltes des plateaux",
+    "16.1 km² — mâÿPD | Volcanisme du Miocène du plateau des Dômes s.l. : Ankaramites, basaltes",
+    "15.2 km² — mâ7SI | Volcanisme du Miocène de la Chaine de la Sioule : Basanites",
+    "14.3 km² — pâ7òCZ | Volcanisme du Pliocène du Cézallier : Basanites à nodules de péridotites",
+    "12.1 km² — mâ7PD | Volcanisme du Miocène du plateau des Dômes s.l. :  Basanites (plateau de Châteaugay)",
+    "9.8 km² — p-IVvs3-4 | Volcanisme du Plio-Quaternaire indifférencié : Tephra et terrains volcano-sédimentaires supérieurs associés",
+    "8.9 km² — pscâåCZ | Volcanisme du Pliocène du Cézallier : Scories basaltiques à téphritiques (en place ou remaniées)",
+    "8.3 km² — «¥ | \"Sidérolithique\" s.l. : Sols rubéfiés, cuirasses ferrugineuses, paléosols (âge indéterminé, Crétacé à Tertiaire)",
+    "7.4 km² — pöâPD | Volcanisme du Pliocène du plateau des Dômes : Trachybasaltes (Montagne de la Serre, Puy d'Alou)",
+    "5.7 km² — HYDRO | Réseau hydrographique, étendues d'eau",
+    "5.6 km² — p2-q1scMD | Volcanisme du Pliocène supérieur à Pleistocène inférieur du Mont-Dore : Scories",
+    "5.5 km² — p-IVvs2 | Volcanisme du Plio-Quaternaire indifférencié : Tephra et terrains volcano-sédimentaires moyens associés",
+    "5 km² — q3pyrscâCZ | Volcanisme du Pleistocène supérieur  du Cézallier : Pyroclastites et/où scories basaltiques",
+    "5 km² — m1-4â1-7LI | Volcanisme du Miocène inférieur à moyen des Limagnes : Basanites et basaltes alcalins",
+    "4.9 km² — p2-q1âPC | Volcanisme du Pliocène supérieur à Pleistocène inférieur de la Petite Chaîne des Puys : Basaltes à tendance limburgitique",
+    "4.6 km² — q4âPMO | Volcanisme du Quaternaire récent (Montchal, Estavidoux, Montcineyre) basaltique à trachy-basaltique : Basaltes à olivine avec ou sa",
+    "4.5 km² — pâ7CZ | Volcanisme du Pliocène du Cézallier : Basanites indifférenciées (noires, à nodules de péridotite, etc.)",
+    "4.5 km² — J | Matériaux de déjection",
+    "4.2 km² — X | Dépôts anthropiques : déblais miniers, déblais de travaux divers",
+    "4 km² — p2-q1ÜMD(1) | Volcanisme du Pliocène supérieur à Pleistocène inférieur du Mont-Dore : Phonolites leucocrates",
+    "3.9 km² — pVsCZ | Volcanisme du Pliocène du Cézallier : Remplissages sédimentaires à volcano-sédimentaires de maars",
+    "3.7 km² — q4öâ2M | Volcanisme du Quaternaire récent (Montchal, Estavidoux, Montcineyre) basaltique à trachy-basaltique: Trachy-basaltes à olivine et p",
+    "3.5 km² — q1-2â1SY | Volcanisme du Pleistocène inférieur à moyen du Sancy : Basaltes s.l. plus ou moins porphyriques  à petits cristaux d'olivine et d",
+    "3.4 km² — q4dâCP | Volcanisme du Quaternaire récent de la Chaîne des Puys : Basaltes à tendance doléritique",
+    "3.1 km² — q3â-â7CZ | Volcanisme du Pleistocène supérieur du Cézallier : Basaltes, basanites à olivines, basanites à nodules de péridotite",
+    "2.9 km² — p2-q1pyscPC | Volcanisme du Pliocène supérieur à Pleistocène inférieur de la Petite Chaîne des Puys : Pyroclastites : projections scoriacées",
+    "2.6 km² — p2-q1âCP | Volcanisme du Pliocène supérieur à Pleistocène inférieur de la Chaîne des Puys (prolongement nord) : Basaltes",
+    "2.5 km² — q4ciöCP | Volcanisme du Quaternaire récent de la Chaîne des Puys : Gaines de cendres trachytiques",
+    "2.4 km² — q4vsPM | Volcanisme du Quaternaire récent (Lac Pavin, Puy de Montchal, Puy de Montcineyre) : Formation volcano-sédimentaire (lahars, débris-"
+  ]
+}
