@@ -3,6 +3,7 @@
 //     la cueillette (réserves naturelles et biologiques, cœurs de parc national, arrêtés de
 //     protection, terrains des conservatoires) → protection.geojsonl ;
 //   - les forêts publiques de la BD TOPO de l'IGN (d'après l'ONF) → forets.geojsonl ;
+//   - un point d'étiquette par zone protégée (nom affiché une seule fois) → etiquettes.geojsonl ;
 // et écrit resume.json (date, nombres par type), copié ensuite en info.json à côté des tuiles.
 //
 // Usage : node telecharger.mjs <dossier> [sud,ouest,nord,est]
@@ -38,9 +39,54 @@ const FORETS = 'BDTOPO_V3:foret_publique';
 
 const fichiers = {
   protection: join(dir, 'protection.geojsonl'),
+  etiquettes: join(dir, 'etiquettes.geojsonl'),
   forets: join(dir, 'forets.geojsonl'),
   resume: join(dir, 'resume.json'),
 };
+
+/** Ordre de priorité des étiquettes (1 passe devant), et types qu'on n'étiquette pas. */
+const RANG = { rnn: 1, rnr: 1, pn: 1, rb: 2, apb: 2, aphn: 2, cdl: 3, cen: 3 };
+
+const aire = (anneau) => {
+  let a = 0;
+  for (let i = 0, j = anneau.length - 1; i < anneau.length; j = i++) a += (anneau[j][0] + anneau[i][0]) * (anneau[j][1] - anneau[i][1]);
+  return Math.abs(a / 2);
+};
+
+/**
+ * Point d'étiquette dans le plus grand morceau d'une zone : milieu du plus long segment intérieur
+ * sur l'horizontale qui coupe ce morceau à mi-hauteur (toujours à l'intérieur, trous compris).
+ */
+function pointEtiquette(geometrie) {
+  const morceaux = geometrie.type === 'Polygon' ? [geometrie.coordinates] : geometrie.type === 'MultiPolygon' ? geometrie.coordinates : [];
+  let poly = null;
+  let surface = 0;
+  for (const m of morceaux) {
+    const a = m[0] ? aire(m[0]) : 0;
+    if (a > surface) [poly, surface] = [m, a];
+  }
+  if (!poly) return null;
+  const ys = poly[0].map((p) => p[1]);
+  const y = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const xs = [];
+  for (const anneau of poly) {
+    for (let i = 0, j = anneau.length - 1; i < anneau.length; j = i++) {
+      const [x1, y1] = anneau[i];
+      const [x2, y2] = anneau[j];
+      if (y1 > y !== y2 > y) xs.push(x1 + ((y - y1) * (x2 - x1)) / (y2 - y1));
+    }
+  }
+  xs.sort((a, b) => a - b);
+  let meilleur = null;
+  let largeur = -1;
+  for (let k = 0; k + 1 < xs.length; k += 2) {
+    if (xs[k + 1] - xs[k] > largeur) [meilleur, largeur] = [(xs[k] + xs[k + 1]) / 2, xs[k + 1] - xs[k]];
+  }
+  return meilleur === null ? null : { point: [meilleur, y], surface };
+}
+
+/** « Roc de Chère » et « Roc de chere » : même nom (une seule étiquette). */
+const cle = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 
 function recent() {
   if (process.env.FORCE === '1' || !Object.values(fichiers).every((f) => existsSync(f))) return false;
@@ -112,6 +158,7 @@ async function construire() {
   const compteurs = {};
   const vus = new Set();
   const protection = [];
+  const etiquettes = new Map(); // nom normalisé → meilleure étiquette
   for (const couche of PROTECTION) {
     const entites = await telecharger(couche.typename);
     for (const f of entites) {
@@ -131,6 +178,11 @@ async function construire() {
       if (type === 'rb' && typeof p.zone === 'string' && p.zone) props.detail = p.zone; // Intégrale / Dirigée
       protection.push(ligne(props, f.geometry));
       compteurs[type] = (compteurs[type] ?? 0) + 1;
+      const pe = RANG[type] && texte ? pointEtiquette(f.geometry) : null;
+      const deja = pe && etiquettes.get(cle(texte));
+      if (pe && (!deja || RANG[type] < deja.rang || (RANG[type] === deja.rang && pe.surface > deja.surface))) {
+        etiquettes.set(cle(texte), { nom: texte, type, rang: RANG[type], surface: pe.surface, point: pe.point });
+      }
     }
     console.log(`${couche.typename} : ${entites.length} objets`);
   }
@@ -152,6 +204,10 @@ async function construire() {
 
   // Écriture atomique : un téléchargement raté ne laisse pas de fichier à moitié écrit.
   writeFileSync(`${fichiers.protection}.tmp`, `${protection.join('\n')}\n`);
+  writeFileSync(
+    `${fichiers.etiquettes}.tmp`,
+    `${[...etiquettes.values()].map((e) => ligne({ nom: e.nom, type: e.type, rang: e.rang }, { type: 'Point', coordinates: e.point })).join('\n')}\n`,
+  );
   writeFileSync(`${fichiers.forets}.tmp`, `${forets.join('\n')}\n`);
   writeFileSync(
     `${fichiers.resume}.tmp`,

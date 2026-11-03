@@ -4,7 +4,9 @@ Carte des types de forêt de la **BD Forêt® V2** de l'IGN, avec une légende c
 que les types qui vous intéressent : chênes, hêtre, châtaignier, sapin-épicéa… Pour la cueillette, la
 carte croise aussi la **nature du sol** (cartes géologiques du BRGM), la **météo des 20 derniers
 jours** et l'**altitude**, et en tire un indice de pousse pour les cèpes, girolles, trompettes,
-chanterelles en tube et morilles. Tout vient de services publics, sans clé d'API.
+chanterelles en tube et morilles. Elle signale aussi les **zones protégées** et les **forêts
+publiques**, pour savoir où l'on a le droit de cueillir. Tout vient de services publics, sans clé
+d'API.
 
 **En ligne : https://aligotaure.github.io/foret-explorer/** (ordinateur et téléphone).
 
@@ -21,6 +23,12 @@ La carte s'ouvre sur http://localhost:5173, entre Annecy, le Parmelan et Thônes
 
 ## Utilisation
 
+À l'ouverture, un avertissement reste affiché au moins 3 secondes : la carte aide à choisir où
+chercher, elle n'identifie aucun champignon et ne donne aucun droit de cueillir. Il revient à chaque
+nouvelle version des conditions et au plus tard après 30 jours. La page **À propos** (bouton ⓘ)
+réunit les conseils avant de cueillir, les règles, les conditions d'utilisation, les mentions
+légales, la confidentialité et un bouton « Effacer mes données ».
+
 ### Trouver des champignons
 
 - **Je cherche…** : choisissez cèpes, girolles, trompettes, chanterelles en tube ou morilles. La
@@ -30,8 +38,13 @@ La carte s'ouvre sur http://localhost:5173, entre Annecy, le Parmelan et Thônes
 - **Carrés de 500 m** : à partir du zoom 12, la grille de l'indice se resserre. Chaque carré est
   calculé avec son altitude (IGN), les arbres et le sol relevés à l'intérieur ; seuls les carrés
   où poussent des arbres hôtes sont colorés. La pluie reste celle de la case de 4,5 km.
-- **Toucher la carte** ouvre le bilan du coin : type de forêt, nature du sol, altitude exacte, pluie
-  jour par jour sur 20 jours, températures, et un verdict expliqué pour chaque champignon.
+- **Toucher la carte** ouvre le bilan du coin : type de forêt, nature du sol, altitude exacte, droit
+  de cueillir (zone protégée, forêt publique ou sans doute privée), pluie jour par jour sur 20 jours,
+  températures, et un verdict expliqué pour chaque champignon.
+- **Où cueillir** : les zones protégées (réserves naturelles et biologiques, cœurs de parc national,
+  arrêtés de biotope, terrains des conservatoires) sont hachurées en rouge ; les forêts publiques
+  (domaniales et communales) s'affichent en tirets sur demande. Données PatriNat et IGN (BD TOPO),
+  indicatives : seuls les textes officiels et les panneaux sur place font foi.
 - **Nature du sol** : motifs par grande nature de sol (calcaire, marnes, grès et molasses, roches
   cristallines, moraines, éboulis, zones humides), avec entre parenthèses les champignons que
   chacune favorise. Couverture : Haute-Savoie et Savoie.
@@ -105,13 +118,20 @@ Pour tester une version locale depuis un téléphone sur le même Wi-Fi : `npm r
 ## Mise en ligne
 
 Chaque push sur `main` déclenche `.github/workflows/deploy.yml` : construction des tuiles de
-géologie, tests et publication du serveur de mesure (s'il est configuré), vérification TypeScript,
-build Vite, publication sur GitHub Pages. Les dépendances sont installées avec `npm ci
---ignore-scripts` : versions figées par les `package-lock.json`, sans script d'installation.
+géologie et des zones, tests et publication du serveur de mesure (s'il est configuré), vérification
+TypeScript, build Vite, publication sur GitHub Pages. Les dépendances sont installées avec `npm ci
+--ignore-scripts` : versions figées par les `package-lock.json`, sans script d'installation. Les
+actions GitHub sont épinglées sur leur identifiant de commit.
 
 Les tuiles « nature du sol » sont produites par `scripts/geologie/construire.sh` (GDAL 3.8 ou plus,
-Node, curl, unzip) dans `public/data/geologie/`. En développement, la carte lit celles du site en
-ligne : pas besoin de les construire.
+Node, curl, unzip) dans `public/data/geologie/`, celles des zones protégées et forêts publiques par
+`scripts/zones/construire.sh` (GDAL, Node ; WFS de la Géoplateforme) dans `public/data/zones/`. En
+développement, la carte lit celles du site en ligne : pas besoin de les construire.
+
+Autres automatismes : `verification.yml` teste chaque pull request (dont celles de Dependabot,
+configuré dans `.github/dependabot.yml` : une fois par semaine, versions d'au moins 7 jours) ;
+`surveillance.yml` vérifie chaque matin que les services IGN, Open-Meteo et le site répondent, et
+échoue (avec un e-mail de GitHub) si l'un d'eux tombe.
 
 ## Données
 
@@ -120,6 +140,8 @@ ligne : pas besoin de les construire.
   [Licence Ouverte Etalab 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence/).
 - Géologie : © BRGM, cartes géologiques harmonisées au 1/50 000 (BD Charm-50, 2019), Licence Ouverte
   2.0, via le miroir référencé par data.gouv.fr.
+- Zones protégées : PatriNat (OFB, MNHN), via la Géoplateforme ; forêts publiques : © IGN, BD TOPO®
+  (d'après l'ONF), Licence Ouverte Etalab 2.0.
 - Météo : [Open-Meteo](https://open-meteo.com/) (CC BY 4.0), gratuit pour un usage non commercial
   (moins de 10 000 appels par jour et 300 000 par mois) : la page privée suit cette consommation.
 - La BD Forêt V2 a été photo-interprétée entre 2007 et 2018 selon les départements : les coupes et

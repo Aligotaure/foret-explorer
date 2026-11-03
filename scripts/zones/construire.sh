@@ -2,6 +2,7 @@
 # Construit les tuiles vectorielles « zones » dans public/data/zones/ :
 #   couche « protection »     : espaces protégés PatriNat (OFB, MNHN) qui peuvent interdire ou limiter
 #                               la cueillette (champs type, nom, url, detail) ;
+#   couche « protection_nom » : un point par zone protégée pour son nom (champs nom, type, rang) ;
 #   couche « foret_publique » : forêts publiques de la BD TOPO de l'IGN, d'après l'ONF (champs nature, nom).
 # Données téléchargées depuis le WFS de la Géoplateforme par telecharger.mjs (sans clé).
 #
@@ -23,6 +24,8 @@ rm -rf "$SORTIE" "$TRAVAIL/zones.gpkg" # le pilote MVT crée lui-même le dossie
 # Lambert-93 → WGS84, simplification de 5 m (les limites sont dessinées au 1/25 000 au mieux).
 ogr2ogr -f GPKG "$TRAVAIL/zones.gpkg" "$TRAVAIL/protection.geojsonl" -s_srs EPSG:2154 -t_srs EPSG:4326 \
   -simplify 5 -nlt PROMOTE_TO_MULTI -nln protection
+ogr2ogr -update -f GPKG "$TRAVAIL/zones.gpkg" "$TRAVAIL/etiquettes.geojsonl" -s_srs EPSG:2154 -t_srs EPSG:4326 \
+  -nln protection_nom
 ogr2ogr -update -f GPKG "$TRAVAIL/zones.gpkg" "$TRAVAIL/forets.geojsonl" -s_srs EPSG:2154 -t_srs EPSG:4326 \
   -simplify 5 -nlt PROMOTE_TO_MULTI -nln foret_publique
 

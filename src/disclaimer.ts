@@ -58,7 +58,8 @@ function content(): HTMLElement {
       'p',
       { id: 'disclaimer-intro', class: 'disclaimer__intro' },
       h('strong', {}, 'Forêt Explorer est une carte personnelle, gratuite et expérimentale.'),
-      ' Elle aide à choisir où chercher. Elle ne dit jamais si un champignon se mange, ni si vous avez le droit de le cueillir.',
+      ' Elle aide à choisir où chercher. Elle ne dit jamais si un champignon se mange, ni si vous avez le droit de le cueillir : ',
+      h('strong', {}, 'vous restez seul responsable de votre cueillette.'),
     ),
     h('h3', { class: 'disclaimer__title' }, 'Identifier votre cueillette'),
     h(
@@ -76,7 +77,7 @@ function content(): HTMLElement {
       point('Photographiez la récolte avant de la cuisiner,', 'et ne donnez jamais de champignons cueillis à de jeunes enfants.'),
       point(
         'Malaise après un repas de champignons ?',
-        'Vomissements, diarrhée, vertiges, troubles de la vue… : appelez aussitôt un centre antipoison (Lyon : 04 72 11 69 11) ou le 15.',
+        'Vomissements, diarrhée, vertiges, troubles de la vue… : appelez aussitôt un centre antipoison (Lyon : 04 72 11 69 11) ou le 15.',
       ),
     ),
     h('h3', { class: 'disclaimer__title' }, 'Où vous avez le droit de cueillir'),
@@ -159,12 +160,14 @@ export function showDisclaimer(force = false): Promise<void> {
     dialog.dataset['ouvert'] = String(Date.now()); // instants lus par les tests de bout en bout
     body.focus({ preventScroll: true });
 
-    let left = WAIT_SECONDS;
+    // Compte à rebours sur l'horloge (et non en additionnant des minuteries, qui prennent du retard
+    // pendant le chargement de la carte) : le bouton s'active au bout de WAIT_SECONDS secondes.
+    const started = Date.now();
     const tick = (): void => {
+      const left = Math.ceil((WAIT_SECONDS * 1000 - (Date.now() - started)) / 1000);
       if (left > 0) {
         accept.textContent = `Lisez d’abord… ${left}`;
-        left -= 1;
-        window.setTimeout(tick, 1000);
+        window.setTimeout(tick, 200);
         return;
       }
       accept.disabled = false;

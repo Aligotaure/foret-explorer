@@ -1,8 +1,0 @@
-OK     déconnexion : cookie effacé
-OK     9e essai depuis la même adresse : bloqué (429), même avec le bon mot de passe — 429
-OK     autre adresse : connexion possible
-OK     aucune adresse IP enregistrée (empreintes seulement) — *,f1a263ea4bebbecf55d20667
-OK     mot de passe trop court : connexion désactivée, message clair
-OK     chemin trop court : tableau de bord désactivé (404)
-
-26/26 vérifications OK — aperçus dans test/apercus/

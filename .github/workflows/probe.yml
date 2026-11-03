@@ -1,4 +1,4 @@
-# Sonde temporaire n°11 : vérification complète des protections (zones réelles, tests, aperçus).
+# Sonde temporaire n°12 : vérification complète des protections (zones réelles, tests, aperçus).
 name: Sonde des sources de données
 
 on:
@@ -56,4 +56,4 @@ jobs:
           git config user.name 'sonde'
           git config user.email 'sonde@users.noreply.github.com'
           git add -f verif
-          git commit -qm "Résultats de la sonde n°11" && git push -q origin HEAD:data-probe || echo "rien à publier"
+          git commit -qm "Résultats de la sonde n°12" && git push -q origin HEAD:data-probe || echo "rien à publier"

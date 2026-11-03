@@ -114,6 +114,8 @@ export const ZONES_BASE = import.meta.env.DEV
 
 export const ZONES = {
   protectedLayer: 'protection',
+  /** Un point par zone protégée, pour afficher son nom une seule fois. */
+  protectedNameLayer: 'protection_nom',
   publicForestLayer: 'foret_publique',
   minZoom: 9,
   maxZoom: 13,

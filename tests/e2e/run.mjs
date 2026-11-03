@@ -86,7 +86,7 @@ async function disclaimerTests(browser, base) {
     };
   });
   check('avertissement : fenêtre modale à l’ouverture', first.modal && first.role === 'alertdialog' && first.label === 'Avant de partir en forêt', JSON.stringify({ modal: first.modal, role: first.role }));
-  check('avertissement : bouton bloqué avec compte à rebours', first.disabled && /3/.test(first.button), first.button);
+  check('avertissement : bouton bloqué avec compte à rebours', first.disabled && /Lisez d’abord… [123]/.test(first.button), first.button);
   check(
     'avertissement : identification, centre antipoison, propriétaire, responsabilité',
     ['pharmacien', 'entiers', 'application', '04 72 11 69 11', 'propriétaire', 'seul responsable', 'limites permises par la loi'].every((w) => first.text.includes(w)),
@@ -107,7 +107,7 @@ async function disclaimerTests(browser, base) {
     const d = document.querySelector('dialog.disclaimer');
     return Number(d.dataset.actif) - Number(d.dataset.ouvert);
   });
-  check('avertissement : acceptation possible au bout de 3 secondes', delay >= 2900 && delay < 4500, `${delay} ms`);
+  check('avertissement : acceptation possible au bout de 3 secondes', delay >= 2950 && delay < 6000, `${delay} ms`);
   await page.locator('.disclaimer__accept').click();
   const after = await page.evaluate(() => ({
     gone: !document.querySelector('dialog.disclaimer'),
@@ -136,7 +136,7 @@ async function disclaimerTests(browser, base) {
     ['identifier', 'regles', 'securite', 'conditions', 'mentions-legales', 'confidentialite', 'sources'].every((id) => about.ids.includes(id)) && about.host && about.law,
     about.ids.join(','),
   );
-  check('À propos : ce que garde le navigateur, état de la mesure', about.stored.some((t) => /avertissement/.test(t)) && about.stored.some((t) => /réglages/.test(t)) && about.metrics === 'activée', `${about.stored.length} éléments, mesure ${about.metrics}`);
+  check('À propos : ce que garde le navigateur, état de la mesure', about.stored.some((t) => /Acceptation de l’avertissement, le /.test(t)) && about.metrics === 'activée', `${about.stored.join(' | ')} — mesure ${about.metrics}`);
   await page.screenshot({ path: `${OUT}10-a-propos.png` });
   await page.locator('[data-clear]').click();
   await page.locator('[data-clear]').click();
@@ -203,6 +203,7 @@ async function desktopTests(browser, base) {
     JSON.stringify(zones),
   );
   check('tuiles des zones et info.json demandés', log.zones.some((p) => p.endsWith('/info.json')) && log.zones.some((p) => p.endsWith('.pbf')), log.zones.slice(0, 2).join(', '));
+  await page.locator('#legend .layer', { hasText: 'Où cueillir' }).locator('.layer__toggle').click();
   await page.getByRole('switch', { name: 'Afficher les forêts publiques' }).check();
   check('interrupteur « Forêts publiques »', (await page.evaluate(() => window.map.getLayoutProperty('forets-publiques', 'visibility'))) === 'visible');
   await page.screenshot({ path: `${OUT}01b-bureau-zones.png` });

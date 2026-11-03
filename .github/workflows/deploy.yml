@@ -60,6 +60,7 @@ jobs:
         with:
           path: |
             .cache/zones/protection.geojsonl
+            .cache/zones/etiquettes.geojsonl
             .cache/zones/forets.geojsonl
             .cache/zones/resume.json
           key: zones-${{ hashFiles('scripts/zones/*') }}-${{ steps.semaine.outputs.n }}

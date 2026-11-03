@@ -302,8 +302,8 @@ export function buildStyle(state: AppState): StyleSpecification {
       {
         id: LAYERS.protectedLabel,
         type: 'symbol',
-        ...zone(ZONES.protectedLayer),
-        minzoom: 12,
+        ...zone(ZONES.protectedNameLayer),
+        minzoom: 11.5,
         layout: {
           visibility: visibility(state.zones),
           'text-field': ['get', 'nom'],
@@ -311,6 +311,8 @@ export function buildStyle(state: AppState): StyleSpecification {
           'text-size': 11,
           'text-max-width': 10,
           'text-allow-overlap': false,
+          // Réserves et cœurs de parc d'abord, terrains des conservatoires ensuite.
+          'symbol-sort-key': ['get', 'rang'],
         },
         paint: { 'text-color': '#8b1515', 'text-halo-color': 'rgba(255,255,255,0.92)', 'text-halo-width': 1.4 },
       },

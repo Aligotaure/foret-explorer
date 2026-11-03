@@ -108,6 +108,15 @@ function rulesSection(zones: ZonesAtPoint, forest: ForestAtPoint | null): HTMLEl
           ` : forêt publique${zones.publicForest.domaniale ? ' (domaniale)' : ''}, gérée par l’ONF. Une cueillette familiale y est en général tolérée, sauf interdiction (arrêté, panneau).`,
         ),
       );
+    } else if (zones.protections.some((z) => z.type === 'cdl')) {
+      items.push(
+        h('p', { class: 'spot__rule' }, h('strong', {}, 'Propriété publique'), ' (Conservatoire du littoral) : suivez le règlement affiché sur place.'),
+      );
+    } else if (zones.protections.length) {
+      // Dans une zone protégée, le propriétaire peut être public ou privé : on ne devine pas.
+      items.push(
+        h('p', { class: 'spot__rule' }, h('strong', {}, 'Propriétaire non identifié'), ' : demandez l’accord du propriétaire ou du gestionnaire de la zone.'),
+      );
     } else if (forest) {
       items.push(
         h(

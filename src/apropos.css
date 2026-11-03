@@ -161,6 +161,10 @@ a {
   font-size: 17px;
 }
 
+.nowrap {
+  white-space: nowrap;
+}
+
 .muted {
   color: var(--ink-soft);
   font-size: 14px;

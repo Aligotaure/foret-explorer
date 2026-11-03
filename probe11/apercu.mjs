@@ -122,7 +122,8 @@ async function bilan(name, { view, kind, layer, pattern, state }) {
     const s = [...document.querySelectorAll('#spot .spot__section')].find((x) => x.querySelector('.spot__title')?.textContent === 'Droit de cueillir');
     return s?.textContent.replace(/\s+/g, ' ');
   });
-  note(name, 'bilan :', rules, errors.length ? `ERREURS ${errors.join(' | ')}` : 'sans erreur');
+  const labels = await page.evaluate(() => window.map.queryRenderedFeatures({ layers: ['zones-protegees-etiquettes'] }).map((f) => f.properties.nom));
+  note(name, 'bilan :', rules, errors.length ? `ERREURS ${errors.join(' | ')}` : 'sans erreur', '— étiquettes :', labels);
   await page.screenshot({ path: `${OUT}${name}.png` });
   await context.close();
 }
@@ -177,7 +178,9 @@ for (const [name, opts] of [
   const page = await context.newPage();
   await page.goto(`${base}a-propos.html`);
   await page.waitForSelector('[data-stored-list] li');
-  await page.screenshot({ path: `${OUT}${name}.png`, fullPage: true });
+  await page.screenshot({ path: `${OUT}${name}.png` });
+  await page.evaluate(() => document.getElementById('mentions-legales').scrollIntoView());
+  await page.screenshot({ path: `${OUT}${name}-mentions.png` });
   note(name, 'débordement horizontal :', await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth));
   await context.close();
 }
