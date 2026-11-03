@@ -11,6 +11,8 @@ const normalize = (s) =>
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/œ/g, 'oe')
+    .replace(/æ/g, 'ae')
     .replace(/[’']/g, ' ')
     .replace(/\s+/g, ' ');
 
@@ -22,17 +24,23 @@ const PRIORITY = [
   [/fluvio-?glaciaire/, 'moraine'], // graviers de fonte glaciaire, drainants
   [/glacio-?lacustre/, 'marne'], // argiles et silts de lacs glaciaires
   [/glacier rocheux/, 'eboulis'],
+  // Roches volcaniques citées après un mot trompeur : « Coulées basaltiques », « Brèches volcaniques ».
+  [/\b(coulees?|breches?|tufs?|cendres|projections|depots?|scories?) (de |d |a )?(volcan|basalt|basanit|lave|trachy|andesit|phonolit|pyroclast|ignimbrit)/, 'cristallin'],
 ];
 
 /** Mots-clés par nature de sol : le plus précoce dans la description l'emporte. */
 const KEYWORDS = {
   moraine: [/morain/, /glaciaire/],
-  eboulis: [/eboulis/, /eboulement/, /ecroulement/, /colluvion/, /\bcones?\b/, /glissement/, /glisse/, /versants?\b/, /\bcoulees?\b/, /solifluxion/],
-  humide: [/tourb/, /marais/, /marecag/, /palustre/, /alluvion/, /fluviatile/, /lacustre/, /zones? humides?/],
-  gres: [/\bgres\b/, /\bsables?\b/, /sableu/, /molass/, /houiller/, /arkose/, /quar?tzit/, /\bquartz\b/, /poudingue/, /conglomerat/, /terr?asse/],
-  cristallin: [/granit/, /gneiss/, /micaschiste/, /migmatit/, /amphib/, /chloritoschiste/, /sericitoschiste/, /leptynit/, /mylonit/, /prasinit/, /ophiolit/, /serpentin/, /diorit/, /gabbro/, /rhyolit/, /pegmatit/, /spilit/, /cinerit/, /metabasit/, /radiolarit/, /metamorphi/, /roches vertes/, /schistes verts/, /cristallin/],
-  marne: [/marne/, /marno/, /argil/, /limons?\b/, /pelites?\b/, /terres noires/, /calcschiste/, /schistes lustres/, /flysch/, /schistes? (calcaires?|marneu)/],
-  calcaire: [/calcaire/, /\bcalc\./, /urgonien/, /dolomi/, /marbre/, /cipolin/, /cargneule/, /gypse/, /\bcraie\b/, /nummulit/, /lumachelle/, /travertin/, /\btufs?\b/, /\bbreches?\b/, /microbreche/],
+  eboulis: [/eboulis/, /eboulement/, /ecroulement/, /colluvion/, /\bcones?\b/, /glissement/, /glisse/, /versants?\b/, /\bcoulees?\b/, /solifluxion/, /\bheads?\b/, /\bgrezes?\b/, /periglaciaire/],
+  humide: [/tourb/, /marais/, /marecag/, /palustre/, /alluvion/, /fluviatile/, /lacustre/, /zones? humides?/, /\bvases?\b/, /\bslikke/, /\bschorre/, /\bpolders?\b/, /\bpaluds?\b/, /estuarien/],
+  gres: [/\bgres\b/, /\bsables?\b/, /sableu/, /molass/, /houiller/, /arkose/, /quar?tzit/, /\bquartz\b/, /poudingue/, /conglomerat/, /terr?asse/, /\bdunes?\b/, /interdunaire/, /eolien/, /cailloutis/, /\bgraviers?\b/, /\bgalets?\b/, /meuliere/, /\bwackes?\b/, /grauwack/, /psammit/],
+  cristallin: [/granit/, /gneiss/, /micaschiste/, /migmatit/, /amphib/, /chloritoschiste/, /sericitoschiste/, /leptynit/, /mylonit/, /prasinit/, /ophiolit/, /serpentin/, /diorit/, /gabbro/, /rhyolit/, /pegmatit/, /spilit/, /cinerit/, /metabasit/, /radiolarit/, /metamorphi/, /roches vertes/, /schistes verts/, /cristallin/,
+    // Roches volcaniques (Massif central, Esterel, Corse…) : sols acides à neutres, filtrants.
+    /volcan/, /basalt/, /basanit/, /ankaramit/, /trachy/, /andesit/, /phonolit/, /pyroclast/, /pouzzolan/, /ignimbrit/, /\blaves?\b/, /dacit/, /tephr/, /\bmaars?\b/,
+    // Autres roches magmatiques et métamorphiques, sols acides.
+    /tonalit/, /trondhjem/, /monzonit/, /syenit/, /porphyr/, /\baplit/, /lamprophyr/, /kersantit/, /dolerit/, /diabase/, /eclogit/, /granulit/, /anatexit/, /\barenes?\b/, /phyllad/, /ardois/, /quartzophyllad/, /orthogneiss/, /paragneiss/],
+  marne: [/marne/, /marno/, /argil/, /limons?\b/, /pelites?\b/, /terres noires/, /calcschiste/, /schistes lustres/, /flysch/, /schistes? (calcaires?|marneu)/, /\bshales?\b/, /siltit/, /\bsilts?\b/, /\bloess\b/],
+  calcaire: [/calcaire/, /\bcalc\./, /urgonien/, /dolomi/, /marbre/, /cipolin/, /cargneule/, /gypse/, /\bcraie\b/, /nummulit/, /lumachelle/, /travertin/, /\btufs?\b/, /\bbreches?\b/, /microbreche/, /\bfaluns?\b/, /tuffeau/],
 };
 
 /** Dernier recours : un schiste sans autre indice donne plutôt un sol acide. */

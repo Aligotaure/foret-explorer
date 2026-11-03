@@ -21,13 +21,13 @@ export interface MetricDef {
 export const SERVICES: Readonly<Record<ServiceId, { label: string; note: string }>> = {
   app: { label: 'Visites', note: 'Ouvertures de la carte et bilans de coin.' },
   openMeteo: {
-    label: 'Open-Meteo (météo)',
-    note: 'Gratuit en usage non commercial : moins de 10 000 appels par jour, 5 000 par heure, 600 par minute et 300 000 par mois. Une requête de 21 jours pèse 1,5 appel par point.',
+    label: 'Open-Meteo (météo, appels directs)',
+    note: 'La carte lit les fichiers météo communs ; elle n’appelle Open-Meteo que s’ils sont injoignables ou pour un point hors de France (21 jours : 1,5 appel par point). Gratuit en usage non commercial : moins de 10 000 appels par jour, 5 000 par heure, 600 par minute et 300 000 par mois. La tâche GitHub « Météo commune » tient ses propres comptes (journal de chaque passage).',
   },
   ignAltitude: { label: 'IGN · altitude', note: 'Limite : 5 requêtes par seconde et par adresse IP (erreur 429 au-delà).' },
   ignGeocoding: { label: 'IGN · recherche de lieu', note: 'Limite : 10 requêtes par seconde et par adresse IP pour l’autocomplétion.' },
   ignTiles: { label: 'IGN · tuiles et polices', note: 'Tuiles WMTS et vectorielles : pas de limite annoncée par la Géoplateforme.' },
-  pages: { label: 'GitHub Pages · tuiles du site', note: 'Limite souple : 100 Go de trafic par mois pour tout le site.' },
+  pages: { label: 'GitHub Pages · fichiers du site', note: 'Tuiles et fichiers météo communs. Limite souple : 100 Go de trafic par mois pour tout le site.' },
 };
 
 export const METRICS = {
@@ -60,6 +60,8 @@ export const METRICS = {
   'pages.geology.errors': { label: 'Erreurs', service: 'pages', max: 100_000, error: true },
   'pages.zones': { label: 'Tuiles des zones protégées et forêts publiques', service: 'pages', max: 100_000 },
   'pages.zones.errors': { label: 'Erreurs des zones', service: 'pages', max: 100_000, error: true },
+  'pages.meteo': { label: 'Fichiers météo communs', service: 'pages', max: 20_000 },
+  'pages.meteo.errors': { label: 'Erreurs de la météo commune', service: 'pages', max: 20_000, error: true },
 } as const satisfies Record<string, MetricDef>;
 
 export type MetricName = keyof typeof METRICS;

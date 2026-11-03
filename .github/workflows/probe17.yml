@@ -1,0 +1,103 @@
+# Sonde temporaire n°17 : listes de cases météo, essai réel de la mise à jour, géologie et zones de
+# toute la France (durées et tailles).
+name: Sonde n°17
+
+on:
+  push:
+    branches: [data-probe-2]
+    paths: [.github/workflows/probe17.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  meteo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Listes de cases (3, 4 et 5 cases de base de côté)
+        run: |
+          mkdir -p verif
+          for f in 3 4 5; do
+            rm -rf /tmp/v$f && mkdir -p /tmp/v$f/src /tmp/v$f/scripts/meteo
+            cp scripts/meteo/cases.mjs /tmp/v$f/scripts/meteo/
+            sed "s/^export const METEO_FACTOR = .*/export const METEO_FACTOR = $f;/" src/meteoGrid.ts > /tmp/v$f/src/meteoGrid.ts
+            echo '{"type":"module"}' > /tmp/v$f/package.json
+            node /tmp/v$f/scripts/meteo/cases.mjs "$PWD/verif/cases-f$f.json" 2>&1 | tee -a verif/cases.txt
+          done
+      - name: Essai réel de la mise à jour météo (budget 330)
+        run: |
+          cp verif/cases-f4.json /tmp/cases.json
+          {
+            node scripts/meteo/mettre-a-jour.mjs --dossier /tmp/meteo --etat /tmp/etat.json --cases /tmp/cases.json --budget 330
+            ls /tmp/meteo/b | head -5; ls /tmp/meteo/b | wc -l
+            du -sh /tmp/meteo
+            f=$(ls -S /tmp/meteo/b | head -1); echo "plus gros bloc : $f $(wc -c < /tmp/meteo/b/$f) octets, $(gzip -c /tmp/meteo/b/$f | wc -c) compressé"
+            head -c 700 /tmp/meteo/index.json; echo
+            node -e "const b=require('/tmp/meteo/b/'+require('fs').readdirSync('/tmp/meteo/b')[0]); const [k,c]=Object.entries(b.cells)[0]; console.log(b.dates[0], b.dates.at(-1), k, JSON.stringify(c).slice(0,400))"
+            echo '--- second passage, budget 0'
+            node scripts/meteo/mettre-a-jour.mjs --dossier /tmp/meteo --etat /tmp/etat.json --cases /tmp/cases.json --budget 0
+            cat /tmp/etat.json
+          } 2>&1 | tee verif/meteo-essai.txt
+      - name: Publier
+        if: always()
+        run: bash probe17/publier.sh meteo
+
+  zones:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Zones de toute la France (durée et tailles)
+        run: |
+          mkdir -p verif
+          sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
+          debut=$(date +%s)
+          { bash scripts/zones/construire.sh 2>&1 | tail -30; } > verif/zones-france17.txt
+          echo "durée : $(( $(date +%s) - debut )) s" >> verif/zones-france17.txt
+          ls -la .cache/zones >> verif/zones-france17.txt
+          bash probe17/tailles.sh public/data/zones >> verif/zones-france17.txt
+          cat public/data/zones/info.json >> verif/zones-france17.txt
+          cat verif/zones-france17.txt
+      - name: Publier
+        if: always()
+        run: bash probe17/publier.sh zones
+
+  geologie:
+    runs-on: ubuntu-latest
+    timeout-minutes: 170
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Géologie de toute la France (durée et tailles)
+        run: |
+          mkdir -p verif
+          sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
+          { ogr2ogr --version; apt-cache policy tippecanoe | head -3; df -h / | tail -1; nproc; free -g | head -2; } > verif/geologie-france17.txt
+          debut=$(date +%s)
+          bash scripts/geologie/construire.sh > /tmp/geologie.log 2>&1
+          code=$?
+          {
+            echo "code de sortie : $code ; durée totale : $(( $(date +%s) - debut )) s"
+            grep -E "::warning|classé|Découpage|Tuiles écrites|info.json|Aucun" /tmp/geologie.log | tail -110
+            df -h / | tail -1
+            bash probe17/tailles.sh public/data/geologie
+            head -c 1500 public/data/geologie/info.json
+          } >> verif/geologie-france17.txt
+          tail -5 /tmp/geologie.log
+          cat verif/geologie-france17.txt | tail -30
+      - name: Publier
+        if: always()
+        run: bash probe17/publier.sh geologie

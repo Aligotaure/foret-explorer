@@ -8,16 +8,17 @@
 #
 # Prérequis : GDAL ≥ 3.8 (ogr2ogr avec le pilote MVT), Node ≥ 20.
 # Utilisé par .github/workflows/deploy.yml ; en local : `bash scripts/zones/construire.sh`.
-# Variables : EMPRISE (sud,ouest,nord,est ; défaut Savoie, Haute-Savoie et alentours), TRAVAIL, FORCE=1.
+# Variables : EMPRISE (sud,ouest,nord,est ; défaut France métropolitaine et Corse), TRAVAIL, FORCE=1.
 set -euo pipefail
 
 ICI="$(cd "$(dirname "$0")" && pwd)"
 RACINE="$(cd "$ICI/../.." && pwd)"
 TRAVAIL="${TRAVAIL:-$RACINE/.cache/zones}"
 SORTIE="$RACINE/public/data/zones"
-EMPRISE="${EMPRISE:-45.0,5.6,46.45,7.25}"
+EMPRISE="${EMPRISE:-41.2,-5.3,51.2,9.7}"
 
-node "$ICI/telecharger.mjs" "$TRAVAIL" "$EMPRISE"
+# Toute la France : ≈ 17 000 forêts publiques et 5 000 zones protégées, gardées en mémoire le temps du tri.
+NODE_OPTIONS="--max-old-space-size=6144" node "$ICI/telecharger.mjs" "$TRAVAIL" "$EMPRISE"
 
 mkdir -p "$(dirname "$SORTIE")"
 rm -rf "$SORTIE" "$TRAVAIL/zones.gpkg" # le pilote MVT crée lui-même le dossier final
@@ -29,10 +30,12 @@ ogr2ogr -update -f GPKG "$TRAVAIL/zones.gpkg" "$TRAVAIL/etiquettes.geojsonl" -s_
 ogr2ogr -update -f GPKG "$TRAVAIL/zones.gpkg" "$TRAVAIL/forets.geojsonl" -s_srs EPSG:2154 -t_srs EPSG:4326 \
   -simplify 5 -nlt PROMOTE_TO_MULTI -nln foret_publique
 
+# Zoom 12 au plus (sur-zoom au-delà) : moins de 2 m par unité de tuile, et la France entière reste
+# légère pour GitHub Pages.
 echo "Découpage en tuiles vectorielles…"
 ogr2ogr -f MVT "$SORTIE" "$TRAVAIL/zones.gpkg" \
   -dsco FORMAT=DIRECTORY -dsco TILE_EXTENSION=pbf -dsco COMPRESS=NO \
-  -dsco MINZOOM=9 -dsco MAXZOOM=13 -dsco SIMPLIFICATION=1 -dsco MAX_SIZE=600000
+  -dsco MINZOOM=9 -dsco MAXZOOM=12 -dsco SIMPLIFICATION=1 -dsco MAX_SIZE=600000
 
 # info.json : lu par la carte (sans lui, le bilan d'un coin ne dit rien du statut du terrain).
 cp "$TRAVAIL/resume.json" "$SORTIE/info.json"
