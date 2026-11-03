@@ -1,0 +1,244 @@
+GDAL 3.12.2 "Chicoutimi", released 2026/02/03
+tippecanoe:
+  Installed: (none)
+  Candidate: 2.53.0-1build1
+/dev/root       145G   58G   88G  40% /
+4
+               total        used        free      shared  buff/cache   available
+Mem:              15           1          13           0           1          14
+code de sortie : 0 ; durée totale : 756 s
+Département 039 classé (589M en tout).
+6446/7757 formations classées
+Département 040 classé (602M en tout).
+9852/13385 formations classées
+Département 041 classé (616M en tout).
+8772/8859 formations classées
+Département 042 classé (625M en tout).
+8340/8409 formations classées
+Département 043 classé (634M en tout).
+7812/9891 formations classées
+Département 044 classé (644M en tout).
+4146/5313 formations classées
+Département 045 classé (652M en tout).
+15694/15852 formations classées
+Département 046 classé (671M en tout).
+8277/8280 formations classées
+Département 047 classé (688M en tout).
+16469/16860 formations classées
+Département 048 classé (705M en tout).
+8087/10103 formations classées
+Département 049 classé (717M en tout).
+8413/9676 formations classées
+Département 050 classé (728M en tout).
+7737/8829 formations classées
+Département 051 classé (741M en tout).
+3637/4034 formations classées
+Département 052 classé (750M en tout).
+17275/17879 formations classées
+Département 053 classé (766M en tout).
+3616/4076 formations classées
+Département 054 classé (773M en tout).
+3002/3526 formations classées
+Département 055 classé (780M en tout).
+11643/11785 formations classées
+Département 056 classé (793M en tout).
+8425/8941 formations classées
+Département 057 classé (807M en tout).
+11403/12463 formations classées
+Département 058 classé (821M en tout).
+::warning::Géologie du département 059 introuvable sur le miroir : pas de nature du sol ici.
+7344/7405 formations classées
+Département 060 classé (832M en tout).
+7465/9027 formations classées
+Département 061 classé (843M en tout).
+::warning::Géologie du département 062 introuvable sur le miroir : pas de nature du sol ici.
+16024/16216 formations classées
+Département 063 classé (861M en tout).
+12009/13037 formations classées
+Département 064 classé (878M en tout).
+12986/13453 formations classées
+Département 065 classé (891M en tout).
+9583/10000 formations classées
+Département 066 classé (901M en tout).
+7008/7852 formations classées
+Département 067 classé (908M en tout).
+7321/7722 formations classées
+Département 068 classé (915M en tout).
+5827/6139 formations classées
+Département 069 classé (921M en tout).
+7419/9025 formations classées
+Département 070 classé (931M en tout).
+15620/17345 formations classées
+Département 071 classé (950M en tout).
+7686/9033 formations classées
+Département 072 classé (962M en tout).
+26569/26921 formations classées
+Département 073 classé (988M en tout).
+16608/16941 formations classées
+Département 074 classé (1004M en tout).
+::warning::Géologie du département 075 introuvable sur le miroir : pas de nature du sol ici.
+10189/10300 formations classées
+Département 076 classé (1018M en tout).
+::warning::Géologie du département 077 introuvable sur le miroir : pas de nature du sol ici.
+::warning::Géologie du département 078 introuvable sur le miroir : pas de nature du sol ici.
+4290/5196 formations classées
+Département 079 classé (1.1G en tout).
+9521/10983 formations classées
+Département 080 classé (1.1G en tout).
+26985/28091 formations classées
+Département 081 classé (1.1G en tout).
+4863/4867 formations classées
+Département 082 classé (1.1G en tout).
+18078/19224 formations classées
+Département 083 classé (1.1G en tout).
+6245/6547 formations classées
+Département 084 classé (1.1G en tout).
+11363/11694 formations classées
+Département 085 classé (1.1G en tout).
+4609/4665 formations classées
+Département 086 classé (1.1G en tout).
+15934/16115 formations classées
+Département 087 classé (1.2G en tout).
+7079/7360 formations classées
+Département 088 classé (1.2G en tout).
+5434/6872 formations classées
+Département 089 classé (1.2G en tout).
+1245/1281 formations classées
+Département 090 classé (1.2G en tout).
+::warning::Géologie du département 091 introuvable sur le miroir : pas de nature du sol ici.
+::warning::Géologie du département 092 introuvable sur le miroir : pas de nature du sol ici.
+::warning::Géologie du département 093 introuvable sur le miroir : pas de nature du sol ici.
+::warning::Géologie du département 094 introuvable sur le miroir : pas de nature du sol ici.
+::warning::Géologie du département 095 introuvable sur le miroir : pas de nature du sol ici.
+6319/7841 formations classées
+Département 02A classé (1.2G en tout).
+11268/11983 formations classées
+Département 02B classé (1.2G en tout).
+Découpage en tuiles vectorielles…
+info.json : 86 départements, 10 manquants, emprise -5.141351, 41.333621, 9.55993, 50.366285
+Tuiles écrites dans /home/runner/work/foret-explorer/foret-explorer/public/data/geologie (16488 fichiers, 502M) ; manquants : 059 062 075 077 078 091 092 093 094 095.
+/dev/root       145G   58G   87G  40% /
+total : 16488 tuiles, 502M
+  z9 : 237 tuiles, 71M, médiane 331952 octets, plus grosse 586846 octets
+  z10 : 855 tuiles, 108M, médiane 117375 octets, plus grosse 529500 octets
+  z11 : 3191 tuiles, 141M, médiane 38723 octets, plus grosse 226980 octets
+  z12 : 12205 tuiles, 183M, médiane 11852 octets, plus grosse 76152 octets
+{
+  "source": "BRGM, cartes géologiques harmonisées au 1/50 000 (BD Charm-50, 2019), Licence Ouverte 2.0",
+  "departements": [
+    "001",
+    "002",
+    "003",
+    "004",
+    "005",
+    "006",
+    "007",
+    "008",
+    "009",
+    "010",
+    "011",
+    "012",
+    "013",
+    "014",
+    "015",
+    "016",
+    "017",
+    "018",
+    "019",
+    "021",
+    "022",
+    "023",
+    "024",
+    "025",
+    "026",
+    "027",
+    "028",
+    "029",
+    "030",
+    "031",
+    "032",
+    "033",
+    "034",
+    "035",
+    "036",
+    "037",
+    "038",
+    "039",
+    "040",
+    "041",
+    "042",
+    "043",
+    "044",
+    "045",
+    "046",
+    "047",
+    "048",
+    "049",
+    "050",
+    "051",
+    "052",
+    "053",
+    "054",
+    "055",
+    "056",
+    "057",
+    "058",
+    "060",
+    "061",
+    "063",
+    "064",
+    "065",
+    "066",
+    "067",
+    "068",
+    "069",
+    "070",
+    "071",
+    "072",
+    "073",
+    "074",
+    "076",
+    "079",
+    "080",
+    "081",
+    "082",
+    "083",
+    "084",
+    "085",
+    "086",
+    "087",
+    "088",
+    "089",
+    "090",
+    "02A",
+    "02B"
+  ],
+  "manquants": [
+    "059",
+    "062",
+    "075",
+    "077",
+    "078",
+    "091",
+    "092",
+    "093",
+    "094",
+    "095"
+  ],
+  "genere": "2026-11-03",
+  "bounds": [
+    -5.141351,
+    41.333621,
+    9.55993,
+    50.366285
+  ],
+  "minzoom": 9,
+  "maxzoom": 12,
+  "couche": "geologie",
+  "surfacesKm2": {
+    "marne": 114504,
+    "calcaire": 98656,
+    "humide": 69561,
+    "moraine": 11527,
+    "eboulis": 34725,
+   
