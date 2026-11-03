@@ -1,0 +1,108 @@
+{
+  "formations": 16216,
+  "conservees": 16024,
+  "sols": {
+    "cristallin": {
+      "polygones": 9501,
+      "km2": 5230.1,
+      "exemples": [
+        "318.2 km² — Socle hercynien. Massif de Saint-Dier : Granites calco-alcalins à biotite et cordièrite de Saint-Dier",
+        "188.1 km² — Série métamorphique d'Ussel-Chavanon (Aubusson) : Diatexites-anatexites à cordiérite-biotite",
+        "184.7 km² — Unité supérieure des Gneiss : Diatexites-Anatexites granitoïdes à biotite et cordiérite.",
+        "173.1 km² — Colluvions alimentées par des roches volcaniques diverses (pyroclastites, scories basaltiques, basaltes, rhyolites, picr",
+        "167.1 km² — Socle hercynien. Massif granitique de Guéret : Monzogranites à biotite +/-  cordiérite, localement riches en biotite",
+        "136.1 km² — Socle hercynien. Granite type Massif des Bois-Noirs: Granite à gros grain, riche en quartz (ou granite de Lachaux, grani",
+        "132.3 km² — Volcanisme du Pliocène du Cézallier : Basaltes, basanites, indifférenciés",
+        "129.7 km² — Socle hercynien. Ceinture granitique du Forez-granites bordiers : Granites à deux micas, leuco à mésocrates (Monestier, "
+      ]
+    },
+    "eboulis": {
+      "polygones": 2811,
+      "km2": 932.1,
+      "exemples": [
+        "337.1 km² — Colluvions s. l. de versants, de fonds de vallées",
+        "278.8 km² — Colluvions argilo-calcaires, parfois sableuses (Oligocène marno-calcaire démantelé)",
+        "164.7 km² — Colluvions-nappes de blocs de roches plutoniques et/ou métamorphiques et/ou volcaniques",
+        "36.5 km² — Formation à blocailles périglaciaires : Blocs hétérométriques, sables argileux",
+        "32.7 km² — Éboulis alimentés par des roches volcaniques diverses selon le contexte local (basanites, basaltes, pyroclastites, tephr",
+        "25.4 km² — Colluvions alimentées par les altérites de roches granitiques",
+        "24.7 km² — Complexe de versant des Formations superficielles, loupes de glissements de terrains",
+        "19.7 km² — Colluvions argilo-sableuses (Oligocène argilo-sableux démantelé)"
+      ]
+    },
+    "marne": {
+      "polygones": 820,
+      "km2": 781.9,
+      "exemples": [
+        "266 km² — Bassins des Limagnes, bassins de Laschamp-la Jugie, Chapuzat-Sauvagnat, Herment-Lastic, Olby, Ambert, Billom : Argiles e",
+        "182.7 km² — Complexe des Limagnes (\"Terres Noires\") (type marais d'Ussel-d'Allier, de Saulzet, du Buron, de Saint-André-de-Coq, de S",
+        "125.7 km² — Bassins des Limagnes : Marnes et argiles beiges à vertes, calcaires argileux, à Cypris",
+        "67.5 km² — Complexe argilo-calcaire (Châteaugay, Cournon d'Auvergne, Lempdes) : Marnes, argiles, calcaires, sables",
+        "40.1 km² — Bassins des Limagnes, bassins d'Ebreuil, Olby : Argiles et sables argileux quartzo-feldspathiques bariolés rouges et ver",
+        "31.5 km² — Formation résiduelle dérivée de l'Oligocène des Limagnes : Matériaux fins argilo-calcaires, cailloutis cryoclastiques, s",
+        "26.2 km² — Formation résiduelle dérivée de l'Oligocène des Limagnes : Matériaux fins argilo-calcaires, cailloutis cryoclastiques, s",
+        "21.1 km² — Bassins des Limagnes, bassins de Laschamp-la Jugie, Chapuzat-Sauvagnat, Herment-Lastic, Olby : Alternances d'argile sabl"
+      ]
+    },
+    "humide": {
+      "polygones": 1685,
+      "km2": 764,
+      "exemples": [
+        "393.6 km² — Alluvions fluviatiles actuelles à récentes (Holocène)",
+        "75.6 km² — Alluvions fluviatiles anciennes de moyenne terrasse (Pleistocène moyen-Riss)",
+        "67.7 km² — Alluvions fluviatiles anciennes de basse terrasse (Pleistocène supérieur-Würm)",
+        "51.2 km² — Alluvions fluviatiles anciennes indifférenciées, alluvions anciennes résiduelles",
+        "49.8 km² — Alluvions fluviatiles anciennes de très haute terrasse (Pleistocène inférieur-Günz)",
+        "49.6 km² — Alluvions fluviatiles anciennes de haute terrasse (Pleistocène moyen-Mindel)",
+        "45.8 km² — Tourbe (tourbières, marécages)",
+        "16.6 km² — Alluvions fluviatiles anciennes (Pleistocène inférieur-Donau)"
+      ]
+    },
+    "gres": {
+      "polygones": 803,
+      "km2": 81.7,
+      "exemples": [
+        "19.7 km² — Bassins des Limagnes : Grès arkosiques, arkoses (arkoses du Bois-de-Bas)",
+        "8.3 km² — Formation des Sables et argiles du Bourbonnais : Niveau à sables grossiers à galets et graviers (silex, granite, etc. se",
+        "7.9 km² — Filon de quartz",
+        "7 km² — Ensemble calcaréo-détritique de Saint-Agoulin : sables, argiles et calcaires",
+        "6.8 km² — Formation résiduelle dérivée du Tertiaire indifférencié des Limagnes: Sables feldspathiques, argiles et marnes, plus ou ",
+        "5.8 km² — Bassins des Limagnes, bassins de Laschamp-la Jugie, Chapuzat-Sauvagnat, de Herment-Lastic, Olby : Conglomérats intercalé",
+        "5 km² — Épandages de quartz",
+        "4.4 km² — Bassins des Limagnes, bassins de Combronde, Saint-Myon, Saint-Agoulin) : Sables rubéfiés (\"Ensemble détritique vert\")"
+      ]
+    },
+    "calcaire": {
+      "polygones": 242,
+      "km2": 76.2,
+      "exemples": [
+        "40.5 km² — Bassins des Limagnes, bassins de Châtelguyon, Gimeaux : Calcaires argileux, marnes, schistes papyracés",
+        "33.7 km² — Bassins des Limagnes, bassin d'Ebreuil (de Moulins au Nord) : Calcaires, calcaires construits, calcaires dolomitiques, c",
+        "0.8 km² — Travertins silicifiés et \"meulières\"",
+        "0.8 km² — Formation des Calcaires à striatelles",
+        "0.3 km² — Travertins, calcaires, anciens (vallée de l'Allier) à actuels",
+        "0.1 km² — Calcaires marneux, calcaires lacustres, arkoses, de Gergovie"
+      ]
+    },
+    "moraine": {
+      "polygones": 162,
+      "km2": 70.9,
+      "exemples": [
+        "41.6 km² — Moraines récentes",
+        "17.5 km² — Dépôts glaciaires indifférenciés : dépôts morainiques, fluvio-glaciaires, limno-glaciaires",
+        "8.6 km² — Dépôts fluvio-glaciaires",
+        "2 km² — Dépôts limno-glaciaires",
+        "1.3 km² — Moraines indifférenciées"
+      ]
+    }
+  },
+  "nonClassees": [
+    "8.3 km² — «¥ | \"Sidérolithique\" s.l. : Sols rubéfiés, cuirasses ferrugineuses, paléosols (âge indéterminé, Crétacé à Tertiaire)",
+    "5.7 km² — HYDRO | Réseau hydrographique, étendues d'eau",
+    "4.5 km² — J | Matériaux de déjection",
+    "4.2 km² — X | Dépôts anthropiques : déblais miniers, déblais de travaux divers",
+    "0.1 km² — Ba | Filon de barytine non minéralisé",
+    "0.1 km² — Û | Pyroxénites indifférenciées",
+    "0 km² — Bam | Filon de barytine minéralisé"
+  ]
+}

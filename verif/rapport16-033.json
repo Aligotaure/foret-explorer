@@ -1,0 +1,79 @@
+{
+  "formations": 7045,
+  "conservees": 6999,
+  "sols": {
+    "gres": {
+      "polygones": 3953,
+      "km2": 6590.9,
+      "exemples": [
+        "1538.2 km² — Sables des Landes : sables eoliens homométriques jaunâtres à blancs à paléosols noirs et ferricrètes (\"garluche\") rougeâ",
+        "1052.3 km² — Formation de Belin : sables grossiers et graviers blanc-grisâtre à matrice kaolinique, à lentilles argileuses (Tiglien -",
+        "348.3 km² — Molasse de l'Agenais inf. à facies argileux dominant : argiles silteuses carbonatées jaunâtre à verdâtre à niveaux grése",
+        "308.1 km² — Espace interdunaire et dunes indiférenciées sub-actuelles (Sub-Atlantique)",
+        "307.6 km² — Hautes terrasses (RG Garonne) - Terrasse de Martillac (type 2) indifférenciée et terrasse d'Arsac : sables, graviers, ga",
+        "279.2 km² — Très hautes terrasses (RG Garonne) - Terrasse de Léognan (type 1) indifférenciée et terrasse de Listrac : sables à gravi",
+        "231.2 km² — Formation d'Onesse et de Béliet : sables fins gris-blancs à vert et graviers à la base (Prétiglien - \"Biber\")",
+        "225.4 km² — Molasse de l'Agenais sup. à faciès argileux dominant : argiles silteuses carbonatées vertes, noires à blanches à niveaux"
+      ]
+    },
+    "humide": {
+      "polygones": 488,
+      "km2": 1284,
+      "exemples": [
+        "789.3 km² — Alluvions subactuelles à actuelles indiféernéciées : argiles siltueuses, argiles sableuses, argiles tourbeuses, sables a",
+        "280.7 km² — Schorre actuel et fossile de l'Estuaire de la Gironde : bri, argile des Mattes, argile des Paluds, schorre fossile, argi",
+        "87.4 km² — Schorre fossile de la région des étangs : argiles, silts et sables tourbeux fluvio-marins, lacustres et palustres (Pré-b",
+        "85 km² — Slikke actuel de l'estuaire de la Gironde : sable vaseux coquillers en amont et sables plus propres et grossiers en aval",
+        "12.1 km² — Alluvions sub-actuelles : sables et tourbes fluvio-lacustres des étangs du Médoc (Pré-boréal à Atlantique moy.)",
+        "9.6 km² — Alluvions actuelles : sables fluvio-lacustre des étangs du Médoc (Atlantique sup. à actuel)",
+        "6.7 km² — Slikke : sables de plage, cordon litoral (Sub-Atlantique à actuel)",
+        "4.6 km² — Alluvions actuelles : sables et tourbes fluvio-lacustre (Atlantique sup. à actuel)"
+      ]
+    },
+    "marne": {
+      "polygones": 535,
+      "km2": 1021,
+      "exemples": [
+        "678 km² — Formation de Castets et Argiles d'Argelouse (sommet) : sables fins blancs à micro-gravillons blancs surmontés d'argiles ",
+        "79.7 km² — Fmt de Sadirac : argiles sableuses kaoliniques très rubéfiées à dragées et petits galets de quartz blanc, niveaux d'argi",
+        "78.2 km² — Argiles à Paléotherium : argiles carbonatées silteuses versicolores à niveaux sableux, à niveaux carbonatés +/- durcis, ",
+        "77.9 km² — Argiles de Brach : argiles blanchâtres silteuses micacés à gris-bleutés à marbrures rouilles (Tiglien - \"Biber-Donau\")",
+        "36.5 km² — Formation des Glaises bigarées : argiles sableuses jaunes à bleues à niveaux ligniteux (Tortonien continental)",
+        "17.6 km² — Groupe de Plassac - Argiles à ostrea cucullaris : argiles bleuâtre à verdâtre à nodules carbonatés, et avec quelques niv",
+        "15.7 km² — Groupe de Plassac - Marnes à sismondia occitana et ostrea bernonensis (supérieures) : marnes et calcaires sablo-argileux",
+        "7 km² — Formation de Castillon - Argiles Vertes de Castillon (et formation de la Bessède) : argiles carbonatées silteuses à sabl"
+      ]
+    },
+    "calcaire": {
+      "polygones": 1113,
+      "km2": 647.6,
+      "exemples": [
+        "445.4 km² — Calcaire à Astéries : biocalcarénite détritique à rudistes, calcaire bioclastique à rhodolithes et polypiers, marno-calc",
+        "44.1 km² — Formation du Calcaire de Castillon s.s. : calcaire lacustre micritique dur azoïque à nodules d'argiles vertes (plusieurs",
+        "29.9 km² — Groupe de Plassac - Calcaire de Plassac : calcaire lacustre blanc, blanc-verdâtre à beige-rosé micritique azoïque locale",
+        "21.7 km² — Groupe de Plassac - Calcaires de St Estephe : calcaire argileux crème à jaune ocre à niveaux marneux à mollusques, oursi",
+        "19.3 km² — Calcaire de Margueron (Sommet de la formation de Castillon) : calcaire lacustre en plaquette. Facies local du sommet de ",
+        "16.5 km² — Formation du calcaire de Blaye (sommet) : calcaire à passées détritiques (sables, graviers, galets), bioclastes, litages",
+        "12.6 km² — Calcaire à Archiacina : calcaire argileux et marnes à archiacina, millioles, pénéroplidés, discorbidés, élphidiidés, gas",
+        "12.6 km² — Faluns de Saucats : calcaires sableux et sables coquilliers +/-argileux, parfois marnes sableuses coquillières, présence"
+      ]
+    },
+    "eboulis": {
+      "polygones": 910,
+      "km2": 542.2,
+      "exemples": [
+        "475.6 km² — Formations superficielles : colluvions indifférenciées de versant, de vallon et plateaux issues d'alluvions, molasses, a",
+        "61.8 km² — Formations superficielles : colluvions indiférenciées sablo-argileuses et argilo sableuses de pentes et de vallons indif",
+        "3.7 km² — Formations superficielles : colluvions carbonatés de versant issus de l'altération de calcaires",
+        "1.1 km² — Formations superficielles : cônes d'éboulis et glissement de terrain"
+      ]
+    }
+  },
+  "nonClassees": [
+    "6.4 km² — Xmz | Anthropique : remaniement de sables et vases de platier et schorre",
+    "1.7 km² — Xrd | Anthropiques : digues de l'Estuaire de la Gironde (XVII à actuel)",
+    "0.7 km² — e4a | Dépots détritiques grossiers de base du Tertiare avec remaniements des dépôts du Crétacé supérieur (Yprésien basal continental)",
+    "0.2 km² — Xdp | Anthropique : dechets industriels (Papeterie, Scieries,...)",
+    "0.1 km² — Xr | Anthropique : remblais, dépots, déblais carrière (Gallo-romain à actuel)"
+  ]
+}

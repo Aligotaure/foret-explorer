@@ -1,0 +1,336 @@
+
+== octobre ==
+taille | variante | champignon | écart moyen de l’indice | même niveau | à un niveau près | écart pluie 20 j (mm) | même dernier épisode (±1 j)
+4 km | point | cepe | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | girolle | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | trompette | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | chanterelle | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | morille | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | TOUS | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | cepe | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | girolle | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | trompette | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | chanterelle | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | morille | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | TOUS | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+9 km | point | cepe | 0.063 | 79.1 % | 95.2 % | 6.9 | 90.1 %
+9 km | point | girolle | 0.056 | 80.7 % | 96.4 % | 6.9 | 90.1 %
+9 km | point | trompette | 0.061 | 82.2 % | 98.8 % | 6.9 | 90.1 %
+9 km | point | chanterelle | 0.049 | 87.7 % | 99.0 % | 6.9 | 90.1 %
+9 km | point | morille | 0.066 | 82.0 % | 97.7 % | 6.9 | 90.1 %
+9 km | point | TOUS | 0.059 | 82.3 % | 97.4 % | 6.9 | 90.1 %
+9 km | moyenne | cepe | 0.052 | 81.8 % | 96.7 % | 5.9 | 91.2 %
+9 km | moyenne | girolle | 0.046 | 82.1 % | 98.3 % | 5.9 | 91.2 %
+9 km | moyenne | trompette | 0.051 | 82.3 % | 99.6 % | 5.9 | 91.2 %
+9 km | moyenne | chanterelle | 0.042 | 89.4 % | 99.8 % | 5.9 | 91.2 %
+9 km | moyenne | morille | 0.055 | 83.4 % | 98.8 % | 5.9 | 91.2 %
+9 km | moyenne | TOUS | 0.049 | 83.8 % | 98.6 % | 5.9 | 91.2 %
+13 km | point | cepe | 0.070 | 76.5 % | 94.6 % | 8.5 | 89.4 %
+13 km | point | girolle | 0.063 | 76.6 % | 95.8 % | 8.5 | 89.4 %
+13 km | point | trompette | 0.070 | 78.3 % | 98.6 % | 8.5 | 89.4 %
+13 km | point | chanterelle | 0.064 | 85.2 % | 98.5 % | 8.5 | 89.4 %
+13 km | point | morille | 0.076 | 79.1 % | 97.7 % | 8.5 | 89.4 %
+13 km | point | TOUS | 0.068 | 79.1 % | 97.0 % | 8.5 | 89.4 %
+13 km | moyenne | cepe | 0.068 | 75.8 % | 95.7 % | 8.0 | 90.9 %
+13 km | moyenne | girolle | 0.059 | 77.2 % | 96.6 % | 8.0 | 90.9 %
+13 km | moyenne | trompette | 0.066 | 79.6 % | 98.8 % | 8.0 | 90.9 %
+13 km | moyenne | chanterelle | 0.058 | 87.0 % | 99.2 % | 8.0 | 90.9 %
+13 km | moyenne | morille | 0.071 | 80.5 % | 98.1 % | 8.0 | 90.9 %
+13 km | moyenne | TOUS | 0.065 | 80.0 % | 97.7 % | 8.0 | 90.9 %
+18 km | point | cepe | 0.087 | 72.0 % | 92.1 % | 10.4 | 85.3 %
+18 km | point | girolle | 0.073 | 73.8 % | 94.5 % | 10.4 | 85.3 %
+18 km | point | trompette | 0.092 | 72.3 % | 96.8 % | 10.4 | 85.3 %
+18 km | point | chanterelle | 0.084 | 81.6 % | 97.5 % | 10.4 | 85.3 %
+18 km | point | morille | 0.096 | 73.3 % | 96.3 % | 10.4 | 85.3 %
+18 km | point | TOUS | 0.086 | 74.6 % | 95.4 % | 10.4 | 85.3 %
+18 km | moyenne | cepe | 0.078 | 73.2 % | 94.6 % | 8.8 | 86.9 %
+18 km | moyenne | girolle | 0.070 | 72.9 % | 96.0 % | 8.8 | 86.9 %
+18 km | moyenne | trompette | 0.074 | 78.0 % | 98.1 % | 8.8 | 86.9 %
+18 km | moyenne | chanterelle | 0.067 | 84.5 % | 98.5 % | 8.8 | 86.9 %
+18 km | moyenne | morille | 0.080 | 78.4 % | 97.7 % | 8.8 | 86.9 %
+18 km | moyenne | TOUS | 0.074 | 77.4 % | 97.0 % | 8.8 | 86.9 %
+22 km | point | cepe | 0.087 | 70.9 % | 91.8 % | 10.4 | 85.5 %
+22 km | point | girolle | 0.079 | 70.9 % | 93.3 % | 10.4 | 85.5 %
+22 km | point | trompette | 0.090 | 73.4 % | 95.7 % | 10.4 | 85.5 %
+22 km | point | chanterelle | 0.088 | 79.8 % | 96.7 % | 10.4 | 85.5 %
+22 km | point | morille | 0.096 | 73.3 % | 95.3 % | 10.4 | 85.5 %
+22 km | point | TOUS | 0.088 | 73.6 % | 94.6 % | 10.4 | 85.5 %
+22 km | moyenne | cepe | 0.081 | 72.3 % | 93.8 % | 9.5 | 87.5 %
+22 km | moyenne | girolle | 0.071 | 73.2 % | 95.5 % | 9.5 | 87.5 %
+22 km | moyenne | trompette | 0.081 | 75.8 % | 96.7 % | 9.5 | 87.5 %
+22 km | moyenne | chanterelle | 0.074 | 82.8 % | 97.5 % | 9.5 | 87.5 %
+22 km | moyenne | morille | 0.086 | 76.1 % | 96.7 % | 9.5 | 87.5 %
+22 km | moyenne | TOUS | 0.078 | 76.0 % | 96.0 % | 9.5 | 87.5 %
+27 km | point | cepe | 0.121 | 64.5 % | 88.6 % | 12.9 | 83.1 %
+27 km | point | girolle | 0.106 | 64.8 % | 90.0 % | 12.9 | 83.1 %
+27 km | point | trompette | 0.113 | 69.8 % | 96.6 % | 12.9 | 83.1 %
+27 km | point | chanterelle | 0.097 | 80.7 % | 97.7 % | 12.9 | 83.1 %
+27 km | point | morille | 0.124 | 70.0 % | 94.4 % | 12.9 | 83.1 %
+27 km | point | TOUS | 0.112 | 70.0 % | 93.4 % | 12.9 | 83.1 %
+27 km | moyenne | cepe | 0.088 | 70.0 % | 93.5 % | 10.1 | 84.8 %
+27 km | moyenne | girolle | 0.078 | 71.2 % | 94.4 % | 10.1 | 84.8 %
+27 km | moyenne | trompette | 0.087 | 73.8 % | 97.0 % | 10.1 | 84.8 %
+27 km | moyenne | chanterelle | 0.083 | 82.8 % | 97.7 % | 10.1 | 84.8 %
+27 km | moyenne | morille | 0.093 | 75.1 % | 96.7 % | 10.1 | 84.8 %
+27 km | moyenne | TOUS | 0.086 | 74.6 % | 95.9 % | 10.1 | 84.8 %
+36 km | point | cepe | 0.112 | 64.4 % | 87.6 % | 14.7 | 76.9 %
+36 km | point | girolle | 0.100 | 67.3 % | 91.6 % | 14.7 | 76.9 %
+36 km | point | trompette | 0.119 | 64.5 % | 91.5 % | 14.7 | 76.9 %
+36 km | point | chanterelle | 0.125 | 73.8 % | 93.8 % | 14.7 | 76.9 %
+36 km | point | morille | 0.129 | 65.9 % | 90.9 % | 14.7 | 76.9 %
+36 km | point | TOUS | 0.117 | 67.2 % | 91.1 % | 14.7 | 76.9 %
+36 km | moyenne | cepe | 0.108 | 63.7 % | 90.6 % | 12.4 | 82.5 %
+36 km | moyenne | girolle | 0.095 | 65.6 % | 92.3 % | 12.4 | 82.5 %
+36 km | moyenne | trompette | 0.108 | 68.7 % | 94.0 % | 12.4 | 82.5 %
+36 km | moyenne | chanterelle | 0.106 | 76.6 % | 96.3 % | 12.4 | 82.5 %
+36 km | moyenne | morille | 0.115 | 68.2 % | 94.1 % | 12.4 | 82.5 %
+36 km | moyenne | TOUS | 0.106 | 68.5 % | 93.5 % | 12.4 | 82.5 %
+22 km | meteofrance_arpege_europe | cepe | 0.132 | 64.1 % | 88.9 % | 20.9 | 63.1 %
+22 km | meteofrance_arpege_europe | girolle | 0.110 | 62.1 % | 91.6 % | 20.9 | 63.1 %
+22 km | meteofrance_arpege_europe | trompette | 0.145 | 68.3 % | 93.8 % | 20.9 | 63.1 %
+22 km | meteofrance_arpege_europe | chanterelle | 0.139 | 78.3 % | 95.1 % | 20.9 | 63.1 %
+22 km | meteofrance_arpege_europe | morille | 0.150 | 69.5 % | 93.4 % | 20.9 | 63.1 %
+22 km | meteofrance_arpege_europe | TOUS | 0.135 | 68.5 % | 92.5 % | 20.9 | 63.1 %
+22 km | ecmwf_ifs025 | cepe | 0.179 | 56.3 % | 84.8 % | 21.3 | 55.9 %
+22 km | ecmwf_ifs025 | girolle | 0.142 | 58.4 % | 87.1 % | 21.3 | 55.9 %
+22 km | ecmwf_ifs025 | trompette | 0.172 | 65.2 % | 91.4 % | 21.3 | 55.9 %
+22 km | ecmwf_ifs025 | chanterelle | 0.173 | 74.8 % | 93.0 % | 21.3 | 55.9 %
+22 km | ecmwf_ifs025 | morille | 0.189 | 68.0 % | 91.7 % | 21.3 | 55.9 %
+22 km | ecmwf_ifs025 | TOUS | 0.171 | 64.5 % | 89.6 % | 21.3 | 55.9 %
+
+== été ==
+taille | variante | champignon | écart moyen de l’indice | même niveau | à un niveau près | écart pluie 20 j (mm) | même dernier épisode (±1 j)
+4 km | point | cepe | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | girolle | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | trompette | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | chanterelle | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | morille | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | TOUS | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | cepe | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | girolle | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | trompette | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | chanterelle | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | morille | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | TOUS | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+9 km | point | cepe | 0.013 | 94.1 % | 99.8 % | 5.0 | 85.9 %
+9 km | point | girolle | 0.035 | 85.5 % | 98.0 % | 5.0 | 85.9 %
+9 km | point | trompette | 0.000 | 100.0 % | 100.0 % | 5.0 | 85.9 %
+9 km | point | chanterelle | 0.000 | 100.0 % | 100.0 % | 5.0 | 85.9 %
+9 km | point | morille | 0.000 | 100.0 % | 100.0 % | 5.0 | 85.9 %
+9 km | point | TOUS | 0.010 | 95.9 % | 99.6 % | 5.0 | 85.9 %
+9 km | moyenne | cepe | 0.011 | 95.7 % | 99.8 % | 4.4 | 84.4 %
+9 km | moyenne | girolle | 0.033 | 85.0 % | 99.2 % | 4.4 | 84.4 %
+9 km | moyenne | trompette | 0.000 | 100.0 % | 100.0 % | 4.4 | 84.4 %
+9 km | moyenne | chanterelle | 0.000 | 100.0 % | 100.0 % | 4.4 | 84.4 %
+9 km | moyenne | morille | 0.000 | 100.0 % | 100.0 % | 4.4 | 84.4 %
+9 km | moyenne | TOUS | 0.009 | 96.1 % | 99.8 % | 4.4 | 84.4 %
+13 km | point | cepe | 0.015 | 93.9 % | 99.2 % | 6.5 | 84.4 %
+13 km | point | girolle | 0.043 | 84.2 % | 97.1 % | 6.5 | 84.4 %
+13 km | point | trompette | 0.000 | 100.0 % | 100.0 % | 6.5 | 84.4 %
+13 km | point | chanterelle | 0.000 | 100.0 % | 100.0 % | 6.5 | 84.4 %
+13 km | point | morille | 0.000 | 100.0 % | 100.0 % | 6.5 | 84.4 %
+13 km | point | TOUS | 0.012 | 95.6 % | 99.3 % | 6.5 | 84.4 %
+13 km | moyenne | cepe | 0.012 | 94.1 % | 99.8 % | 5.8 | 85.0 %
+13 km | moyenne | girolle | 0.037 | 84.2 % | 98.4 % | 5.8 | 85.0 %
+13 km | moyenne | trompette | 0.000 | 100.0 % | 100.0 % | 5.8 | 85.0 %
+13 km | moyenne | chanterelle | 0.000 | 100.0 % | 100.0 % | 5.8 | 85.0 %
+13 km | moyenne | morille | 0.000 | 100.0 % | 100.0 % | 5.8 | 85.0 %
+13 km | moyenne | TOUS | 0.010 | 95.7 % | 99.6 % | 5.8 | 85.0 %
+18 km | point | cepe | 0.017 | 92.6 % | 99.8 % | 7.5 | 80.1 %
+18 km | point | girolle | 0.051 | 75.4 % | 97.3 % | 7.5 | 80.1 %
+18 km | point | trompette | 0.000 | 100.0 % | 100.0 % | 7.5 | 80.1 %
+18 km | point | chanterelle | 0.000 | 100.0 % | 100.0 % | 7.5 | 80.1 %
+18 km | point | morille | 0.000 | 100.0 % | 100.0 % | 7.5 | 80.1 %
+18 km | point | TOUS | 0.014 | 93.6 % | 99.4 % | 7.5 | 80.1 %
+18 km | moyenne | cepe | 0.014 | 94.3 % | 99.8 % | 6.3 | 80.5 %
+18 km | moyenne | girolle | 0.043 | 80.5 % | 98.2 % | 6.3 | 80.5 %
+18 km | moyenne | trompette | 0.000 | 100.0 % | 100.0 % | 6.3 | 80.5 %
+18 km | moyenne | chanterelle | 0.000 | 100.0 % | 100.0 % | 6.3 | 80.5 %
+18 km | moyenne | morille | 0.000 | 100.0 % | 100.0 % | 6.3 | 80.5 %
+18 km | moyenne | TOUS | 0.011 | 95.0 % | 99.6 % | 6.3 | 80.5 %
+22 km | point | cepe | 0.017 | 92.2 % | 99.8 % | 8.8 | 76.2 %
+22 km | point | girolle | 0.052 | 76.8 % | 97.1 % | 8.8 | 76.2 %
+22 km | point | trompette | 0.000 | 100.0 % | 100.0 % | 8.8 | 76.2 %
+22 km | point | chanterelle | 0.000 | 100.0 % | 100.0 % | 8.8 | 76.2 %
+22 km | point | morille | 0.000 | 100.0 % | 100.0 % | 8.8 | 76.2 %
+22 km | point | TOUS | 0.014 | 93.8 % | 99.4 % | 8.8 | 76.2 %
+22 km | moyenne | cepe | 0.016 | 93.2 % | 99.8 % | 7.1 | 77.1 %
+22 km | moyenne | girolle | 0.049 | 79.5 % | 96.9 % | 7.1 | 77.1 %
+22 km | moyenne | trompette | 0.000 | 100.0 % | 100.0 % | 7.1 | 77.1 %
+22 km | moyenne | chanterelle | 0.000 | 100.0 % | 100.0 % | 7.1 | 77.1 %
+22 km | moyenne | morille | 0.000 | 100.0 % | 100.0 % | 7.1 | 77.1 %
+22 km | moyenne | TOUS | 0.013 | 94.5 % | 99.3 % | 7.1 | 77.1 %
+27 km | point | cepe | 0.023 | 87.3 % | 99.4 % | 8.1 | 72.5 %
+27 km | point | girolle | 0.056 | 77.1 % | 95.5 % | 8.1 | 72.5 %
+27 km | point | trompette | 0.000 | 100.0 % | 100.0 % | 8.1 | 72.5 %
+27 km | point | chanterelle | 0.000 | 100.0 % | 100.0 % | 8.1 | 72.5 %
+27 km | point | morille | 0.000 | 100.0 % | 100.0 % | 8.1 | 72.5 %
+27 km | point | TOUS | 0.016 | 92.9 % | 99.0 % | 8.1 | 72.5 %
+27 km | moyenne | cepe | 0.018 | 91.8 % | 99.8 % | 7.4 | 77.9 %
+27 km | moyenne | girolle | 0.050 | 78.1 % | 96.1 % | 7.4 | 77.9 %
+27 km | moyenne | trompette | 0.000 | 100.0 % | 100.0 % | 7.4 | 77.9 %
+27 km | moyenne | chanterelle | 0.000 | 100.0 % | 100.0 % | 7.4 | 77.9 %
+27 km | moyenne | morille | 0.000 | 100.0 % | 100.0 % | 7.4 | 77.9 %
+27 km | moyenne | TOUS | 0.014 | 94.0 % | 99.2 % | 7.4 | 77.9 %
+36 km | point | cepe | 0.018 | 93.8 % | 99.8 % | 9.9 | 68.0 %
+36 km | point | girolle | 0.055 | 78.7 % | 96.3 % | 9.9 | 68.0 %
+36 km | point | trompette | 0.000 | 100.0 % | 100.0 % | 9.9 | 68.0 %
+36 km | point | chanterelle | 0.000 | 100.0 % | 100.0 % | 9.9 | 68.0 %
+36 km | point | morille | 0.000 | 100.0 % | 100.0 % | 9.9 | 68.0 %
+36 km | point | TOUS | 0.015 | 94.5 % | 99.2 % | 9.9 | 68.0 %
+36 km | moyenne | cepe | 0.015 | 93.0 % | 99.8 % | 8.5 | 73.2 %
+36 km | moyenne | girolle | 0.051 | 79.5 % | 96.5 % | 8.5 | 73.2 %
+36 km | moyenne | trompette | 0.000 | 100.0 % | 100.0 % | 8.5 | 73.2 %
+36 km | moyenne | chanterelle | 0.000 | 100.0 % | 100.0 % | 8.5 | 73.2 %
+36 km | moyenne | morille | 0.000 | 100.0 % | 100.0 % | 8.5 | 73.2 %
+36 km | moyenne | TOUS | 0.013 | 94.5 % | 99.3 % | 8.5 | 73.2 %
+
+== les deux périodes ==
+taille | variante | champignon | écart moyen de l’indice | même niveau | à un niveau près | écart pluie 20 j (mm) | même dernier épisode (±1 j)
+4 km | point | cepe | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | girolle | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | trompette | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | chanterelle | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | morille | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | point | TOUS | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | cepe | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | girolle | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | trompette | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | chanterelle | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | morille | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+4 km | moyenne | TOUS | 0.000 | 100.0 % | 100.0 % | 0.0 | 100.0 %
+9 km | point | cepe | 0.049 | 83.4 % | 96.5 % | 6.4 | 88.9 %
+9 km | point | girolle | 0.050 | 82.1 % | 96.9 % | 6.4 | 88.9 %
+9 km | point | trompette | 0.044 | 87.3 % | 99.2 % | 6.4 | 88.9 %
+9 km | point | chanterelle | 0.035 | 91.2 % | 99.3 % | 6.4 | 88.9 %
+9 km | point | morille | 0.047 | 87.2 % | 98.3 % | 6.4 | 88.9 %
+9 km | point | TOUS | 0.045 | 86.2 % | 98.0 % | 6.4 | 88.9 %
+9 km | moyenne | cepe | 0.040 | 85.8 % | 97.6 % | 5.4 | 89.2 %
+9 km | moyenne | girolle | 0.042 | 82.9 % | 98.5 % | 5.4 | 89.2 %
+9 km | moyenne | trompette | 0.036 | 87.4 % | 99.7 % | 5.4 | 89.2 %
+9 km | moyenne | chanterelle | 0.030 | 92.4 % | 99.8 % | 5.4 | 89.2 %
+9 km | moyenne | morille | 0.039 | 88.1 % | 99.2 % | 5.4 | 89.2 %
+9 km | moyenne | TOUS | 0.038 | 87.3 % | 99.0 % | 5.4 | 89.2 %
+13 km | point | cepe | 0.054 | 81.5 % | 95.9 % | 8.0 | 87.9 %
+13 km | point | girolle | 0.057 | 78.7 % | 96.1 % | 8.0 | 87.9 %
+13 km | point | trompette | 0.050 | 84.5 % | 99.0 % | 8.0 | 87.9 %
+13 km | point | chanterelle | 0.046 | 89.5 % | 98.9 % | 8.0 | 87.9 %
+13 km | point | morille | 0.054 | 85.1 % | 98.4 % | 8.0 | 87.9 %
+13 km | point | TOUS | 0.052 | 83.9 % | 97.7 % | 8.0 | 87.9 %
+13 km | moyenne | cepe | 0.052 | 81.0 % | 96.9 % | 7.4 | 89.2 %
+13 km | moyenne | girolle | 0.053 | 79.2 % | 97.2 % | 7.4 | 89.2 %
+13 km | moyenne | trompette | 0.047 | 85.4 % | 99.1 % | 7.4 | 89.2 %
+13 km | moyenne | chanterelle | 0.042 | 90.7 % | 99.4 % | 7.4 | 89.2 %
+13 km | moyenne | morille | 0.051 | 86.0 % | 98.7 % | 7.4 | 89.2 %
+13 km | moyenne | TOUS | 0.049 | 84.5 % | 98.2 % | 7.4 | 89.2 %
+18 km | point | cepe | 0.067 | 77.8 % | 94.3 % | 9.5 | 83.8 %
+18 km | point | girolle | 0.067 | 74.2 % | 95.3 % | 9.5 | 83.8 %
+18 km | point | trompette | 0.066 | 80.2 % | 97.7 % | 9.5 | 83.8 %
+18 km | point | chanterelle | 0.060 | 86.8 % | 98.2 % | 9.5 | 83.8 %
+18 km | point | morille | 0.068 | 80.9 % | 97.4 % | 9.5 | 83.8 %
+18 km | point | TOUS | 0.066 | 80.0 % | 96.6 % | 9.5 | 83.8 %
+18 km | moyenne | cepe | 0.060 | 79.2 % | 96.1 % | 8.1 | 85.0 %
+18 km | moyenne | girolle | 0.062 | 75.1 % | 96.7 % | 8.1 | 85.0 %
+18 km | moyenne | trompette | 0.053 | 84.3 % | 98.7 % | 8.1 | 85.0 %
+18 km | moyenne | chanterelle | 0.048 | 89.0 % | 98.9 % | 8.1 | 85.0 %
+18 km | moyenne | morille | 0.057 | 84.6 % | 98.4 % | 8.1 | 85.0 %
+18 km | moyenne | TOUS | 0.056 | 82.4 % | 97.7 % | 8.1 | 85.0 %
+22 km | point | cepe | 0.067 | 77.0 % | 94.1 % | 10.0 | 82.9 %
+22 km | point | girolle | 0.072 | 72.5 % | 94.4 % | 10.0 | 82.9 %
+22 km | point | trompette | 0.065 | 81.0 % | 96.9 % | 10.0 | 82.9 %
+22 km | point | chanterelle | 0.063 | 85.5 % | 97.7 % | 10.0 | 82.9 %
+22 km | point | morille | 0.068 | 80.9 % | 96.7 % | 10.0 | 82.9 %
+22 km | point | TOUS | 0.067 | 79.4 % | 95.9 % | 10.0 | 82.9 %
+22 km | moyenne | cepe | 0.062 | 78.2 % | 95.5 % | 8.8 | 84.5 %
+22 km | moyenne | girolle | 0.064 | 75.0 % | 95.9 % | 8.8 | 84.5 %
+22 km | moyenne | trompette | 0.058 | 82.7 % | 97.7 % | 8.8 | 84.5 %
+22 km | moyenne | chanterelle | 0.053 | 87.7 % | 98.2 % | 8.8 | 84.5 %
+22 km | moyenne | morille | 0.061 | 82.9 % | 97.7 % | 8.8 | 84.5 %
+22 km | moyenne | TOUS | 0.060 | 81.3 % | 97.0 % | 8.8 | 84.5 %
+27 km | point | cepe | 0.093 | 71.0 % | 91.7 % | 11.6 | 80.1 %
+27 km | point | girolle | 0.092 | 68.3 % | 91.6 % | 11.6 | 80.1 %
+27 km | point | trompette | 0.081 | 78.4 % | 97.5 % | 11.6 | 80.1 %
+27 km | point | chanterelle | 0.070 | 86.2 % | 98.3 % | 11.6 | 80.1 %
+27 km | point | morille | 0.088 | 78.6 % | 96.0 % | 11.6 | 80.1 %
+27 km | point | TOUS | 0.085 | 76.5 % | 95.0 % | 11.6 | 80.1 %
+27 km | moyenne | cepe | 0.068 | 76.2 % | 95.3 % | 9.4 | 82.9 %
+27 km | moyenne | girolle | 0.070 | 73.2 % | 94.9 % | 9.4 | 82.9 %
+27 km | moyenne | trompette | 0.062 | 81.3 % | 97.9 % | 9.4 | 82.9 %
+27 km | moyenne | chanterelle | 0.060 | 87.7 % | 98.4 % | 9.4 | 82.9 %
+27 km | moyenne | morille | 0.066 | 82.2 % | 97.7 % | 9.4 | 82.9 %
+27 km | moyenne | TOUS | 0.065 | 80.1 % | 96.8 % | 9.4 | 82.9 %
+36 km | point | cepe | 0.085 | 72.8 % | 91.1 % | 13.3 | 74.3 %
+36 km | point | girolle | 0.087 | 70.5 % | 93.0 % | 13.3 | 74.3 %
+36 km | point | trompette | 0.085 | 74.7 % | 93.9 % | 13.3 | 74.3 %
+36 km | point | chanterelle | 0.090 | 81.3 % | 95.5 % | 13.3 | 74.3 %
+36 km | point | morille | 0.092 | 75.7 % | 93.5 % | 13.3 | 74.3 %
+36 km | point | TOUS | 0.088 | 75.0 % | 93.4 % | 13.3 | 74.3 %
+36 km | moyenne | cepe | 0.081 | 72.0 % | 93.2 % | 11.3 | 79.9 %
+36 km | moyenne | girolle | 0.082 | 69.6 % | 93.5 % | 11.3 | 79.9 %
+36 km | moyenne | trompette | 0.077 | 77.6 % | 95.7 % | 11.3 | 79.9 %
+36 km | moyenne | chanterelle | 0.076 | 83.3 % | 97.4 % | 11.3 | 79.9 %
+36 km | moyenne | morille | 0.082 | 77.3 % | 95.8 % | 11.3 | 79.9 %
+36 km | moyenne | TOUS | 0.080 | 76.0 % | 95.1 % | 11.3 | 79.9 %
+22 km | meteofrance_arpege_europe | cepe | 0.132 | 64.1 % | 88.9 % | 20.9 | 63.1 %
+22 km | meteofrance_arpege_europe | girolle | 0.110 | 62.1 % | 91.6 % | 20.9 | 63.1 %
+22 km | meteofrance_arpege_europe | trompette | 0.145 | 68.3 % | 93.8 % | 20.9 | 63.1 %
+22 km | meteofrance_arpege_europe | chanterelle | 0.139 | 78.3 % | 95.1 % | 20.9 | 63.1 %
+22 km | meteofrance_arpege_europe | morille | 0.150 | 69.5 % | 93.4 % | 20.9 | 63.1 %
+22 km | meteofrance_arpege_europe | TOUS | 0.135 | 68.5 % | 92.5 % | 20.9 | 63.1 %
+22 km | ecmwf_ifs025 | cepe | 0.179 | 56.3 % | 84.8 % | 21.3 | 55.9 %
+22 km | ecmwf_ifs025 | girolle | 0.142 | 58.4 % | 87.1 % | 21.3 | 55.9 %
+22 km | ecmwf_ifs025 | trompette | 0.172 | 65.2 % | 91.4 % | 21.3 | 55.9 %
+22 km | ecmwf_ifs025 | chanterelle | 0.173 | 74.8 % | 93.0 % | 21.3 | 55.9 %
+22 km | ecmwf_ifs025 | morille | 0.189 | 68.0 % | 91.7 % | 21.3 | 55.9 %
+22 km | ecmwf_ifs025 | TOUS | 0.171 | 64.5 % | 89.6 % | 21.3 | 55.9 %
+
+période | région | taille | même niveau (toutes espèces) | écart moyen
+octobre | Alpes (Annecy, Bauges) | 4 km | 100.0 % | 0.000
+octobre | Alpes (Annecy, Bauges) | 9 km | 83.8 % | 0.075
+octobre | Alpes (Annecy, Bauges) | 13 km | 81.7 % | 0.075
+octobre | Alpes (Annecy, Bauges) | 18 km | 77.8 % | 0.094
+octobre | Alpes (Annecy, Bauges) | 22 km | 80.8 % | 0.079
+octobre | Alpes (Annecy, Bauges) | 27 km | 74.0 % | 0.137
+octobre | Alpes (Annecy, Bauges) | 36 km | 77.9 % | 0.108
+octobre | Massif central (Corrèze) | 4 km | 100.0 % | 0.000
+octobre | Massif central (Corrèze) | 9 km | 75.8 % | 0.070
+octobre | Massif central (Corrèze) | 13 km | 70.5 % | 0.094
+octobre | Massif central (Corrèze) | 18 km | 59.3 % | 0.131
+octobre | Massif central (Corrèze) | 22 km | 58.4 % | 0.126
+octobre | Massif central (Corrèze) | 27 km | 54.0 % | 0.143
+octobre | Massif central (Corrèze) | 36 km | 44.8 % | 0.172
+octobre | Landes | 4 km | 100.0 % | 0.000
+octobre | Landes | 9 km | 79.8 % | 0.040
+octobre | Landes | 13 km | 74.9 % | 0.048
+octobre | Landes | 18 km | 74.2 % | 0.054
+octobre | Landes | 22 km | 68.5 % | 0.069
+octobre | Landes | 27 km | 69.6 % | 0.067
+octobre | Landes | 36 km | 65.1 % | 0.082
+octobre | Vosges | 4 km | 100.0 % | 0.000
+octobre | Vosges | 9 km | 75.9 % | 0.067
+octobre | Vosges | 13 km | 72.3 % | 0.083
+octobre | Vosges | 18 km | 66.4 % | 0.102
+octobre | Vosges | 22 km | 63.8 % | 0.123
+octobre | Vosges | 27 km | 58.0 % | 0.150
+octobre | Vosges | 36 km | 54.8 % | 0.166
+octobre | Provence (Var) | 4 km | 100.0 % | 0.000
+octobre | Provence (Var) | 9 km | 96.3 % | 0.044
+octobre | Provence (Var) | 13 km | 96.3 % | 0.041
+octobre | Provence (Var) | 18 km | 95.1 % | 0.051
+octobre | Provence (Var) | 22 km | 96.6 % | 0.043
+octobre | Provence (Var) | 27 km | 94.1 % | 0.063
+octobre | Provence (Var) | 36 km | 93.4 % | 0.057
+été | Massif central (Corrèze) | 4 km | 100.0 % | 0.000
+été | Massif central (Corrèze) | 9 km | 93.1 % | 0.016
+été | Massif central (Corrèze) | 13 km | 92.7 % | 0.018
+été | Massif central (Corrèze) | 18 km | 88.7 % | 0.023
+été | Massif central (Corrèze) | 22 km | 88.5 % | 0.024
+été | Massif central (Corrèze) | 27 km | 87.8 % | 0.026
+été | Massif central (Corrèze) | 36 km | 89.9 % | 0.026
+été | Vosges | 4 km | 100.0 % | 0.000
+été | Vosges | 9 km | 98.8 % | 0.003
+été | Vosges | 13 km | 98.6 % | 0.006
+été | Vosges | 18 km | 98.5 % | 0.004
+été | Vosges | 22 km | 99.1 % | 0.004
+été | Vosges | 27 km | 98.0 % | 0.006
+été | Vosges | 36 km | 99.1 % | 0.004
