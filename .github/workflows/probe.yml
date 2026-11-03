@@ -1,4 +1,4 @@
-# Sonde temporaire n°14 : tests de bout en bout après le réglage du compte à rebours.
+# Sonde temporaire n°15 : taille des cases météo, masque France, zones et géologie nationales.
 name: Sonde des sources de données
 
 on:
@@ -11,25 +11,33 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           package-manager-cache: false
-      - name: Types, build, tests de bout en bout (deux passages)
+      - name: Préparer
         run: |
           mkdir -p verif
-          npm ci --ignore-scripts --no-audit --no-fund
-          npm run check > verif/build.txt 2>&1 && echo "BUILD_OK" >> verif/build.txt
-          npx playwright install --with-deps chromium > /dev/null
-          for n in 1 2; do npm run test:e2e > verif/e2e-$n.txt 2>&1 || echo "E2E_ECHEC" >> verif/e2e-$n.txt; done
-          grep -h -E "vérifications|ÉCHEC|BUILD_OK|error" verif/*.txt
+          npm ci --ignore-scripts --no-audit --no-fund > /dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
+      - name: Masque France et nombre de cases
+        run: node probe15/masque.mjs 2>&1 | tee verif/masque.txt || true
+      - name: Zones sur toute la France
+        run: python3 -u probe15/zones-france.py 2>&1 | tee verif/zones-france.txt || true
+      - name: Géologie de toute la France (tailles, classement de 4 départements)
+        run: bash probe15/geologie-france.sh 2>&1 | tail -80 || true
+      - name: Étude des cases météo
+        run: |
+          npx esbuild probe15/etude.ts --bundle --platform=node --format=esm --outfile=probe15/etude.mjs \
+            --define:import.meta.env.DEV=true --define:import.meta.env.VITE_METRICS_URL='""' --log-level=warning
+          node probe15/etude.mjs 2>&1 | tee verif/etude.txt || true
       - name: Publier les résultats
         if: always()
         run: |
           git config user.name 'sonde'
           git config user.email 'sonde@users.noreply.github.com'
           git add -f verif
-          git commit -qm "Résultats de la sonde n°14" && git push -q origin HEAD:data-probe || echo "rien à publier"
+          git commit -qm "Résultats de la sonde n°15" && git push -q origin HEAD:data-probe || echo "rien à publier"
