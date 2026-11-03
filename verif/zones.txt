@@ -1,0 +1,47 @@
+patrinat_rnn:rnn : 21 objets
+patrinat_rnr:rnr : 7 objets
+patrinat_pprnn:pprnn : 2 objets
+patrinat_pprnr:pprnr : 1 objets
+patrinat_rb:rb : 16 objets
+patrinat_pn:parc_national : 4 objets
+patrinat_apb:apb : 128 objets
+patrinat_aphn:aphn : 1 objets
+patrinat_cdl:conservatoire_littoral : 32 objets
+patrinat_cen:cen : 130 objets
+BDTOPO_V3:foret_publique : 949 objets
+Zones : {"perimetre":3,"rnn":19,"rnr":6,"rb":16,"pn":2,"apb":128,"aphn":1,"cdl":32,"cen":130,"forets_domaniales":89,"autres_forets_publiques":860}
+Découpage en tuiles vectorielles…
+Tuiles écrites dans /home/runner/work/foret-explorer/foret-explorer/public/data/zones (2357 fichiers, 12M).
+
+real	0m21.298s
+user	0m18.966s
+sys	0m0.735s
+{
+ "genere": "2026-11-03T10:21:53.897Z",
+ "emprise": "45.0,5.6,46.45,7.25",
+ "compteurs": {
+  "perimetre": 3,
+  "rnn": 19,
+  "rnr": 6,
+  "rb": 16,
+  "pn": 2,
+  "apb": 128,
+  "aphn": 1,
+  "cdl": 32,
+  "cen": 130,
+  "forets_domaniales": 89,
+  "autres_forets_publiques": 860
+ },
+ "sources": [
+  "PatriNat (OFB, MNHN), espaces protégés, via le WFS de la Géoplateforme",
+  "IGN, BD TOPO® V3, forêts publiques (d’après l’ONF), Licence Ouverte Etalab 2.0"
+ ]
+}     45 10
+    148 11
+    496 12
+   1651 13
+     17 9
+Feature Count: 337
+Extent: (5.362155, 44.613662) - (7.184831, 47.223865)
+Feature Count: 949
+Extent: (5.459890, 44.895049) - (7.038590, 46.574425)
