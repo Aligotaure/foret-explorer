@@ -105,9 +105,9 @@ async function disclaimerTests(browser, base) {
   await page.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
   const delay = await page.evaluate(() => {
     const d = document.querySelector('dialog.disclaimer');
-    return Number(d.dataset.actif) - Number(d.dataset.ouvert);
+    return Number(d.dataset.actif) - Number(d.dataset.debut);
   });
-  check('avertissement : acceptation possible au bout de 3 secondes', delay >= 2950 && delay < 6000, `${delay} ms`);
+  check('avertissement : acceptation possible au bout de 3 secondes d’affichage', delay >= 2950 && delay < 4500, `${delay} ms`);
   await page.locator('.disclaimer__accept').click();
   const after = await page.evaluate(() => ({
     gone: !document.querySelector('dialog.disclaimer'),
