@@ -64,6 +64,17 @@ async function startServer() {
 /** Avertissement bloquant à l'ouverture, page « À propos » et effacement des données. */
 async function disclaimerTests(browser, base) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  // Historique du bouton (bloqué ou non, texte) dès la création de la page : le compte à rebours se
+  // vérifie ainsi même si la machine de test est lente.
+  await context.addInitScript(() => {
+    window.__bouton = [];
+    new MutationObserver(() => {
+      const b = document.querySelector('.disclaimer__accept');
+      if (!b) return;
+      const state = `${b.disabled}|${b.textContent}`;
+      if (window.__bouton.at(-1)?.s !== state) window.__bouton.push({ t: Date.now(), s: state });
+    }).observe(document, { subtree: true, childList: true, characterData: true, attributes: true });
+  });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
@@ -86,7 +97,12 @@ async function disclaimerTests(browser, base) {
     };
   });
   check('avertissement : fenêtre modale à l’ouverture', first.modal && first.role === 'alertdialog' && first.label === 'Avant de partir en forêt', JSON.stringify({ modal: first.modal, role: first.role }));
-  check('avertissement : bouton bloqué avec compte à rebours', first.disabled && /Lisez d’abord… [123]/.test(first.button), first.button);
+  const history = await page.evaluate(() => window.__bouton);
+  check(
+    'avertissement : bouton bloqué avec compte à rebours',
+    history[0]?.s === 'true|Lisez d’abord… 3' && (first.disabled || history.some((h) => h.s.startsWith('false|'))),
+    history.map((h) => h.s).join(' → '),
+  );
   check(
     'avertissement : identification, centre antipoison, propriétaire, responsabilité',
     ['pharmacien', 'entiers', 'application', '04 72 11 69 11', 'propriétaire', 'seul responsable', 'limites permises par la loi'].every((w) => first.text.includes(w)),
@@ -105,9 +121,14 @@ async function disclaimerTests(browser, base) {
   await page.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
   const delay = await page.evaluate(() => {
     const d = document.querySelector('dialog.disclaimer');
-    return Number(d.dataset.actif) - Number(d.dataset.debut);
+    const enabled = window.__bouton.find((h) => h.s.startsWith('false|'));
+    return { shown: Number(d.dataset.actif) - Number(d.dataset.debut), sinceButton: enabled ? enabled.t - window.__bouton[0].t : 0 };
   });
-  check('avertissement : acceptation possible au bout de 3 secondes d’affichage', delay >= 2950 && delay < 4500, `${delay} ms`);
+  check(
+    'avertissement : acceptation possible au bout de 3 secondes d’affichage',
+    delay.shown >= 2950 && delay.shown < 6000 && delay.sinceButton >= 2950,
+    JSON.stringify(delay),
+  );
   await page.locator('.disclaimer__accept').click();
   const after = await page.evaluate(() => ({
     gone: !document.querySelector('dialog.disclaimer'),

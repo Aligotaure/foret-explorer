@@ -1,4 +1,4 @@
-# Sonde temporaire n°13 : tests de bout en bout après le réglage du compte à rebours.
+# Sonde temporaire n°14 : tests de bout en bout après le réglage du compte à rebours.
 name: Sonde des sources de données
 
 on:
@@ -32,4 +32,4 @@ jobs:
           git config user.name 'sonde'
           git config user.email 'sonde@users.noreply.github.com'
           git add -f verif
-          git commit -qm "Résultats de la sonde n°13" && git push -q origin HEAD:data-probe || echo "rien à publier"
+          git commit -qm "Résultats de la sonde n°14" && git push -q origin HEAD:data-probe || echo "rien à publier"
