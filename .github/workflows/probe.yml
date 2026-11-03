@@ -1,4 +1,4 @@
-# Sonde temporaire n°8 : contrôle du site en ligne après publication.
+# Sonde temporaire n°9 : zones protégées et forêts publiques (WFS de la Géoplateforme).
 name: Sonde des sources de données
 
 on:
@@ -12,16 +12,10 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Site en ligne
+      - uses: actions/checkout@v4
+      - name: Zones protégées et forêts publiques
+        run: python3 -u probe9/sonde.py
+      - name: Téléchargements INPN (secours)
         run: |
           set +e
-          B=https://aligotaure.github.io/foret-explorer/
-          curl -sS -o index.html -w "index %{http_code}\n" $B
-          js=$(grep -Eo 'assets/index-[A-Za-z0-9_-]+\.js' index.html | head -1)
-          echo "bundle : $js"
-          curl -sS -o app.js -w "js %{http_code} %{size_download} octets\n" "$B$js"
-          for w in Morilles gyromitre meteo-fin-cellules foret-explorer:altitudes 'pas ce qui se mange' mesures.test workers.dev; do
-            printf '%-28s %s\n' "$w" "$(grep -c -- "$w" app.js)"
-          done
-          curl -sS -o /dev/null -w "géologie info.json %{http_code}\n" ${B}data/geologie/info.json
-          curl -sS -o /dev/null -w "tuile géologie 12/2118/1456 %{http_code}\n" ${B}data/geologie/12/2118/1456.pbf
+          for f in rnn rnr apb rb pn; do curl -sS -o /dev/null -m 30 -w "inpn $f %{http_code} %{size_download}\n" -I "https://inpn.mnhn.fr/docs/Shape/$f.zip"; done
