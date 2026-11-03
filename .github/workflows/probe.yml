@@ -1,4 +1,4 @@
-# Sonde temporaire n°9 : zones protégées et forêts publiques (WFS de la Géoplateforme).
+# Sonde temporaire n°10 : forêts publiques, parcs et réserves, PatriNat, PRSF.
 name: Sonde des sources de données
 
 on:
@@ -14,8 +14,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Zones protégées et forêts publiques
-        run: python3 -u probe9/sonde.py
-      - name: Téléchargements INPN (secours)
-        run: |
-          set +e
-          for f in rnn rnr apb rb pn; do curl -sS -o /dev/null -m 30 -w "inpn $f %{http_code} %{size_download}\n" -I "https://inpn.mnhn.fr/docs/Shape/$f.zip"; done
+        run: python3 -u probe10/sonde.py
