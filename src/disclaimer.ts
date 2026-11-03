@@ -105,7 +105,7 @@ function content(): HTMLElement {
 export function showDisclaimer(force = false): Promise<void> {
   if (!force && hasAccepted()) return Promise.resolve();
 
-  const accept = h('button', { class: 'disclaimer__accept', type: 'button', disabled: true });
+  const accept = h('button', { class: 'disclaimer__accept', type: 'button', disabled: true }, `Lisez d’abord… ${WAIT_SECONDS}`);
   const body = content();
   const dialog = h(
     'dialog',
@@ -161,8 +161,10 @@ export function showDisclaimer(force = false): Promise<void> {
     body.focus({ preventScroll: true });
 
     // Compte à rebours sur l'horloge (et non en additionnant des minuteries, qui prennent du retard
-    // pendant le chargement de la carte) : le bouton s'active au bout de WAIT_SECONDS secondes.
-    const started = Date.now();
+    // pendant le chargement de la carte). Il part quand l'avertissement est vraiment à l'écran : deux
+    // images après l'ouverture, donc après un éventuel blocage du chargement, et seulement quand
+    // l'onglet est visible.
+    let started = 0;
     const tick = (): void => {
       const left = Math.ceil((WAIT_SECONDS * 1000 - (Date.now() - started)) / 1000);
       if (left > 0) {
@@ -174,7 +176,13 @@ export function showDisclaimer(force = false): Promise<void> {
       accept.textContent = 'J’ai compris et j’accepte';
       dialog.dataset['actif'] = String(Date.now());
     };
-    tick();
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        started = Date.now();
+        dialog.dataset['debut'] = String(started);
+        tick();
+      }),
+    );
 
     accept.addEventListener('click', () => {
       if (accept.disabled) return;

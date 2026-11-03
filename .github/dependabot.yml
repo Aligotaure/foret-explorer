@@ -2,6 +2,10 @@
 # npm de la carte, npm du serveur de mesure (worker/) et actions GitHub (épinglées sur leur commit).
 # Une nouvelle version n'est proposée qu'au bout de 7 jours (cooldown) : le temps que les paquets
 # piégés soient repérés et retirés du registre. Les alertes de sécurité, elles, arrivent tout de suite.
+#
+# Versions mineures et correctifs : regroupés en une pull request par dossier. Versions majeures
+# (MapLibre 6, Vite 8, TypeScript 7…) : une pull request chacune, car elles demandent souvent de
+# modifier le code ; la vérification automatique (verification.yml) dit si elles cassent quelque chose.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -12,7 +16,7 @@ updates:
       default-days: 7
     groups:
       carte:
-        patterns: ['*']
+        update-types: [minor, patch]
   - package-ecosystem: npm
     directory: /worker
     schedule:
@@ -21,7 +25,7 @@ updates:
       default-days: 7
     groups:
       serveur-de-mesure:
-        patterns: ['*']
+        update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -30,4 +34,4 @@ updates:
       default-days: 7
     groups:
       actions:
-        patterns: ['*']
+        update-types: [minor, patch]

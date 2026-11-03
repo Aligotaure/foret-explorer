@@ -49,7 +49,7 @@ Vite + TypeScript strict + MapLibre GL JS 5, sans framework. Pas de nouvelle dé
 | Fichier | Rôle |
 |---|---|
 | `main.ts` | Point d'entrée : avertissement, carte, modules, état → carte, clic → bilan du coin, comptages |
-| `disclaimer.ts` | Avertissement bloquant (`<dialog>` modal, 3 s, ni Échap ni clic à côté), mémorisé par version des conditions, 30 jours au plus |
+| `disclaimer.ts` | Avertissement bloquant (`<dialog>` modal, ni Échap ni clic à côté) : bouton actif 3 s après le premier affichage (horloge, pas minuteries), mémorisé par version des conditions, 30 jours au plus |
 | `legal.ts` | Version des conditions (`TERMS_VERSION`), adresse de « À propos », données gardées dans le navigateur, effacement |
 | `apropos.ts`, `apropos.css` | Page `a-propos.html` (conseils, règles, conditions, mentions légales, confidentialité) : état de la mesure, « Effacer mes données » |
 | `zones.ts` | Zones protégées et forêt publique sous un point, hachures, `info.json` (sans lui : statut inconnu) |
