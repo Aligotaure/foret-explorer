@@ -1,9 +1,13 @@
 # Publie la carte sur GitHub Pages à chaque push sur main :
 # https://aligotaure.github.io/foret-explorer/
 #
-# 1. Construit les tuiles « nature du sol » à partir des cartes géologiques du BRGM
-#    (scripts/geologie/construire.sh) et les tuiles des zones protégées et forêts publiques
-#    (scripts/zones/construire.sh) : elles sont servies par GitHub Pages avec le site.
+# Aussi relancée par la tâche « Météo commune » (meteo.yml) quand de nouveaux fichiers météo sont prêts.
+#
+# 1. Reprend les tuiles « nature du sol » de toute la France (cache, refaites seulement quand les
+#    scripts de scripts/geologie/ changent : ≈ 2,7 Go de cartes du BRGM à télécharger), celles des
+#    zones protégées et forêts publiques (cache, refaites chaque semaine depuis le WFS) et les
+#    derniers fichiers météo communs : tout cela est servi par GitHub Pages avec le site. Si une
+#    reconstruction échoue, les tuiles précédentes restent ; sans tuiles du tout, rien n'est publié.
 # 2. Teste le serveur de mesure (worker/) et, si les secrets Cloudflare existent, le publie :
 #    son adresse est alors donnée au build pour que la carte y envoie ses compteurs.
 # 3. Vérifie les types, construit la carte et la publie.
@@ -25,13 +29,15 @@ permissions:
   pages: write
   id-token: write
 
+# Une publication en cours va au bout (elle garde les tuiles construites en cache) ; la suivante attend.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
       WRANGLER_SEND_METRICS: 'false'
@@ -43,32 +49,82 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      - name: Installer GDAL
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
-      - name: Cartes géologiques BRGM en cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # ── Données servies avec le site : tuiles gardées en cache, refaites seulement s'il le faut ──
+      - name: Tuiles « nature du sol » en cache
+        id: geologie
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: .cache/geologie/*.zip
-          key: geologie-brgm-${{ hashFiles('scripts/geologie/construire.sh') }}
-      - name: Construire les tuiles « nature du sol »
-        run: bash scripts/geologie/construire.sh
+          path: public/data/geologie
+          key: geologie-tuiles-${{ hashFiles('scripts/geologie/*') }}
+          # Scripts modifiés : on garde les tuiles précédentes si la reconstruction échoue.
+          restore-keys: geologie-tuiles-
       - name: Semaine en cours
         id: semaine
         run: echo "n=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
-      - name: Zones protégées et forêts publiques en cache (retéléchargées chaque semaine)
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Tuiles des zones protégées et des forêts publiques en cache (refaites chaque semaine)
+        id: zones
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            .cache/zones/protection.geojsonl
-            .cache/zones/etiquettes.geojsonl
-            .cache/zones/forets.geojsonl
-            .cache/zones/resume.json
-          key: zones-${{ hashFiles('scripts/zones/*') }}-${{ steps.semaine.outputs.n }}
-          restore-keys: zones-${{ hashFiles('scripts/zones/*') }}-
-      - name: Construire les tuiles des zones protégées et des forêts publiques
-        # Sans ces tuiles, la carte part quand même : le bilan d'un coin dit alors « statut inconnu ».
+          path: public/data/zones
+          key: zones-tuiles-${{ hashFiles('scripts/zones/*') }}-${{ steps.semaine.outputs.n }}
+          # Nouvelle semaine ou scripts modifiés : tuiles précédentes gardées si le WFS ne répond pas.
+          restore-keys: zones-tuiles-
+      - name: Installer GDAL
+        if: steps.geologie.outputs.cache-hit != 'true' || steps.zones.outputs.cache-hit != 'true'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
+      - name: Construire les tuiles « nature du sol » (France entière, un quart d'heure)
+        id: geologie-construire
+        if: steps.geologie.outputs.cache-hit != 'true'
+        continue-on-error: true
+        run: bash scripts/geologie/construire.sh
+      - name: Garder les tuiles « nature du sol »
+        if: steps.geologie-construire.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: public/data/geologie
+          key: geologie-tuiles-${{ hashFiles('scripts/geologie/*') }}
+      - name: Construire les tuiles des zones protégées et des forêts publiques (France entière)
+        id: zones-construire
+        if: steps.zones.outputs.cache-hit != 'true'
         continue-on-error: true
         run: bash scripts/zones/construire.sh
+      - name: Garder les tuiles des zones
+        if: steps.zones-construire.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: public/data/zones
+          key: zones-tuiles-${{ hashFiles('scripts/zones/*') }}-${{ steps.semaine.outputs.n }}
+      - name: Fichiers météo communs (dernier passage de la tâche « Météo commune »)
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            public/data/meteo
+            .meteo-etat.json
+          key: meteo-${{ github.run_id }}
+          restore-keys: meteo-
+      - name: Sans fichiers météo en cache, reprendre ceux du site en ligne
+        # Sans eux, la carte interroge Open-Meteo elle-même (quelques dizaines de cases au plus).
+        continue-on-error: true
+        run: |
+          if [ ! -f public/data/meteo/index.json ]; then
+            node scripts/meteo/mettre-a-jour.mjs --budget 0 --amorce https://aligotaure.github.io/foret-explorer/data/meteo/
+          fi
+      - name: Vérifier que les données sont là
+        # Une couche manquante (première construction ratée) : on ne publie pas, le site en ligne
+        # reste tel quel et la prochaine publication réessaie.
+        run: |
+          manque=0
+          for f in public/data/geologie/info.json public/data/zones/info.json; do
+            if [ ! -s "$f" ]; then
+              echo "::error::$f manquant, publication annulée pour ne pas retirer une couche du site en ligne."
+              manque=1
+            fi
+          done
+          if [ ! -f public/data/meteo/index.json ]; then
+            echo "::warning::Pas de fichiers météo communs, la carte interrogera Open-Meteo elle-même."
+          fi
+          du -sh public/data/* 2>/dev/null || true
+          exit $manque
       - name: Installer les dépendances
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Tester le serveur de mesure
@@ -104,11 +160,21 @@ jobs:
           if [ -z "$ADMIN_PASSWORD" ] || [ -z "$ADMIN_PATH" ]; then
             echo "::warning::Secrets ADMIN_PASSWORD et ADMIN_PATH manquants : la page privée reste fermée."
           fi
+      - name: Tester les scripts de données (météo commune simulée, règles des sols sur toute la France)
+        run: npm run test:donnees
       - name: Vérifier les types et construire
         run: npm run check
         env:
           # Vide si le serveur de mesure n'est pas configuré : la carte n'envoie alors rien.
           VITE_METRICS_URL: ${{ steps.mesures.outputs.url }}
+      - name: Taille du site
+        run: |
+          taille=$(du -sm dist | cut -f1)
+          echo "Site : ${taille} Mo (limite de GitHub Pages : 1 Go)"
+          if [ "$taille" -gt 950 ]; then
+            echo "::error::Site trop gros pour GitHub Pages (${taille} Mo)."
+            exit 1
+          fi
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: dist

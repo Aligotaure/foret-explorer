@@ -4,8 +4,8 @@
  * Changer TERMS_VERSION quand le texte de l'avertissement ou des conditions change : la carte
  * redemande alors l'accord de chaque visiteur.
  */
-export const TERMS_VERSION = '2026-11-03';
-export const TERMS_DATE_LABEL = '3 novembre 2026';
+export const TERMS_VERSION = '2026-11-10';
+export const TERMS_DATE_LABEL = '10 novembre 2026';
 
 /** Page « À propos » (conditions, mentions légales, confidentialité), à côté de index.html. */
 export const ABOUT_URL = 'a-propos.html';

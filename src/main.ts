@@ -1,10 +1,10 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
 import maplibregl from 'maplibre-gl';
-import { BDFORET, INITIAL_VIEW, MAP_MAX_ZOOM, MAP_MIN_ZOOM } from './config';
+import { BDFORET, FRANCE_BOUNDS, MAP_MAX_ZOOM, MAP_MIN_ZOOM } from './config';
 import { countClasses } from './counts';
 import { showDisclaimer } from './disclaimer';
-import { byId, h, toast } from './dom';
+import { byId, debounce, h, toast } from './dom';
 import { registerSoilPatterns } from './geology';
 import { LegendPanel } from './legend';
 import {
@@ -23,6 +23,7 @@ import { flush, sessionTotals, startMetrics, track, trackMapRequest } from './me
 import { initSearch } from './search';
 import { SpotPanel } from './spot';
 import { Store, loadInitialState, persistState } from './state';
+import { STORAGE_PREFIX } from './legal';
 import { initLegendToggle, initToolbar } from './toolbar';
 import { loadZonesInfo, noteZonesError, registerZonePattern } from './zones';
 
@@ -37,11 +38,26 @@ startMetrics(!wideScreen);
 void loadZonesInfo();
 
 // ── Carte ─────────────────────────────────────────────────────────────────────
+// Vue de départ : celle de l'adresse (#carte=zoom/lat/lon), sinon la dernière vue sur cet appareil,
+// sinon la France entière.
+const VIEW_KEY = `${STORAGE_PREFIX}vue`;
+function savedView(): { center: [number, number]; zoom: number } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? 'null') as { c?: unknown; z?: unknown } | null;
+    const [lng, lat] = Array.isArray(v?.c) ? (v.c as unknown[]) : [];
+    if (typeof lng === 'number' && typeof lat === 'number' && typeof v?.z === 'number' && Math.abs(lat) < 85 && Math.abs(lng) <= 180) {
+      return { center: [lng, lat], zoom: v.z };
+    }
+  } catch {
+    /* stockage indisponible */
+  }
+  return null;
+}
+const lastView = savedView();
 const map = new maplibregl.Map({
   container: 'map',
   style: buildStyle(store.state),
-  center: INITIAL_VIEW.center,
-  zoom: INITIAL_VIEW.zoom,
+  ...(lastView ?? { bounds: FRANCE_BOUNDS, fitBoundsOptions: { padding: 16 } }),
   minZoom: MAP_MIN_ZOOM,
   maxZoom: MAP_MAX_ZOOM,
   hash: 'carte', // position dans l'URL : #carte=zoom/lat/lon
@@ -112,6 +128,18 @@ map.on('load', () => {
 map.on('moveend', () => {
   if (store.state.weatherMode !== 'off') meteo.refresh();
 });
+// Dernière vue, reprise à la prochaine visite (sans #carte= dans l'adresse).
+map.on(
+  'moveend',
+  debounce(() => {
+    const c = map.getCenter();
+    try {
+      localStorage.setItem(VIEW_KEY, JSON.stringify({ c: [+c.lng.toFixed(5), +c.lat.toFixed(5)], z: +map.getZoom().toFixed(2) }));
+    } catch {
+      /* stockage indisponible : on repartira de la France entière */
+    }
+  }, 1000),
+);
 
 // ── Clic sur la carte : bilan du coin (forêt, sol, altitude, météo, champignons) ─
 map.on('click', (event) => {
@@ -143,12 +171,15 @@ map.on('idle', () => {
 const shownErrors = new Set<string>();
 map.on('error', (event) => {
   const sourceId = (event as { sourceId?: string }).sourceId;
+  // Tuile absente des données du site (en mer, à l'étranger, ou sans rien dedans) : pas une erreur.
+  const ours = sourceId === SOURCES.geologie || sourceId === SOURCES.zones;
+  if (ours && (event.error as { status?: number } | undefined)?.status === 404) return;
   console.warn('[carte]', sourceId ?? '', event.error?.message ?? event.error);
   if (sourceId === SOURCES.geologie) track('pages.geology.errors');
   else if (sourceId === SOURCES.zones) {
-    // Tuile des zones manquante (réseau…) : le bilan ne doit plus affirmer qu'une forêt est privée.
+    // Tuile des zones en panne (réseau…) : le bilan ne doit plus affirmer qu'une forêt est privée.
     track('pages.zones.errors');
-    if ((event.error as { status?: number } | undefined)?.status !== 404) noteZonesError();
+    noteZonesError();
   } else if (sourceId) track('ign.tiles.errors');
   if (sourceId === SOURCES.bdForet && !shownErrors.has(sourceId)) {
     shownErrors.add(sourceId);

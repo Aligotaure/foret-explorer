@@ -2,9 +2,11 @@ node_modules/
 dist/
 .vite/
 tests/e2e/shots/
-# Tuiles de géologie et téléchargements BRGM : produits par scripts/geologie/construire.sh
+# Données servies avec le site (tuiles de géologie et des zones, fichiers météo communs) et
+# téléchargements : produits par scripts/geologie/, scripts/zones/ et scripts/meteo/
 .cache/
 public/data/
+.meteo-etat.json
 *.log
 .DS_Store
 # Serveur de mesure (Cloudflare)

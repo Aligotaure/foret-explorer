@@ -49,6 +49,13 @@ const renderedCodes = (page) =>
   );
 const waitForMap = (page) =>
   page.waitForFunction(() => window.map && window.map.loaded(), null, { timeout: 30000 });
+/** Vue des tests de la carte : au-dessus d'Annecy et du Parmelan (#carte=zoom/lat/lon). */
+const ANNECY = '#carte=11.5/45.92/6.19';
+const viewOf = (page) =>
+  page.evaluate(() => {
+    const c = window.map.getCenter();
+    return { lng: +c.lng.toFixed(3), lat: +c.lat.toFixed(3), zoom: +window.map.getZoom().toFixed(1) };
+  });
 
 async function startServer() {
   if (process.env.BASE_URL) return { url: process.env.BASE_URL, close: async () => {} };
@@ -105,7 +112,7 @@ async function disclaimerTests(browser, base) {
   );
   check(
     'avertissement : identification, centre antipoison, propriétaire, responsabilité',
-    ['pharmacien', 'entiers', 'application', '04 72 11 69 11', 'propriétaire', 'seul responsable', 'limites permises par la loi'].every((w) => first.text.includes(w)),
+    ['pharmacien', 'entiers', 'application', 'centre antipoison', 'le 15', 'propriétaire', 'seul responsable', 'limites permises par la loi'].every((w) => first.text.includes(w)) && !first.text.includes('Lyon'),
     first.text.slice(0, 80),
   );
   check('avertissement : lien vers les conditions', first.link === 'a-propos.html#conditions', first.link);
@@ -135,10 +142,31 @@ async function disclaimerTests(browser, base) {
     saved: JSON.parse(localStorage.getItem('foret-explorer:avertissement') ?? 'null'),
   }));
   check('avertissement : accepté et mémorisé avec la version des conditions', after.gone && after.saved?.v === TERMS_VERSION && typeof after.saved?.t === 'number', JSON.stringify(after.saved));
-  await page.reload();
+  await waitForMap(page);
+  const firstView = await viewOf(page);
+  check('première visite : la France entière', firstView.zoom < 7 && firstView.lat > 44 && firstView.lat < 49 && firstView.lng > 0 && firstView.lng < 5, JSON.stringify(firstView));
+  // Vue d'ensemble : l'indice de pousse de tout le pays, lu dans les fichiers météo communs.
+  await page.getByRole('button', { name: 'Cèpes', exact: true }).click();
+  await page.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 1000, null, { timeout: 20000 });
+  const national = await page.evaluate(() => ({
+    status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '',
+    opacity: JSON.stringify(window.map.getPaintProperty('meteo-cellules', 'fill-opacity')).slice(0, 34),
+  }));
+  check(
+    'vue France : indice de pousse sur tout le pays',
+    Number(national.status.match(/^(\d+) cases/)?.[1]) > 1500 && national.opacity.startsWith('["interpolate",["linear"],["zoom"]'),
+    national.status.slice(0, 80),
+  );
+  await page.screenshot({ path: `${OUT}00b-france.png` });
+  await page.getByRole('button', { name: 'Cèpes', exact: true }).click(); // on retire le champignon
+  await page.evaluate(() => window.map.jumpTo({ center: [2.35, 48.85], zoom: 10 }));
+  await page.waitForTimeout(1500); // la vue est enregistrée une seconde après le dernier mouvement
+  await page.goto(base);
   await waitForMap(page);
   await page.waitForTimeout(500);
   check('avertissement : pas redemandé à la visite suivante', !(await disclaimerOpen(page)));
+  const kept = await viewOf(page);
+  check('visite suivante : la carte reprend la dernière vue', Math.abs(kept.lng - 2.35) < 0.01 && Math.abs(kept.lat - 48.85) < 0.01 && kept.zoom === 10, JSON.stringify(kept));
 
   // Page « À propos »
   await page.goto(new URL('a-propos.html', base).href);
@@ -183,7 +211,7 @@ async function desktopTests(browser, base) {
   page.on('console', (m) => m.type() === 'error' && errors.push(`console.error: ${m.text()}`));
   await installMocks(page, log);
 
-  await page.goto(base);
+  await page.goto(`${base}${ANNECY}`);
   await waitForMap(page);
   await idle(page);
 
@@ -262,14 +290,18 @@ async function desktopTests(browser, base) {
   };
   if (zonePoints.prot && zonePoints.pub && zonePoints.priv) {
     const before = log.meteo.length;
+    const blocksBefore = log.meteoCommune.length;
     const prot = await rulesAt(zonePoints.prot);
     check(
       'bilan : réserve naturelle signalée, fiche INPN, mise en garde sur l’indice',
       /Réserve naturelle nationale « Réserve d’essai »/.test(prot.text) && /interdire ou limiter la cueillette/.test(prot.text) && prot.link?.startsWith('https://inpn.mnhn.fr/') && /Zone protégée/.test(prot.warning ?? ''),
       prot.text.slice(0, 110),
     );
-    const query = log.meteo.slice(before).pop() ?? '';
-    check('bilan : coordonnées arrondies à 0,01° pour Open-Meteo, altitude exacte', /latitude=\d+\.\d\d00&/.test(query) && /longitude=\d+\.\d\d00&/.test(query) && /elevation=930/.test(query), query.slice(0, 70));
+    check(
+      'bilan : météo de la case commune, aucun appel à Open-Meteo',
+      log.meteo.length === before && log.meteoCommune.slice(blocksBefore).every((p) => /\/data\/meteo\/(index|b\/\d+_\d+)\.json$/.test(p)),
+      `${log.meteo.length - before} appel(s) Open-Meteo, ${log.meteoCommune.length} fichier(s) météo`,
+    );
     await page.screenshot({ path: `${OUT}03b-bureau-bilan-reserve.png` });
     const pub = await rulesAt(zonePoints.pub);
     check('bilan : forêt publique, cueillette familiale tolérée', /Forêt communale d’essai : forêt publique/.test(pub.text) && /tolérée/.test(pub.text) && !pub.warning, pub.text.slice(0, 110));
@@ -364,7 +396,7 @@ async function desktopTests(browser, base) {
     check('bilan : type de forêt du point', spot.rows[0]?.includes('Forêt fermée de chênes décidus purs'), spot.rows[0]);
     check('bilan : nature du sol', /Calcaires et dolomies|Moraines et dépôts glaciaires/.test(spot.rows[1] ?? ''), spot.rows[1]);
     check('bilan : altitude IGN', /^Altitude\s*930 m$/.test(spot.rows[2] ?? ''), spot.rows[2]);
-    check('bilan : pluie des 20 jours', /mm de pluie/.test(spot.summary ?? '') && spot.bars >= 8, `${spot.summary} (${spot.bars} barres)`);
+    check('bilan : pluie des 30 jours', /mm de pluie/.test(spot.summary ?? '') && /il y a 1[03] jours/.test(spot.summary ?? '') && spot.bars >= 8, `${spot.summary} (${spot.bars} barres)`);
     check('bilan : un verdict par champignon (5 espèces)', spot.verdicts.length === 5 && spot.verdicts.includes('Morilles'), spot.verdicts.join(', '));
     check('surbrillance du polygone cliqué', spot.highlight === JSON.stringify(['==', ['get', 'id'], target.id]), spot.highlight);
     await page.screenshot({ path: `${OUT}03-bureau-bilan.png` });
@@ -386,13 +418,17 @@ async function desktopTests(browser, base) {
     visible: window.map.getLayoutProperty('meteo-cellules', 'visibility'),
     fill: JSON.stringify(window.map.getPaintProperty('meteo-cellules', 'fill-color')),
     levels: [...new Set(window.map.querySourceFeatures('meteo').map((f) => f.properties.l_cepe))].sort(),
-    status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cellules/.test(t)),
+    status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)),
   }));
   check('Je cherche cèpes → forêts hôtes seulement', cepes.filter.includes('FF1-09-09') && !cepes.filter.includes('FF1-14-14'), cepes.filter.slice(0, 80));
   check('Je cherche cèpes → grille « indice » visible', cepes.mode === 'indice' && cepes.visible === 'visible' && cepes.fill.includes('l_cepe'), `${cepes.mode} ${cepes.visible}`);
   check('grille météo calculée', cepes.levels.length > 0 && cepes.levels.every((l) => l >= 0 && l <= 3), `niveaux ${cepes.levels.join(',')}`);
-  check('requêtes Open-Meteo groupées (20 jours passés)', log.meteo.length >= 1 && log.meteo.every((q) => q.includes('past_days=20')), `${log.meteo.length} requête(s)`);
-  check('état de la grille dans la légende', Boolean(cepes.status), cepes.status);
+  check(
+    'grille météo lue dans les fichiers communs, sans appel à Open-Meteo',
+    log.meteo.length === 0 && log.meteoCommune.some((p) => p.endsWith('/meteo/index.json')) && log.meteoCommune.some((p) => /\/b\/\d+_\d+\.json$/.test(p)),
+    `${log.meteo.length} appel(s) Open-Meteo, ${log.meteoCommune.length} fichier(s)`,
+  );
+  check('état de la grille dans la légende (cases de 18 km, date de la pluie)', Boolean(cepes.status) && /pluie connue jusqu’au/.test(cepes.status ?? ''), cepes.status);
   await page.screenshot({ path: `${OUT}04-bureau-cepes.png` });
 
   // Grille fine : carrés de 500 m à partir du zoom 13 (mode indice)
@@ -429,14 +465,18 @@ async function desktopTests(browser, base) {
   check('grille fine : carrés de 500 m dessinés', fine.count > 20 && fine.visible === 'visible' && fine.filter.includes('c_cepe'), `${fine.count} carrés, ${fine.levels.join(',')}`);
   check('grille fine : altitudes IGN groupées et variées', batches.length >= 1 && batches.every((q) => q.includes('%7C')) && fine.altitudes > 5, `${batches.length} requête(s), ${fine.altitudes} altitudes`);
   check('grille fine : altitudes gardées dans le navigateur', fine.saved > 20, `${fine.saved} altitudes`);
-  check('grille fine : la grille de 4,5 km s’efface au zoom 12', fine.coarseOpacity.startsWith('["step",["zoom"]'), fine.coarseOpacity.slice(0, 40));
+  check(
+    'grille fine : la grille des cases s’efface au zoom 12',
+    fine.coarseOpacity.startsWith('["interpolate",["linear"],["zoom"]') && fine.coarseOpacity.includes(',12,["*",0.35,'),
+    fine.coarseOpacity.slice(0, 40),
+  );
   check('grille fine : état dans la légende', Boolean(fine.status) && fine.coverage, fine.status);
   await page.screenshot({ path: `${OUT}04b-bureau-grille-fine.png` });
   await page.evaluate(() => window.map.jumpTo({ zoom: 11.5 }));
   await idle(page);
 
   // Grille en mode pluie
-  await page.getByText('Pluie cumulée', { exact: true }).click();
+  await page.getByText('Pluie cumulée sur 20 jours', { exact: true }).click();
   const rain = await page.evaluate(() => ({
     fill: JSON.stringify(window.map.getPaintProperty('meteo-cellules', 'fill-color')),
     text: JSON.stringify(window.map.getLayoutProperty('meteo-etiquettes', 'text-field')),
@@ -453,7 +493,7 @@ async function desktopTests(browser, base) {
     favored: [...document.querySelectorAll('.soil-item.is-favored')].map((li) => li.dataset.soil),
   }));
   check('nature du sol : couche et motifs', soil.visible === 'visible' && soil.pattern, JSON.stringify(soil));
-  check('nature du sol : 7 types, sols favorables aux cèpes repérés', soil.rows === 7 && soil.favored.includes('gres') && !soil.favored.includes('calcaire'), soil.favored.join(','));
+  check('nature du sol : 8 types, sols favorables aux cèpes repérés', soil.rows === 8 && soil.favored.includes('gres') && !soil.favored.includes('calcaire'), soil.favored.join(','));
   check('tuiles de géologie demandées', log.geologie.length > 0, log.geologie.slice(0, 2).join(', '));
   await page.screenshot({ path: `${OUT}05-bureau-sol.png` });
   await page.getByRole('switch', { name: 'Afficher la nature du sol' }).uncheck();
@@ -481,10 +521,10 @@ async function desktopTests(browser, base) {
   // Consommation des API : compteurs de la visite et envoi groupé au serveur de mesure
   const totals = await page.evaluate(() => window.metrics.totals());
   check(
-    'mesure : compteurs Open-Meteo, IGN, géologie',
+    'mesure : compteurs météo commune, IGN, géologie, aucun appel direct à Open-Meteo',
     totals['app.sessions'] === 1 &&
-      totals['openMeteo.requests'] >= 1 &&
-      totals['openMeteo.calls10'] === totals['openMeteo.locations'] * 15 &&
+      totals['pages.meteo'] >= 2 &&
+      !totals['openMeteo.requests'] &&
       totals['ign.tiles.forest'] > 0 &&
       totals['ign.tiles.plan'] > 0 &&
       totals['ign.altitude.points'] > 20 &&
@@ -558,11 +598,55 @@ async function desktopTests(browser, base) {
   await context.close();
 }
 
+/** Fichiers météo communs injoignables : la carte interroge Open-Meteo elle-même, avec mesure. */
+async function fallbackTests(browser, base) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await preAccept(context);
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  const log = { tms: [], wmts: [], geocode: [], other: [] };
+  await installMocks(page, log, { meteoCommune: false });
+  await page.goto(`${base}#carte=10.5/45.92/6.19`);
+  await waitForMap(page);
+  await page.getByRole('button', { name: 'Cèpes', exact: true }).click();
+  await page.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 0, null, { timeout: 15000 });
+  const status = await page.evaluate(() => [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '');
+  check(
+    'secours : sans fichiers communs, grille par Open-Meteo (20 jours, appels groupés)',
+    log.meteo.length >= 1 && log.meteo.every((q) => q.includes('past_days=20')) && /Open-Meteo interrogé directement/.test(status),
+    `${log.meteo.length} requête(s) ; ${status.slice(0, 90)}`,
+  );
+  const before = log.meteo.length;
+  await page.mouse.click(640, 400);
+  await page.waitForSelector('#spot .verdict', { timeout: 10000 });
+  const query = log.meteo.slice(before).pop() ?? '';
+  check('secours : bilan d’un coin, coordonnées arrondies à 0,01°, altitude exacte', /latitude=\d+\.\d\d00&/.test(query) && /longitude=\d+\.\d\d00&/.test(query) && /elevation=930/.test(query), query.slice(0, 70));
+  const totals = await page.evaluate(() => window.metrics.totals());
+  check('secours : appels Open-Meteo comptés (1,5 appel par point sur 21 jours)', totals['openMeteo.requests'] >= 2 && totals['openMeteo.calls10'] === totals['openMeteo.locations'] * 15 && totals['pages.meteo.errors'] >= 1, JSON.stringify(totals).slice(0, 160));
+  check('secours : aucune erreur JavaScript', errors.length === 0, errors.slice(0, 3).join(' | '));
+
+  // Fichiers communs en retard de 6 jours (tâche GitHub en panne) : même repli.
+  const page2 = await context.newPage();
+  const log2 = { tms: [], wmts: [], geocode: [], other: [] };
+  await installMocks(page2, log2, { meteoCommune: 'ancienne' });
+  await page2.goto(`${base}#carte=10.5/44.5/3.1`); // ailleurs : pas dans le cache du jour de la page précédente
+  await waitForMap(page2);
+  await page2.getByRole('button', { name: 'Cèpes', exact: true }).click();
+  await page2.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 0, null, { timeout: 15000 });
+  check(
+    'secours : fichiers communs trop anciens, Open-Meteo interrogé, aucun bloc lu',
+    log2.meteo.length >= 1 && !log2.meteoCommune.some((p) => p.includes('/b/')),
+    `${log2.meteo.length} requête(s) Open-Meteo, fichiers lus : ${log2.meteoCommune.map((p) => p.split('/meteo/')[1]).join(', ')}`,
+  );
+  await context.close();
+}
+
 async function mobileTests(browser, base) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
   const page = await context.newPage();
   await installMocks(page, { tms: [], wmts: [], geocode: [], other: [] });
-  await page.goto(base);
+  await page.goto(`${base}#carte=12/45.92/6.19`);
   // Avertissement à l'ouverture : il tient dans l'écran, le bouton reste atteignable.
   await page.waitForSelector('dialog.disclaimer[open]', { timeout: 10000 });
   const dialog = await page.evaluate(() => {
@@ -608,6 +692,7 @@ const browser = await chromium.launch({
 try {
   await disclaimerTests(browser, server.url);
   await desktopTests(browser, server.url);
+  await fallbackTests(browser, server.url);
   await mobileTests(browser, server.url);
 } finally {
   await browser.close();

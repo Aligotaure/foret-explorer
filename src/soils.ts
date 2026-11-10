@@ -6,9 +6,9 @@
  * carte BRGM est faite par `scripts/geologie/classer.mjs` (champ `sol` des tuiles).
  */
 
-export type SoilId = 'calcaire' | 'marne' | 'gres' | 'cristallin' | 'moraine' | 'eboulis' | 'humide';
+export type SoilId = 'calcaire' | 'marne' | 'limon' | 'gres' | 'cristallin' | 'moraine' | 'eboulis' | 'humide';
 
-export type PatternKind = 'bricks' | 'dashes' | 'dots' | 'crosses' | 'triangles' | 'scree' | 'waves';
+export type PatternKind = 'bricks' | 'dashes' | 'ticks' | 'dots' | 'crosses' | 'triangles' | 'scree' | 'waves';
 
 export interface SoilClass {
   id: SoilId;
@@ -32,9 +32,17 @@ export const SOIL_CLASSES: readonly SoilClass[] = [
   {
     id: 'marne',
     label: 'Marnes et argiles',
-    ground: 'sol calcaire, lourd et frais',
+    ground: 'sol lourd et frais, souvent calcaire',
     mushrooms: 'trompettes, pieds-de-mouton, morilles',
     pattern: 'dashes',
+  },
+  {
+    // Grands plateaux du Bassin parisien, du Nord, de Normandie… : limons décalcifiés sur craie ou calcaire.
+    id: 'limon',
+    label: 'Limons, lœss et argiles à silex',
+    ground: 'sol profond et frais, souvent acide en surface',
+    mushrooms: 'cèpes, girolles, trompettes sous chênes et hêtres',
+    pattern: 'ticks',
   },
   {
     id: 'gres',
@@ -114,6 +122,15 @@ export function drawPattern(kind: PatternKind, size: number, ratio = 2): HTMLCan
       ] as const) {
         shapes.moveTo(x, y);
         shapes.lineTo(x + s / 2 - 4, y);
+      }
+      break;
+    case 'ticks': // limons et lœss = petits traits verticaux
+      for (const [x, y] of [
+        [s / 4, s / 4],
+        [(3 * s) / 4, (3 * s) / 4],
+      ] as const) {
+        shapes.moveTo(x, y - 2.5);
+        shapes.lineTo(x, y + 2.5);
       }
       break;
     case 'dots': // grès = points

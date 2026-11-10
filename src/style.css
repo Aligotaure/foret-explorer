@@ -1120,6 +1120,12 @@ li.is-off .swatch {
   fill: #9ecae1;
 }
 
+.rain-chart__unknown {
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 2;
+}
+
 .rain-chart__value,
 .rain-chart__tick {
   fill: var(--muted);

@@ -1,14 +1,15 @@
 import maplibregl, { type LngLat, type Map as MapLibreMap, type PointLike } from 'maplibre-gl';
-import { GEOLOGY } from './config';
+import { DIRECT_PAST_DAYS, GEOLOGY } from './config';
 import { h, toast } from './dom';
 import { forestAt, soilAt, type ForestAtPoint, type SoilAtPoint } from './geology';
 import { icon } from './icons';
 import { track } from './metrics';
 import { LEVELS, MUSHROOMS, scoreMushroom, type MushroomScore } from './mushrooms';
 import { setHighlight } from './mapStyle';
+import { CELL_KM, KEPT_DAYS } from './meteoGrid';
 import { patternImageId, drawPattern } from './soils';
 import type { Store } from './state';
-import { fetchAltitude, fetchDaily, summarize, type WeatherSummary } from './weather';
+import { fetchAltitude, summarize, weatherAt, type WeatherSummary } from './weather';
 import { zonesAt, type ZonesAtPoint } from './zones';
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -24,13 +25,18 @@ function rainChart(w: WeatherSummary): SVGSVGElement {
   const width = 240;
   const height = 64;
   const n = w.days.length;
-  const max = Math.max(20, ...w.days.map((d) => d.rain));
+  const max = Math.max(20, ...w.days.map((d) => d.rain ?? 0));
   const barW = width / n;
   const peaks = new Set(w.events.map((e) => e.date));
   const chart = svg('svg', { viewBox: `0 0 ${width} ${height + 14}`, class: 'rain-chart', role: 'img' });
-  chart.setAttribute('aria-label', `Pluie jour par jour sur ${n} jours, ${Math.round(w.rain20)} mm au total`);
+  chart.setAttribute('aria-label', `Pluie jour par jour sur ${n} jours, ${Math.round(w.rain30)} mm au total`);
   chart.append(svg('line', { x1: 0, y1: height, x2: width, y2: height, class: 'rain-chart__axis' }));
   w.days.forEach((d, i) => {
+    if (d.rain === null) {
+      // Jour pas encore connu : un tiret sous l'axe.
+      chart.append(svg('line', { x1: i * barW + 2, y1: height + 2, x2: (i + 1) * barW - 2, y2: height + 2, class: 'rain-chart__unknown' }));
+      return;
+    }
     const bh = d.rain > 0 ? Math.max(1.5, (d.rain / max) * (height - 12)) : 0;
     if (!bh) return;
     const bar = svg('rect', {
@@ -143,11 +149,8 @@ function rulesSection(zones: ZonesAtPoint, forest: ForestAtPoint | null): HTMLEl
   return h('section', { class: 'spot__section' }, h('h3', { class: 'spot__title' }, 'Droit de cueillir'), ...items);
 }
 
-/** Open-Meteo n'a besoin que de la case météo : coordonnées arrondies à 0,01° (≈ 1 km) pour la vie privée. */
-const round2 = (x: number): number => Math.round(x * 100) / 100;
-
 /**
- * Bilan d'un coin : forêt, sol, altitude, pluie des 20 derniers jours et, pour chaque
+ * Bilan d'un coin : forêt, sol, altitude, pluie des 30 derniers jours et, pour chaque
  * champignon, un verdict expliqué. Panneau à droite sur grand écran, tiroir bas sur mobile.
  */
 export class SpotPanel {
@@ -209,12 +212,11 @@ export class SpotPanel {
 
     try {
       const altitude = await fetchAltitude(lngLat.lng, lngLat.lat, controller.signal).catch(() => null);
-      const [series] = await fetchDaily(
-        [{ lat: round2(lngLat.lat), lon: round2(lngLat.lng), ...(altitude !== null ? { elevation: altitude } : {}) }],
-        controller.signal,
-      );
+      // Case météo commune qui contient le point (températures ramenées à son altitude) ; Open-Meteo
+      // n'est appelé que hors de France ou si les fichiers communs sont injoignables.
+      const weather = await weatherAt(lngLat.lat, lngLat.lng, altitude, controller.signal);
       if (controller.signal.aborted) return;
-      this.render(forest, soil, zones, altitude, series ? summarize(series) : null, 'ok');
+      this.render(forest, soil, zones, altitude, weather ? summarize(weather.series) : null, 'ok', weather?.shared ?? false);
     } catch (error) {
       if (controller.signal.aborted) return;
       console.warn('[bilan]', error);
@@ -229,6 +231,7 @@ export class SpotPanel {
     altitude: number | null,
     weather: WeatherSummary | null,
     status: 'loading' | 'ok' | 'error',
+    shared = true,
   ): void {
     const terrain = h('dl', { class: 'spot__facts' });
     terrain.append(
@@ -250,21 +253,27 @@ export class SpotPanel {
     const parts: Node[] = [h('section', { class: 'spot__section' }, terrain), rulesSection(zones, forest)];
 
     if (status === 'loading') {
-      parts.push(h('p', { class: 'spot__status' }, 'Calcul de la météo des 20 derniers jours…'));
+      parts.push(h('p', { class: 'spot__status' }, 'Lecture de la météo des derniers jours…'));
     } else if (!weather) {
       parts.push(h('p', { class: 'spot__status' }, 'Météo indisponible pour le moment (réseau ?).'));
     } else {
       const last = weather.events[0];
+      const yesterday = weather.days[weather.days.length - 1]?.date ?? '';
+      const late = weather.lastDate && weather.lastDate < yesterday;
       parts.push(
         h(
           'section',
           { class: 'spot__section' },
-          h('h3', { class: 'spot__title' }, 'Météo des 20 derniers jours'),
+          // En secours (Open-Meteo interrogé directement), seuls les 20 derniers jours sont connus.
+          h('h3', { class: 'spot__title' }, `Météo des ${shared ? KEPT_DAYS : DIRECT_PAST_DAYS} derniers jours`),
           h(
             'p',
             { class: 'spot__summary' },
-            `${Math.round(weather.rain20)} mm de pluie`,
+            `${Math.round(weather.rain30)} mm de pluie`,
             last ? ` · dernière grosse pluie : ${Math.round(last.amount)} mm il y a ${last.daysAgo} jours` : ' · pas de grosse pluie',
+            late && weather.lastDate
+              ? ` · connue jusqu’au ${new Date(`${weather.lastDate}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`
+              : '',
           ),
           rainChart(weather),
           h(
@@ -337,7 +346,7 @@ export class SpotPanel {
       h(
         'p',
         { class: 'spot__note' },
-        'Indice expérimental, fondé sur des règles de cueilleur : délai après la pluie, températures à cette altitude, arbres hôtes et sol. Il dit où chercher, pas ce qui se mange ni si l’on peut cueillir. Météo : Open-Meteo.',
+        `Indice expérimental, fondé sur des règles de cueilleur : délai après la pluie, températures à cette altitude, arbres hôtes et sol. Il dit où chercher, pas ce qui se mange ni si l’on peut cueillir. Météo : Open-Meteo, ${shared ? `case de ${CELL_KM} km qui contient ce point, mise à jour chaque nuit` : 'interrogé directement pour ce point'}.`,
       ),
     );
     this.body.replaceChildren(...parts);

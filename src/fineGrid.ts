@@ -1,29 +1,29 @@
 /**
  * Grille fine de l'indice de pousse : carrés d'environ 500 m, à partir du zoom FINE_MIN_ZOOM.
  *
- * Chaque case météo de 4,5 km est découpée en FINE_DIVISIONS × FINE_DIVISIONS carrés. Pour chacun :
+ * Chaque case de base de 4,5 km (0,04° × 0,056°) est découpée en FINE_DIVISIONS × FINE_DIVISIONS
+ * carrés ; ils s'emboîtent donc exactement dans les cases météo communes (meteoGrid.ts). Pour chacun :
  *  - forêts et sols relevés sur 3 × 3 points, dans les tuiles déjà affichées ;
  *  - altitude IGN au centre, gardée dans le navigateur (elle ne change pas) ;
- *  - météo de la case parente, températures ramenées à l'altitude du carré (−0,65 °C par 100 m).
- * La pluie reste celle de la case : le modèle météo n'est pas plus fin.
+ *  - météo de la case commune qui le contient, températures ramenées à l'altitude du carré
+ *    (−0,65 °C par 100 m). La pluie reste celle de la case.
  */
 import type { MultiPolygon, Polygon, Position } from 'geojson';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { FINE_DIVISIONS, FINE_MAX_CELLS } from './config';
 import { LAYERS } from './mapStyle';
 import { scoreMushroom, soilModulation, type Level, type Mushroom } from './mushrooms';
+import { BASE_STEP_LAT, BASE_STEP_LON, cellId, cellOfBase } from './meteoGrid';
 import { SOIL_BY_ID, type SoilId } from './soils';
-import { BASE_STEP_LAT, BASE_STEP_LON, type DailySeries, type WeatherSummary } from './weather';
+import type { WeatherSummary } from './weather';
 
 export const FINE_STEP_LAT = BASE_STEP_LAT / FINE_DIVISIONS;
 export const FINE_STEP_LON = BASE_STEP_LON / FINE_DIVISIONS;
-/** Gradient thermique standard (°C par mètre). */
-export const LAPSE_RATE = 0.0065;
 
 export interface FineCell {
   /** « I:J », indices du carré dans la grille fine mondiale. */
   id: string;
-  /** Identifiant de la case météo parente (grille de 4,5 km, facteur 1). */
+  /** Identifiant de la case météo commune qui le contient. */
   parentId: string;
   lat: number;
   lon: number;
@@ -52,9 +52,10 @@ export function fineCellsForBounds(b: Bounds, max = FINE_MAX_CELLS): FineCell[] 
     for (let j = j0; j <= j1; j++) {
       const south = (i * BASE_STEP_LAT) / FINE_DIVISIONS;
       const west = (j * BASE_STEP_LON) / FINE_DIVISIONS;
+      const parent = cellOfBase(Math.floor(i / FINE_DIVISIONS), Math.floor(j / FINE_DIVISIONS));
       cells.push({
         id: `${i}:${j}`,
-        parentId: `1:${Math.floor(i / FINE_DIVISIONS)}:${Math.floor(j / FINE_DIVISIONS)}`,
+        parentId: cellId(parent.i, parent.j),
         south: +south.toFixed(6),
         north: +(south + FINE_STEP_LAT).toFixed(6),
         west: +west.toFixed(6),
@@ -223,14 +224,6 @@ export function saveAltitudes(): void {
 }
 
 // ── Indice d'un carré ─────────────────────────────────────────────────────────
-
-/** Série météo de la case parente, températures ramenées à l'altitude `z`. */
-export function atAltitude(series: DailySeries, z: number | null): DailySeries {
-  if (z === null || !Number.isFinite(series.elevation)) return series;
-  const shift = -LAPSE_RATE * (z - series.elevation);
-  const move = (t: number | null): number | null => (t === null ? null : Math.round((t + shift) * 10) / 10);
-  return { ...series, tmax: series.tmax.map(move), tmin: series.tmin.map(move), elevation: z };
-}
 
 export interface FineScore {
   level: Level;

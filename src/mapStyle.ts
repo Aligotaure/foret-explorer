@@ -8,6 +8,7 @@ import {
   LABEL_FONT,
   FINE_MIN_ZOOM,
   TILES,
+  WEATHER_LABEL_MIN_ZOOM,
   WEATHER_MIN_ZOOM,
   ZONES,
   ZONES_BASE,
@@ -240,7 +241,8 @@ export function buildStyle(state: AppState): StyleSpecification {
         source: SOURCES.meteo,
         minzoom: WEATHER_MIN_ZOOM,
         layout: { visibility: visibility(meteoOn) },
-        paint: { 'line-color': '#161630', 'line-opacity': 0.25, 'line-width': 0.6 },
+        // Vue d'ensemble : pas de quadrillage, les cases ne font que quelques pixels.
+        paint: { 'line-color': '#161630', 'line-opacity': ['interpolate', ['linear'], ['zoom'], 6.5, 0, 8, 0.25], 'line-width': 0.6 },
       },
       {
         id: LAYERS.meteoFineFill,
@@ -262,7 +264,7 @@ export function buildStyle(state: AppState): StyleSpecification {
         id: LAYERS.meteoLabel,
         type: 'symbol',
         source: SOURCES.meteo,
-        minzoom: 9.5,
+        minzoom: WEATHER_LABEL_MIN_ZOOM,
         layout: {
           visibility: visibility(meteoOn),
           'text-field': '',

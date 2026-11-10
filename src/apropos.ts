@@ -11,7 +11,8 @@ import { TERMS_DATE_LABEL, clearStoredData, storedEntries } from './legal';
 const LABELS: Readonly<Record<string, string>> = {
   'foret-explorer:v1': 'Vos réglages (types de forêt, champignon, fond de carte, couches affichées)',
   'foret-explorer:avertissement': 'Acceptation de l’avertissement',
-  'foret-explorer:meteo': 'Météo du jour déjà téléchargée',
+  'foret-explorer:meteo': 'Météo du jour demandée directement à Open-Meteo (secours)',
+  'foret-explorer:vue': 'Dernière vue de la carte (lieu et zoom)',
   'foret-explorer:altitudes': 'Altitudes des carrés de 500 m déjà vus',
 };
 

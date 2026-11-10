@@ -182,6 +182,20 @@ a {
   margin: 0;
 }
 
+.alert p + p,
+.alert .cap + p {
+  margin-top: 8px;
+}
+
+.cap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 2px 16px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
 .terms li {
   padding-left: 2px;
 }

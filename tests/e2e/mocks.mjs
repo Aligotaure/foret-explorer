@@ -174,23 +174,27 @@ export function zonesTile() {
   return Buffer.concat([protection, forests]); // une tuile = suite de couches : on les met bout à bout
 }
 
-// Météo : 20 jours passés + aujourd'hui, avec deux grosses pluies il y a 10 et 13 jours
-// (relevés réels du 11 au 31 octobre 2026 vers 930 m, au-dessus de Nâves-Parmelan).
+// Météo : 30 jours passés + aujourd'hui, avec deux grosses pluies il y a 10 et 13 jours
+// (relevés réels du 11 au 31 octobre 2026 vers 930 m, au-dessus de Nâves-Parmelan, précédés de
+// 10 jours secs).
+const DRY = { rain: Array(10).fill(0), tmax: Array(10).fill(15.2), tmin: Array(10).fill(7.4) };
 const DAILY = {
-  rain: [0, 0, 0, 0, 0, 0, 2.2, 30.6, 1.0, 0.9, 31.8, 0, 11.8, 4.1, 8.9, 0, 0, 0.1, 0, 0, 0],
-  tmax: [11.1, 13.5, 14.8, 17.1, 18.1, 18.0, 12.6, 7.6, 12.0, 11.5, 8.2, 9.5, 10.8, 6.4, 11.0, 11.2, 15.8, 11.6, 9.2, 8.9, 8.1],
-  tmin: [7.1, 6.4, 8.5, 10.7, 12.3, 12.6, 7.6, 5.2, 6.1, 7.9, 4.4, 3.2, 5.2, 2.5, 5.0, 4.1, 9.9, 6.4, 5.1, 4.2, 3.1],
+  rain: [...DRY.rain, 0, 0, 0, 0, 0, 0, 2.2, 30.6, 1.0, 0.9, 31.8, 0, 11.8, 4.1, 8.9, 0, 0, 0.1, 0, 0, 0],
+  tmax: [...DRY.tmax, 11.1, 13.5, 14.8, 17.1, 18.1, 18.0, 12.6, 7.6, 12.0, 11.5, 8.2, 9.5, 10.8, 6.4, 11.0, 11.2, 15.8, 11.6, 9.2, 8.9, 8.1],
+  tmin: [...DRY.tmin, 7.1, 6.4, 8.5, 10.7, 12.3, 12.6, 7.6, 5.2, 6.1, 7.9, 4.4, 3.2, 5.2, 2.5, 5.0, 4.1, 9.9, 6.4, 5.1, 4.2, 3.1],
 };
+/** Jours civils à l'heure de Paris, comme la carte. */
+const parisToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date());
+const addDays = (date, k) => new Date(Date.parse(`${date}T00:00:00Z`) + k * 86_400_000).toISOString().slice(0, 10);
+
 function openMeteo(url) {
   const lats = (url.searchParams.get('latitude') ?? '').split(',').map(Number);
   const lons = (url.searchParams.get('longitude') ?? '').split(',').map(Number);
   const elevations = (url.searchParams.get('elevation') ?? '').split(',').filter(Boolean).map(Number);
-  const today = new Date();
-  const time = DAILY.rain.map((_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() - (DAILY.rain.length - 1 - i));
-    return d.toISOString().slice(0, 10);
-  });
+  const past = Number(url.searchParams.get('past_days') ?? 20);
+  const today = parisToday();
+  const time = Array.from({ length: past + 1 }, (_, i) => addDays(today, i - past));
+  const slice = (xs) => xs.slice(xs.length - (past + 1));
   const items = lats.map((lat, k) => {
     const elevation = elevations[k] ?? 930;
     const shift = (930 - elevation) * 0.0065; // gradient thermique
@@ -201,13 +205,49 @@ function openMeteo(url) {
       elevation,
       daily: {
         time,
-        precipitation_sum: DAILY.rain.map((r) => Math.round(r * wetter * 10) / 10),
-        temperature_2m_max: DAILY.tmax.map((t) => Math.round((t + shift) * 10) / 10),
-        temperature_2m_min: DAILY.tmin.map((t) => Math.round((t + shift) * 10) / 10),
+        precipitation_sum: slice(DAILY.rain).map((r) => Math.round(r * wetter * 10) / 10),
+        temperature_2m_max: slice(DAILY.tmax).map((t) => Math.round((t + shift) * 10) / 10),
+        temperature_2m_min: slice(DAILY.tmin).map((t) => Math.round((t + shift) * 10) / 10),
       },
     };
   });
   return items.length === 1 ? items[0] : items;
+}
+
+// Fichiers météo communs (src/meteoGrid.ts) : cases de 0,16° × 0,224°, blocs de 8 × 8 cases.
+const STEP_LAT = 0.16;
+const STEP_LON = 0.224;
+const BLOCK = 8;
+/** `late` : jours de retard de la mise à jour (0 : à jour d'hier). */
+function meteoIndex(late = 0) {
+  const blocs = [];
+  for (let bi = 32; bi <= 40; bi++) for (let bj = -4; bj <= 5; bj++) blocs.push(`${bi}_${bj}`);
+  const day = addDays(parisToday(), -late);
+  return { v: 1, pasLat: STEP_LAT, pasLon: STEP_LON, bloc: BLOCK, jours: 30, dernierJour: addDays(day, -1), maj: `${day}T01:40:00.000Z`, cases: blocs.length * 64, aJour: blocs.length * 64, blocs, source: 'essai' };
+}
+function meteoBlock(id) {
+  const [bi, bj] = id.split('_').map(Number);
+  const today = parisToday();
+  const dates = Array.from({ length: 30 }, (_, k) => addDays(today, k - 30));
+  const past = (xs) => xs.slice(0, 30); // sans aujourd'hui
+  const cells = {};
+  for (let i = bi * BLOCK; i < (bi + 1) * BLOCK; i++) {
+    for (let j = bj * BLOCK; j < (bj + 1) * BLOCK; j++) {
+      const wetter = 1 + ((((i + j) % 3) + 3) % 3 - 1) * 0.3;
+      const z = 600 + ((((i * 7 + j * 13) % 9) + 9) % 9) * 100;
+      const shift = (930 - z) * 0.0065;
+      cells[`${i}:${j}`] = {
+        lat: +((i + 0.5) * STEP_LAT).toFixed(4),
+        lon: +((j + 0.5) * STEP_LON).toFixed(4),
+        z,
+        c: dates[29],
+        p: past(DAILY.rain).map((r) => Math.round(r * wetter * 10) / 10),
+        x: past(DAILY.tmax).map((t) => Math.round((t + shift) * 10) / 10),
+        n: past(DAILY.tmin).map((t) => Math.round((t + shift) * 10) / 10),
+      };
+    }
+  }
+  return { v: 1, dates, cells };
 }
 
 // Altitude : 930 m pour un point seul (bilan d'un coin), relief varié pour une liste de points.
@@ -227,9 +267,14 @@ const COMPLETION = {
   ],
 };
 
-/** Intercepte les requêtes vers les services externes et les consigne dans `log`. */
-export async function installMocks(page, log) {
+/**
+ * Intercepte les requêtes vers les services externes et les consigne dans `log`.
+ * `meteoCommune: false` : fichiers météo communs injoignables ; `'ancienne'` : en retard de 6 jours
+ * (dans les deux cas, la carte se rabat sur Open-Meteo).
+ */
+export async function installMocks(page, log, { meteoCommune = true } = {}) {
   log.meteo ??= [];
+  log.meteoCommune ??= [];
   log.geologie ??= [];
   log.altitude ??= [];
   log.mesures ??= [];
@@ -248,6 +293,18 @@ export async function installMocks(page, log) {
     const request = route.request();
     log.mesures.push({ method: request.method(), path: new URL(request.url()).pathname, body: request.postData() ?? '' });
     return route.fulfill({ status: 204, headers: CORS, body: '' });
+  });
+  await page.route('https://aligotaure.github.io/foret-explorer/data/meteo/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    log.meteoCommune.push(path);
+    if (!meteoCommune) return route.fulfill({ status: 404, headers: CORS, body: '' });
+    if (path.endsWith('/index.json')) {
+      const index = meteoIndex(meteoCommune === 'ancienne' ? 6 : 0);
+      return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(index) });
+    }
+    const block = path.match(/\/b\/(-?\d+_-?\d+)\.json$/);
+    if (!block) return route.fulfill({ status: 404, headers: CORS, body: '' });
+    return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(meteoBlock(block[1])) });
   });
   await page.route('https://api.open-meteo.com/**', (route) => {
     const url = new URL(route.request().url());

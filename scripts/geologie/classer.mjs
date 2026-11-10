@@ -7,7 +7,9 @@
 // Sortie : mêmes géométries, propriétés réduites à { sol, notation, descr } ; formations sans sol
 // (eau, glace) et formations non classées retirées. Le rapport liste les surfaces par sol et les
 // descriptions non classées, pour améliorer `regles.mjs`.
-import { createReadStream, createWriteStream, writeFileSync } from 'node:fs';
+// Avec TABLE_DESCR=fichier.tsv, toutes les descriptions rencontrées sont ajoutées à ce fichier
+// (surface en km², sol retenu, notation, description) : de quoi régler les règles sur toute la France.
+import { appendFileSync, createReadStream, createWriteStream, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { classer } from './regles.mjs';
 
@@ -39,6 +41,8 @@ function areaKm2(geometry) {
 
 const stats = {};
 const unclassified = {};
+/** Toutes les descriptions : « notation | description » → { km2, sol }. */
+const table = new Map();
 const out = createWriteStream(output);
 let total = 0;
 let kept = 0;
@@ -53,6 +57,12 @@ for await (const line of lines) {
   const notation = String(p.NOTATION ?? p.notation ?? '').trim();
   const sol = classer(descr, notation);
   const area = areaKm2(feature.geometry);
+  if (process.env.TABLE_DESCR) {
+    const key = `${notation}\t${descr.replace(/\s+/g, ' ')}`;
+    const row = table.get(key) ?? { km2: 0, sol: sol ?? '' };
+    row.km2 += area;
+    table.set(key, row);
+  }
   if (!sol) {
     const key = `${notation} | ${descr}`;
     unclassified[key] = (unclassified[key] ?? 0) + area;
@@ -94,5 +104,8 @@ const summary = {
     .map(([d, a]) => `${round(a)} km² — ${d.slice(0, 140)}`),
 };
 if (report) writeFileSync(report, JSON.stringify(summary, null, 2));
+if (process.env.TABLE_DESCR) {
+  appendFileSync(process.env.TABLE_DESCR, [...table].map(([key, row]) => `${row.km2.toFixed(2)}\t${row.sol}\t${key}\n`).join(''));
+}
 console.log(`${kept}/${total} formations classées`);
 for (const [sol, s] of Object.entries(summary.sols)) console.log(`  ${sol.padEnd(10)} ${String(s.km2).padStart(8)} km²  ${s.polygones} polygones`);

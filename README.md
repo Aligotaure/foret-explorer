@@ -2,11 +2,11 @@
 
 Carte des types de forêt de la **BD Forêt® V2** de l'IGN, avec une légende cliquable pour n'afficher
 que les types qui vous intéressent : chênes, hêtre, châtaignier, sapin-épicéa… Pour la cueillette, la
-carte croise aussi la **nature du sol** (cartes géologiques du BRGM), la **météo des 20 derniers
+carte croise aussi la **nature du sol** (cartes géologiques du BRGM), la **météo des 30 derniers
 jours** et l'**altitude**, et en tire un indice de pousse pour les cèpes, girolles, trompettes,
 chanterelles en tube et morilles. Elle signale aussi les **zones protégées** et les **forêts
-publiques**, pour savoir où l'on a le droit de cueillir. Tout vient de services publics, sans clé
-d'API.
+publiques**, pour savoir où l'on a le droit de cueillir. Toute la France métropolitaine, Corse
+comprise. Tout vient de services publics, sans clé d'API.
 
 **En ligne : https://aligotaure.github.io/foret-explorer/** (ordinateur et téléphone).
 
@@ -19,7 +19,8 @@ npm install
 npm run dev
 ```
 
-La carte s'ouvre sur http://localhost:5173, entre Annecy, le Parmelan et Thônes.
+La carte s'ouvre sur http://localhost:5173 : la France entière à la première visite, puis la
+dernière vue (ou celle de l'adresse, `#carte=zoom/lat/lon`).
 
 ## Utilisation
 
@@ -37,19 +38,21 @@ légales, la confidentialité et un bouton « Effacer mes données ».
   (gyromitre pour les morilles…).
 - **Carrés de 500 m** : à partir du zoom 12, la grille de l'indice se resserre. Chaque carré est
   calculé avec son altitude (IGN), les arbres et le sol relevés à l'intérieur ; seuls les carrés
-  où poussent des arbres hôtes sont colorés. La pluie reste celle de la case de 4,5 km.
+  où poussent des arbres hôtes sont colorés. La pluie reste celle de la case météo (≈ 18 km).
 - **Toucher la carte** ouvre le bilan du coin : type de forêt, nature du sol, altitude exacte, droit
-  de cueillir (zone protégée, forêt publique ou sans doute privée), pluie jour par jour sur 20 jours,
+  de cueillir (zone protégée, forêt publique ou sans doute privée), pluie jour par jour sur 30 jours,
   températures, et un verdict expliqué pour chaque champignon.
 - **Où cueillir** : les zones protégées (réserves naturelles et biologiques, cœurs de parc national,
   arrêtés de biotope, terrains des conservatoires) sont hachurées en rouge ; les forêts publiques
   (domaniales et communales) s'affichent en tirets sur demande. Données PatriNat et IGN (BD TOPO),
   indicatives : seuls les textes officiels et les panneaux sur place font foi.
-- **Nature du sol** : motifs par grande nature de sol (calcaire, marnes, grès et molasses, roches
-  cristallines, moraines, éboulis, zones humides), avec entre parenthèses les champignons que
-  chacune favorise. Couverture : Haute-Savoie et Savoie.
-- **Météo des 20 derniers jours** : grille de cases de 4,5 km, en pluie cumulée ou en indice de
-  pousse. Les températures sont ramenées à l'altitude de chaque case.
+- **Nature du sol** : motifs par grande nature de sol (calcaire, marnes, limons et lœss, grès et
+  sables, roches cristallines et volcaniques, moraines, éboulis, zones humides), avec entre
+  parenthèses les champignons que chacune favorise. Couverture : France métropolitaine (cartes
+  départementales du BRGM).
+- **Météo des 30 derniers jours** : grille de cases d'environ 18 km sur toute la France, en pluie
+  cumulée sur 20 jours ou en indice de pousse. Les températures sont ramenées à l'altitude de chaque
+  case, de chaque carré de 500 m ou du point touché.
 
 L'indice applique des règles de cueilleur (délai après une grosse pluie, températures, gel, arbre
 hôte, sol). C'est une aide pour choisir où aller, pas une garantie, et il ne dit rien de ce qui se
@@ -85,10 +88,10 @@ cd worker && npm ci && npm test    # serveur de mesure (Node 22.18 ou plus)
 ## Page privée : consommation des API
 
 Un petit serveur Cloudflare (dossier `worker/`, offre gratuite) reçoit des compteurs anonymes
-envoyés par la carte (appels Open-Meteo pondérés, altitude, recherche, tuiles IGN, tuiles de
-géologie, visites) et les présente sur une page privée : adresse secrète et mot de passe vérifié
-par le serveur. Les navigateurs envoient des totaux par jour, sans identifiant ni cookie ; les
-adresses IP ne sont pas conservées.
+envoyés par la carte (fichiers météo, appels Open-Meteo de secours, altitude, recherche, tuiles
+IGN, tuiles de géologie, visites) et les présente sur une page privée : adresse secrète et mot de
+passe vérifié par le serveur. Les navigateurs envoient des totaux par jour, sans identifiant ni
+cookie ; les adresses IP ne sont pas conservées.
 
 Mise en route (une fois, une dizaine de minutes) :
 
@@ -117,21 +120,36 @@ Pour tester une version locale depuis un téléphone sur le même Wi-Fi : `npm r
 
 ## Mise en ligne
 
-Chaque push sur `main` déclenche `.github/workflows/deploy.yml` : construction des tuiles de
-géologie et des zones, tests et publication du serveur de mesure (s'il est configuré), vérification
-TypeScript, build Vite, publication sur GitHub Pages. Les dépendances sont installées avec `npm ci
+Chaque push sur `main` déclenche `.github/workflows/deploy.yml` : tuiles de géologie (gardées en
+cache tant que leurs scripts ne changent pas), tuiles des zones, fichiers météo, tests et publication
+du serveur de mesure (s'il est configuré), vérification TypeScript, build Vite, publication sur
+GitHub Pages. Les dépendances sont installées avec `npm ci
 --ignore-scripts` : versions figées par les `package-lock.json`, sans script d'installation. Les
 actions GitHub sont épinglées sur leur identifiant de commit.
 
 Les tuiles « nature du sol » sont produites par `scripts/geologie/construire.sh` (GDAL 3.8 ou plus,
-Node, curl, unzip) dans `public/data/geologie/`, celles des zones protégées et forêts publiques par
-`scripts/zones/construire.sh` (GDAL, Node ; WFS de la Géoplateforme) dans `public/data/zones/`. En
-développement, la carte lit celles du site en ligne : pas besoin de les construire.
+Node, curl, unzip ; ≈ 2,7 Go de cartes du BRGM pour toute la France) dans `public/data/geologie/`,
+celles des zones protégées et forêts publiques par `scripts/zones/construire.sh` (GDAL, Node ; WFS
+de la Géoplateforme) dans `public/data/zones/`. En développement, la carte lit celles du site en
+ligne : pas besoin de les construire.
+
+### Météo commune
+
+La carte n'appelle pas Open-Meteo depuis chaque navigateur : la tâche `.github/workflows/meteo.yml`
+recopie, pour chaque case d'environ 18 km de la France métropolitaine (1 972 cases), la pluie et
+les températures des 30 derniers jours dans des fichiers publiés avec le site (`data/meteo/`). Elle
+passe toutes les deux heures avec un budget d'appels, ne demande que les jours manquants (une case
+à jour la veille ne coûte qu'un appel, soit ≈ 2 000 appels par jour pour toute la France, quel que
+soit le nombre de visiteurs : un cinquième des 10 000 permis) et relance la publication quand le
+tour du jour est fini. Si ces fichiers sont injoignables ou en retard de plus de 3 jours, la carte
+interroge Open-Meteo elle-même (20 jours, quelques dizaines de cases au plus).
 
 Autres automatismes : `verification.yml` teste chaque pull request (dont celles de Dependabot,
 configuré dans `.github/dependabot.yml` : une fois par semaine, versions d'au moins 7 jours) ;
-`surveillance.yml` vérifie chaque matin que les services IGN, Open-Meteo et le site répondent, et
-échoue (avec un e-mail de GitHub) si l'un d'eux tombe.
+`surveillance.yml` vérifie chaque matin que les services IGN, Open-Meteo et le site répondent, et que
+la météo commune a moins de 36 heures ; elle échoue (avec un e-mail de GitHub) sinon. GitHub
+suspend les tâches planifiées d'un dépôt public resté 60 jours sans activité : il suffit alors de
+les réactiver dans l'onglet **Actions**.
 
 ## Données
 
@@ -143,7 +161,8 @@ configuré dans `.github/dependabot.yml` : une fois par semaine, versions d'au m
 - Zones protégées : PatriNat (OFB, MNHN), via la Géoplateforme ; forêts publiques : © IGN, BD TOPO®
   (d'après l'ONF), Licence Ouverte Etalab 2.0.
 - Météo : [Open-Meteo](https://open-meteo.com/) (CC BY 4.0), gratuit pour un usage non commercial
-  (moins de 10 000 appels par jour et 300 000 par mois) : la page privée suit cette consommation.
+  (moins de 10 000 appels par jour et 300 000 par mois), recopiée chaque nuit dans les fichiers
+  météo du site ; limites des départements (grille météo) : © IGN, ADMIN EXPRESS.
 - La BD Forêt V2 a été photo-interprétée entre 2007 et 2018 selon les départements : les coupes et
   dépérissements récents n'y figurent pas.
 - Bibliothèque cartographique : [MapLibre GL JS](https://maplibre.org/) (licence BSD-3).

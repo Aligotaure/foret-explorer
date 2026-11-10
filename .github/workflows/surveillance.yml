@@ -1,7 +1,8 @@
 # Vérifie chaque matin que les services utilisés par la carte répondent : IGN (tuiles, altitude,
-# recherche, polices), Open-Meteo et le site en ligne (tuiles de géologie et des zones). Une seule
-# requête par service. En cas d'échec, l'exécution apparaît en rouge dans l'onglet Actions et
-# GitHub envoie un e-mail de notification (réglage par défaut des notifications Actions).
+# recherche, polices), Open-Meteo et le site en ligne (tuiles de géologie et des zones, fichiers
+# météo communs, qui doivent dater de moins de 36 heures). Une seule requête par service. En cas
+# d'échec, l'exécution apparaît en rouge dans l'onglet Actions et GitHub envoie un e-mail de
+# notification (réglage par défaut des notifications Actions).
 #
 # Attention : GitHub suspend les tâches planifiées d'un dépôt public sans activité depuis 60 jours ;
 # il suffit alors de la réactiver dans l'onglet Actions.
@@ -48,4 +49,13 @@ jobs:
           verifier 'Page À propos' 'https://aligotaure.github.io/foret-explorer/a-propos.html' 'Mentions légales'
           verifier 'Tuiles de géologie' 'https://aligotaure.github.io/foret-explorer/data/geologie/info.json'
           verifier 'Zones protégées et forêts publiques' 'https://aligotaure.github.io/foret-explorer/data/zones/info.json' 'genere'
+          verifier 'Météo commune' 'https://aligotaure.github.io/foret-explorer/data/meteo/index.json' 'dernierJour'
+          maj=$(jq -r '.maj // empty' reponse 2>/dev/null)
+          age=$(( ( $(date +%s) - $(date -d "${maj:-1970-01-01}" +%s 2>/dev/null || echo 0) ) / 3600 ))
+          if [ "$age" -gt 36 ]; then
+            echo "::error::Météo commune : dernière mise à jour il y a ${age} h (tâche « Météo commune » suspendue ou en panne ?)"
+            echec=1
+          else
+            echo "OK  Météo commune mise à jour il y a ${age} h ($(jq -r '"\(.aJour) cases à jour sur \(.cases)"' reponse))"
+          fi
           exit $echec

@@ -59,16 +59,37 @@ export const ALTITUDE_URL = `${GEOPF}/altimetrie/1.0/calcul/alti/rest/elevation.
 export const GLYPHS_URL = `${GEOPF}/annexes/ressources/vectorTiles/fonts/{fontstack}/{range}.pbf`;
 export const LABEL_FONT = 'Source Sans Pro Regular';
 
-/** Météo : Open-Meteo (gratuit, sans clé, usage non commercial). */
+/**
+ * Fichiers météo communs (cases d'environ 18 km sur toute la France, 30 derniers jours), produits
+ * chaque nuit par la tâche GitHub `meteo.yml` et publiés avec le site. En développement, on lit
+ * ceux du site en ligne.
+ */
+export const METEO_BASE = import.meta.env.DEV
+  ? 'https://aligotaure.github.io/foret-explorer/data/meteo/'
+  : new URL('data/meteo/', document.baseURI).href;
+
+/** Météo de secours : Open-Meteo en direct (gratuit, sans clé, usage non commercial). */
 export const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
-/** Nombre de jours passés analysés pour la pousse. */
-export const PAST_DAYS = 20;
-/** Zoom minimal pour afficher la grille météo (au-delà, trop de cellules). */
-export const WEATHER_MIN_ZOOM = 8;
+/**
+ * Appels directs, seulement si les fichiers communs sont injoignables (ou pour un point hors de
+ * France) : 20 jours passés (1,5 appel par point) et au plus DIRECT_MAX_CELLS cases à l'écran.
+ */
+export const DIRECT_PAST_DAYS = 20;
+export const DIRECT_MAX_CELLS = 60;
+/** Fichiers communs en retard de plus de tant de jours (tâche GitHub en panne) : on ne s'y fie plus. */
+export const METEO_MAX_LATE_DAYS = 3;
+/**
+ * La grille météo s'affiche à tous les zooms : toute la France tient dans WEATHER_MAX_CELLS cases
+ * (la vue est d'abord limitée à l'emprise de la France). Les étiquettes attendent que les cases
+ * soient assez grandes.
+ */
+export const WEATHER_MIN_ZOOM = 4;
+export const WEATHER_MAX_CELLS = 4500;
+export const WEATHER_LABEL_MIN_ZOOM = 7.5;
 
 /**
- * Grille fine de l'indice (carrés ≈ 500 m : chaque case météo découpée en 9 × 9), à partir de ce
- * zoom. Au-delà de FINE_MAX_CELLS carrés à l'écran, on garde la grille de 4,5 km.
+ * Grille fine de l'indice (carrés ≈ 500 m : chaque case de base de 4,5 km découpée en 9 × 9), à
+ * partir de ce zoom. Au-delà de FINE_MAX_CELLS carrés à l'écran, on garde la grille des cases.
  */
 export const FINE_MIN_ZOOM = 12;
 export const FINE_DIVISIONS = 9;
@@ -91,6 +112,12 @@ export const METRICS_URL = (import.meta.env.VITE_METRICS_URL ?? '').replace(/\/+
  * Tuiles de géologie simplifiée, produites par `scripts/geologie/` et publiées avec le site.
  * En développement, on lit celles du site en ligne (GitHub Pages autorise le CORS).
  */
+/**
+ * France métropolitaine et Corse (ouest, sud, est, nord) : emprise des données nationales et vue de
+ * la première visite (ensuite, la carte reprend la dernière vue).
+ */
+export const FRANCE_BOUNDS: [number, number, number, number] = [-5.3, 41.3, 9.7, 51.2];
+
 export const GEOLOGY_TILES_BASE = import.meta.env.DEV
   ? 'https://aligotaure.github.io/foret-explorer/data/geologie/'
   : new URL('data/geologie/', document.baseURI).href;
@@ -98,10 +125,10 @@ export const GEOLOGY_TILES_BASE = import.meta.env.DEV
 export const GEOLOGY = {
   sourceLayer: 'geologie',
   minZoom: 9,
-  maxZoom: 13,
-  /** Emprise couverte : Savoie et Haute-Savoie (ouest, sud, est, nord). */
-  bounds: [5.6, 45.0, 7.25, 46.45] as [number, number, number, number],
-  coverage: 'Haute-Savoie et Savoie',
+  maxZoom: 12,
+  /** Emprise couverte : France métropolitaine, Corse comprise (ouest, sud, est, nord). */
+  bounds: FRANCE_BOUNDS,
+  coverage: 'France métropolitaine',
 } as const;
 
 /**
@@ -118,21 +145,16 @@ export const ZONES = {
   protectedNameLayer: 'protection_nom',
   publicForestLayer: 'foret_publique',
   minZoom: 9,
-  maxZoom: 13,
+  maxZoom: 12,
   /** Zoom à partir duquel le bilan d'un coin donne le statut du terrain (celui de la BD Forêt). */
   queryMinZoom: 10,
-  /** Emprise téléchargée : Savoie, Haute-Savoie et alentours (ouest, sud, est, nord). */
-  bounds: [5.6, 45.0, 7.25, 46.45] as [number, number, number, number],
-  coverage: 'Savoie, Haute-Savoie et alentours',
+  /** Emprise téléchargée : France métropolitaine, Corse comprise (ouest, sud, est, nord). */
+  bounds: FRANCE_BOUNDS,
+  coverage: 'France métropolitaine',
 } as const;
 
-/** Vue initiale : entre Annecy, le Parmelan et Thônes. */
-export const INITIAL_VIEW = {
-  center: [6.19, 45.92] as [number, number],
-  zoom: 11.5,
-};
-
-export const MAP_MIN_ZOOM = 5;
+/** Zoom 4 : la France entière tient sur un écran de téléphone. */
+export const MAP_MIN_ZOOM = 4;
 export const MAP_MAX_ZOOM = 18;
 export const DEFAULT_OPACITY = 0.7;
 

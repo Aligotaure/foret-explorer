@@ -77,7 +77,7 @@ function content(): HTMLElement {
       point('Photographiez la récolte avant de la cuisiner,', 'et ne donnez jamais de champignons cueillis à de jeunes enfants.'),
       point(
         'Malaise après un repas de champignons ?',
-        'Vomissements, diarrhée, vertiges, troubles de la vue… : appelez aussitôt un centre antipoison (Lyon : 04 72 11 69 11) ou le 15.',
+        'Vomissements, diarrhée, vertiges, troubles de la vue… : appelez aussitôt le 15 ou un centre antipoison (leurs numéros sont dans « À propos »).',
       ),
     ),
     h('h3', { class: 'disclaimer__title' }, 'Où vous avez le droit de cueillir'),

@@ -8,19 +8,23 @@
 #
 # Prérequis : GDAL ≥ 3.8 (ogr2ogr avec le pilote MVT), Node ≥ 20.
 # Utilisé par .github/workflows/deploy.yml ; en local : `bash scripts/zones/construire.sh`.
-# Variables : EMPRISE (sud,ouest,nord,est ; défaut Savoie, Haute-Savoie et alentours), TRAVAIL, FORCE=1.
+# Variables : EMPRISE (sud,ouest,nord,est ; défaut France métropolitaine et Corse), TRAVAIL, FORCE=1.
 set -euo pipefail
 
 ICI="$(cd "$(dirname "$0")" && pwd)"
 RACINE="$(cd "$ICI/../.." && pwd)"
 TRAVAIL="${TRAVAIL:-$RACINE/.cache/zones}"
 SORTIE="$RACINE/public/data/zones"
-EMPRISE="${EMPRISE:-45.0,5.6,46.45,7.25}"
+EMPRISE="${EMPRISE:-41.2,-5.3,51.2,9.7}"
 
-node "$ICI/telecharger.mjs" "$TRAVAIL" "$EMPRISE"
+# Toute la France : ≈ 17 000 forêts publiques et 5 000 zones protégées, gardées en mémoire le temps du tri.
+NODE_OPTIONS="--max-old-space-size=6144" node "$ICI/telecharger.mjs" "$TRAVAIL" "$EMPRISE"
 
+# Tuiles écrites à part, puis mises en place seulement si tout a réussi : en cas d'échec (WFS en
+# panne…), les tuiles précédentes restent servies.
+NEUVES="$TRAVAIL/tuiles"
 mkdir -p "$(dirname "$SORTIE")"
-rm -rf "$SORTIE" "$TRAVAIL/zones.gpkg" # le pilote MVT crée lui-même le dossier final
+rm -rf "$NEUVES" "$TRAVAIL/zones.gpkg" # le pilote MVT crée lui-même le dossier final
 # Lambert-93 → WGS84, simplification de 5 m (les limites sont dessinées au 1/25 000 au mieux).
 ogr2ogr -f GPKG "$TRAVAIL/zones.gpkg" "$TRAVAIL/protection.geojsonl" -s_srs EPSG:2154 -t_srs EPSG:4326 \
   -simplify 5 -nlt PROMOTE_TO_MULTI -nln protection
@@ -29,11 +33,14 @@ ogr2ogr -update -f GPKG "$TRAVAIL/zones.gpkg" "$TRAVAIL/etiquettes.geojsonl" -s_
 ogr2ogr -update -f GPKG "$TRAVAIL/zones.gpkg" "$TRAVAIL/forets.geojsonl" -s_srs EPSG:2154 -t_srs EPSG:4326 \
   -simplify 5 -nlt PROMOTE_TO_MULTI -nln foret_publique
 
+# Zoom 12 au plus (sur-zoom au-delà) : 2,4 m par unité de tuile, et la France entière reste
+# légère pour GitHub Pages.
 echo "Découpage en tuiles vectorielles…"
-ogr2ogr -f MVT "$SORTIE" "$TRAVAIL/zones.gpkg" \
+ogr2ogr -f MVT "$NEUVES" "$TRAVAIL/zones.gpkg" \
   -dsco FORMAT=DIRECTORY -dsco TILE_EXTENSION=pbf -dsco COMPRESS=NO \
-  -dsco MINZOOM=9 -dsco MAXZOOM=13 -dsco SIMPLIFICATION=1 -dsco MAX_SIZE=600000
+  -dsco MINZOOM=9 -dsco MAXZOOM=12 -dsco SIMPLIFICATION=1 -dsco MAX_SIZE=600000
 
 # info.json : lu par la carte (sans lui, le bilan d'un coin ne dit rien du statut du terrain).
-cp "$TRAVAIL/resume.json" "$SORTIE/info.json"
+cp "$TRAVAIL/resume.json" "$NEUVES/info.json"
+rm -rf "$SORTIE" && mv "$NEUVES" "$SORTIE"
 echo "Tuiles écrites dans $SORTIE ($(find "$SORTIE" -name '*.pbf' | wc -l) fichiers, $(du -sh "$SORTIE" | cut -f1))."

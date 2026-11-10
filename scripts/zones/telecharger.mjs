@@ -14,7 +14,8 @@ import { join } from 'node:path';
 
 const WFS = 'https://data.geopf.fr/wfs';
 const PAGE = 5000;
-const [dir, emprise = '45.0,5.6,46.45,7.25'] = process.argv.slice(2);
+// Emprise par défaut : France métropolitaine, Corse comprise.
+const [dir, emprise = '41.2,-5.3,51.2,9.7'] = process.argv.slice(2);
 if (!dir) {
   console.error('Usage : node telecharger.mjs <dossier> [sud,ouest,nord,est]');
   process.exit(2);
@@ -66,8 +67,11 @@ function pointEtiquette(geometrie) {
     if (a > surface) [poly, surface] = [m, a];
   }
   if (!poly) return null;
-  const ys = poly[0].map((p) => p[1]);
-  const y = (Math.min(...ys) + Math.max(...ys)) / 2;
+  // Boucle et non Math.min(...ys) : un cœur de parc national compte des centaines de milliers de points.
+  let bas = Infinity;
+  let haut = -Infinity;
+  for (const p of poly[0]) [bas, haut] = [Math.min(bas, p[1]), Math.max(haut, p[1])];
+  const y = (bas + haut) / 2;
   const xs = [];
   for (const anneau of poly) {
     for (let i = 0, j = anneau.length - 1; i < anneau.length; j = i++) {
@@ -128,7 +132,7 @@ async function telecharger(typename) {
       }
     }
     const lot = page.features ?? [];
-    entites.push(...lot);
+    for (const e of lot) entites.push(e);
     if (lot.length < PAGE) return entites;
   }
 }

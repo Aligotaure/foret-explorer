@@ -28,6 +28,8 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Vérifier les types et construire
         run: npm run check
+      - name: Tester les scripts de données (météo commune simulée, règles des sols sur toute la France)
+        run: npm run test:donnees
       - name: Tests de bout en bout
         run: |
           npx playwright install --with-deps chromium

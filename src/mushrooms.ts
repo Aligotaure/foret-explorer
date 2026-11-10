@@ -55,8 +55,8 @@ export const MUSHROOMS: readonly Mushroom[] = [
     singular: 'le cèpe',
     latin: 'Boletus edulis et proches',
     hosts: { ...BROADLEAF, ...CONIFER, ...MIXED, 'FF1G06-06': 0.6, 'FF2-51-51': 0.6 },
-    soils: { cristallin: 1, gres: 1, moraine: 0.8, eboulis: 0.6, calcaire: 0.6, marne: 0.5, humide: 0.2 },
-    season: { 6: 0.5, 7: 0.8, 8: 1, 9: 1, 10: 1, 11: 0.5 },
+    soils: { cristallin: 1, gres: 1, limon: 0.8, moraine: 0.8, eboulis: 0.6, calcaire: 0.6, marne: 0.5, humide: 0.2 },
+    season: { 5: 0.2, 6: 0.5, 7: 0.8, 8: 1, 9: 1, 10: 1, 11: 0.7, 12: 0.3 },
     temp: [10, 19],
     tempRamp: 5,
     lag: [4, 7, 14, 21],
@@ -72,8 +72,8 @@ export const MUSHROOMS: readonly Mushroom[] = [
     singular: 'la girolle',
     latin: 'Cantharellus cibarius et proches',
     hosts: { ...BROADLEAF, ...CONIFER, ...MIXED },
-    soils: { cristallin: 1, gres: 1, moraine: 0.8, eboulis: 0.6, calcaire: 0.5, marne: 0.5, humide: 0.3 },
-    season: { 6: 0.7, 7: 1, 8: 1, 9: 1, 10: 0.8, 11: 0.3 },
+    soils: { cristallin: 1, gres: 1, limon: 0.8, moraine: 0.8, eboulis: 0.6, calcaire: 0.5, marne: 0.5, humide: 0.3 },
+    season: { 5: 0.3, 6: 0.7, 7: 1, 8: 1, 9: 1, 10: 0.8, 11: 0.5, 12: 0.2 },
     temp: [11, 21],
     tempRamp: 5,
     lag: [5, 9, 18, 25],
@@ -90,8 +90,8 @@ export const MUSHROOMS: readonly Mushroom[] = [
     singular: 'la trompette',
     latin: 'Craterellus cornucopioides',
     hosts: { 'FF1-09-09': 1, 'FF1G01-01': 0.9, 'FF1-10-10': 0.7, 'FF1-00-00': 0.9, FF31: 0.9, FF32: 0.6, 'FF1-00': 0.5, 'FF2G61-61': 0.3, FO1: 0.3 },
-    soils: { calcaire: 1, marne: 1, moraine: 0.8, eboulis: 0.7, gres: 0.5, cristallin: 0.4, humide: 0.3 },
-    season: { 8: 0.6, 9: 1, 10: 1, 11: 0.8, 12: 0.3 },
+    soils: { calcaire: 1, marne: 1, limon: 0.8, moraine: 0.8, eboulis: 0.7, gres: 0.5, cristallin: 0.4, humide: 0.3 },
+    season: { 8: 0.6, 9: 1, 10: 1, 11: 0.9, 12: 0.5, 1: 0.2 },
     temp: [7, 16],
     tempRamp: 5,
     lag: [6, 10, 20, 28],
@@ -106,8 +106,8 @@ export const MUSHROOMS: readonly Mushroom[] = [
     singular: 'la chanterelle en tube',
     latin: 'Craterellus tubaeformis',
     hosts: { 'FF2G61-61': 1, 'FF2-00-00': 0.9, FF32: 0.9, 'FF2-52-52': 0.6, 'FF2-80-80': 0.5, 'FF2-81-81': 0.5, 'FF2G58-58': 0.5, 'FF1-09-09': 0.5, FF31: 0.6, 'FF2-00': 0.5, 'FF2-63-63': 0.4, FO2: 0.4 },
-    soils: { cristallin: 1, gres: 1, moraine: 0.9, humide: 0.7, eboulis: 0.6, marne: 0.5, calcaire: 0.5 },
-    season: { 9: 0.6, 10: 1, 11: 1, 12: 0.6, 1: 0.2 },
+    soils: { cristallin: 1, gres: 1, moraine: 0.9, humide: 0.7, limon: 0.6, eboulis: 0.6, marne: 0.5, calcaire: 0.5 },
+    season: { 9: 0.6, 10: 1, 11: 1, 12: 0.8, 1: 0.4, 2: 0.1 },
     temp: [3, 12],
     tempRamp: 4,
     lag: [5, 8, 18, 26],
@@ -138,8 +138,8 @@ export const MUSHROOMS: readonly Mushroom[] = [
       'FF1-09-09': 0.3,
       'FF1G01-01': 0.3,
     },
-    soils: { calcaire: 1, humide: 0.9, marne: 0.9, moraine: 0.8, eboulis: 0.7, gres: 0.5, cristallin: 0.3 },
-    season: { 2: 0.2, 3: 0.8, 4: 1, 5: 1, 6: 0.7, 7: 0.3 },
+    soils: { calcaire: 1, humide: 0.9, marne: 0.9, moraine: 0.8, eboulis: 0.7, limon: 0.6, gres: 0.5, cristallin: 0.3 },
+    season: { 2: 0.3, 3: 0.8, 4: 1, 5: 1, 6: 0.7, 7: 0.3 },
     temp: [8, 15],
     tempRamp: 4,
     lag: [3, 7, 16, 24],
@@ -226,7 +226,7 @@ function rainFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
   const [, start, end] = m.lag;
 
   if (!bestEvent) {
-    reasons.push(`Pas de grosse pluie depuis ${days(w.days.length)} (${mm(w.rain20)} au total).`);
+    reasons.push(`Pas de grosse pluie depuis ${days(w.days.length)} (${mm(w.rain30)} au total).`);
   } else {
     const e = bestEvent;
     const head = `Pluie de ${mm(e.amount)} il y a ${days(e.daysAgo)}`;

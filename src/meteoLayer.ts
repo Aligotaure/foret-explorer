@@ -1,10 +1,9 @@
 import type { Feature, Polygon } from 'geojson';
 import type { GeoJSONSource, Map as MapLibreMap } from 'maplibre-gl';
-import { FINE_MIN_ZOOM, WEATHER_MIN_ZOOM } from './config';
+import { FINE_MIN_ZOOM, FRANCE_BOUNDS, WEATHER_MAX_CELLS, WEATHER_MIN_ZOOM } from './config';
 import { debounce } from './dom';
 import {
   altitudeCache,
-  atAltitude,
   fineCellsForBounds,
   hasForest,
   sampleCells,
@@ -14,10 +13,11 @@ import {
   type Sample,
 } from './fineGrid';
 import { track } from './metrics';
+import { CELL_KM } from './meteoGrid';
 import { LEVELS, MUSHROOMS, MUSHROOM_BY_ID, scoreMushroom, type MushroomId } from './mushrooms';
 import { LAYERS, SOURCES, applyOpacity, setFineVisible, setMeteoVisible } from './mapStyle';
 import type { AppState, Store } from './state';
-import { cellsForBounds, fetchAltitudes, summarize, weatherForCells, type DailySeries } from './weather';
+import { atAltitude, cellsForBounds, fetchAltitudes, summarize, todayKey, weatherForCells, type DailySeries } from './weather';
 
 /** État de la grille fine (carrés de 500 m, mode « indice » seulement). */
 export type FineStatus =
@@ -30,8 +30,11 @@ export type FineStatus =
 export type MeteoStatus =
   | { state: 'off' }
   | { state: 'zoom' }
+  | { state: 'outside' }
+  | { state: 'many' }
   | { state: 'loading' }
-  | { state: 'ok'; cells: number; day: string; fine: FineStatus }
+  /** `day` : dernier jour connu ; `shared` : fichiers communs (sinon Open-Meteo en direct). */
+  | { state: 'ok'; cells: number; day: string; shared: boolean; fine: FineStatus }
   | { state: 'error'; message: string };
 
 /** Paliers de pluie cumulée sur 20 jours (mm) et leurs couleurs. */
@@ -95,7 +98,7 @@ function waitForIdle(map: MapLibreMap, signal: AbortSignal): Promise<void> {
 }
 
 /**
- * Grille météo sur la zone affichée : une cellule ≈ 4,5 km, colorée selon la pluie des 20
+ * Grille météo sur la zone affichée : les cases communes (≈ 18 km), colorées selon la pluie des 20
  * derniers jours ou selon l'indice de pousse. En mode indice, à partir du zoom FINE_MIN_ZOOM,
  * des carrés de 500 m précisent l'indice là où poussent les arbres hôtes (voir fineGrid.ts).
  */
@@ -103,7 +106,7 @@ export class MeteoLayer {
   private controller: AbortController | null = null;
   private status: MeteoStatus = { state: 'off' };
   private readonly listeners = new Set<(s: MeteoStatus) => void>();
-  /** Des carrés fins sont dessinés : la grille de 4,5 km s'efface aux zooms où ils apparaissent. */
+  /** Des carrés fins sont dessinés : la grille des cases s'efface aux zooms où ils apparaissent. */
   private fineShown = false;
   readonly refresh = debounce(() => void this.update(), 500);
 
@@ -160,11 +163,15 @@ export class MeteoLayer {
     const labels = LEVELS.flatMap((l, i) => (i === 0 ? [] : [i, l.label]));
     const opacity = ['match', level, 0, 0.04, 1, 0.16, 2, 0.26, 3, 0.36, 0];
     const text = ['match', level, ...labels, ''];
-    // Avec les carrés fins, la grille de 4,5 km reste en fond, très pâle et sans étiquettes.
+    // Avec les carrés fins, la grille des cases reste en fond, très pâle et sans étiquettes.
     const fade = (normal: unknown, faded: unknown): unknown =>
       this.fineShown ? ['step', ['zoom'], normal, FINE_MIN_ZOOM, faded] : normal;
+    // Vue d'ensemble (France entière) : couleurs plus soutenues, sinon les petites cases se perdent
+    // sur le fond de carte ; opacité normale à partir du zoom 9.
+    const fillOpacity: unknown[] = ['interpolate', ['linear'], ['zoom'], 6, ['*', 2, opacity], 9, opacity];
+    if (this.fineShown) fillOpacity.push(FINE_MIN_ZOOM - 0.01, opacity, FINE_MIN_ZOOM, ['*', 0.35, opacity]);
     this.map.setPaintProperty(LAYERS.meteoFill, 'fill-color', ['match', level, ...colors, 'rgba(0,0,0,0)'] as never);
-    this.map.setPaintProperty(LAYERS.meteoFill, 'fill-opacity', fade(opacity, ['*', 0.35, opacity]) as never);
+    this.map.setPaintProperty(LAYERS.meteoFill, 'fill-opacity', fillOpacity as never);
     this.map.setLayoutProperty(LAYERS.meteoLabel, 'text-field', fade(text, '') as never);
 
     const coverage = ['get', `c_${id}`];
@@ -205,23 +212,49 @@ export class MeteoLayer {
       this.setStatus({ state: 'zoom' });
       return;
     }
+    // Vue limitée à l'emprise de la France : pas de météo ailleurs, et jamais trop de cases.
     const b = this.map.getBounds();
-    const cells = cellsForBounds({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() }, 120);
+    const [west, south, east, north] = FRANCE_BOUNDS;
+    const view = {
+      west: Math.max(b.getWest(), west),
+      south: Math.max(b.getSouth(), south),
+      east: Math.min(b.getEast(), east),
+      north: Math.min(b.getNorth(), north),
+    };
     this.controller?.abort();
+    if (view.west >= view.east || view.south >= view.north) {
+      this.map.getSource<GeoJSONSource>(SOURCES.meteo)?.setData({ type: 'FeatureCollection', features: [] });
+      this.showFine(false);
+      this.setStatus({ state: 'outside' });
+      return;
+    }
+    const cells = cellsForBounds(view, WEATHER_MAX_CELLS);
+    if (!cells) {
+      this.showFine(false);
+      this.setStatus({ state: 'many' });
+      return;
+    }
     const controller = new AbortController();
     this.controller = controller;
     this.setStatus({ state: 'loading' });
     try {
-      const series = await weatherForCells(cells, controller.signal);
+      const weather = await weatherForCells(cells, controller.signal);
       if (controller.signal.aborted) return;
+      if (weather.tooMany) {
+        this.showFine(false);
+        this.setStatus({ state: 'many' });
+        return;
+      }
+      const series = weather.series;
       const month = new Date().getMonth() + 1;
+      const today = todayKey();
       let day = '';
       const features: Feature[] = [];
       for (const c of cells) {
         const s = series.get(c.id);
         if (!s) continue;
-        day = s.dates[s.dates.length - 1] ?? day;
-        const w = summarize(s);
+        const w = summarize(s, today);
+        if (w.lastDate && w.lastDate > day) day = w.lastDate;
         const properties: Record<string, number> = {
           rain20: Math.round(w.rain20),
           elevation: Math.round(w.elevation),
@@ -236,7 +269,7 @@ export class MeteoLayer {
       }
       this.map.getSource<GeoJSONSource>(SOURCES.meteo)?.setData({ type: 'FeatureCollection', features });
       const fine: FineStatus = state.weatherMode === 'indice' ? { state: 'loading' } : { state: 'off' };
-      this.setStatus({ state: 'ok', cells: features.length, day, fine });
+      this.setStatus({ state: 'ok', cells: features.length, day, shared: weather.shared, fine });
       if (state.weatherMode === 'indice') await this.updateFine(series, controller.signal);
       else this.showFine(false);
     } catch (error) {
@@ -285,7 +318,7 @@ export class MeteoLayer {
         if (signal.aborted || isAbort(error)) return;
         console.warn('[grille fine]', error);
         altitudeOk = false;
-        count = this.renderFine(forested, samples, series, true); // températures de la case de 4,5 km
+        count = this.renderFine(forested, samples, series, true); // températures de la case
       }
     }
     if (!signal.aborted) this.setFine({ state: 'ok', count, altitude: altitudeOk });
@@ -303,6 +336,7 @@ export class MeteoLayer {
   ): number {
     const altitudes = altitudeCache();
     const month = new Date().getMonth() + 1;
+    const today = todayKey();
     const shown = indexMushroom(this.store.state);
     let count = 0;
     const features: Feature[] = [];
@@ -312,7 +346,7 @@ export class MeteoLayer {
       if (!parent || !sample) continue;
       const z = altitudes.get(c.id);
       if (z === undefined && !fallback) continue;
-      const w = summarize(atAltitude(parent, z ?? null));
+      const w = summarize(atAltitude(parent, z ?? null), today);
       const properties: Record<string, number> = { z: z ?? Math.round(parent.elevation) };
       let any = false;
       for (const m of MUSHROOMS) {
@@ -343,7 +377,7 @@ function fineText(fine: FineStatus): string {
     case 'ok':
       return (
         ` ${fine.count} carré${fine.count > 1 ? 's' : ''} de 500 m avec arbres hôtes.` +
-        (fine.altitude ? '' : ' Altitude IGN indisponible : températures de la case de 4,5 km.')
+        (fine.altitude ? '' : ' Altitude IGN indisponible : températures de la case.')
       );
   }
 }
@@ -355,8 +389,12 @@ export function describeStatus(s: MeteoStatus, state: AppState): string {
       return 'Grille masquée.';
     case 'zoom':
       return 'Zoomez un peu pour afficher la grille météo.';
+    case 'outside':
+      return 'Pas de météo hors de la France métropolitaine.';
+    case 'many':
+      return 'Trop de cases à l’écran : zoomez un peu.';
     case 'loading':
-      return 'Chargement de la météo des 20 derniers jours…';
+      return 'Chargement de la météo des 30 derniers jours…';
     case 'error':
       return 'Météo indisponible pour le moment (réseau ?).';
     case 'ok': {
@@ -365,7 +403,8 @@ export function describeStatus(s: MeteoStatus, state: AppState): string {
           ? 'pluie cumulée'
           : `indice ${MUSHROOM_BY_ID.get(indexMushroom(state))?.label.toLowerCase() ?? ''}`;
       const date = s.day ? new Date(`${s.day}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '';
-      return `${s.cells} cellules de 4,5 km · ${what}${date ? ` au ${date}` : ''}.${fineText(s.fine)}`;
+      const source = s.shared ? '' : ' Fichiers météo du site indisponibles ou trop anciens : Open-Meteo interrogé directement.';
+      return `${s.cells} cases de ${CELL_KM} km · ${what}${date ? `, pluie connue jusqu’au ${date}` : ''}.${source}${fineText(s.fine)}`;
     }
   }
 }

@@ -6,6 +6,7 @@ import { FINE_MIN_ZOOM, GEOLOGY, ZONES } from './config';
 import { h } from './dom';
 import { CLASS_BY_CODE } from './forestClasses';
 import { ABOUT_URL } from './legal';
+import { CELL_KM } from './meteoGrid';
 import { RAIN_STEPS, describeStatus, indexMushroom, type MeteoLayer } from './meteoLayer';
 import { GENERAL_CAUTION, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, hostCodes, type Mushroom } from './mushrooms';
 import { SOIL_CLASSES, drawPattern } from './soils';
@@ -74,7 +75,7 @@ export function mushroomSection(store: Store): { el: HTMLElement; sync(state: Ap
         h(
           'p',
           { class: 'legend-hint' },
-          'Choisissez un champignon : la carte montre ses forêts hôtes et, sur une grille, l’indice de pousse calculé avec la météo des 20 derniers jours. Touchez ensuite la carte pour le bilan d’un coin.',
+          'Choisissez un champignon : la carte montre ses forêts hôtes et, sur une grille, l’indice de pousse calculé avec la météo des 30 derniers jours. Touchez ensuite la carte pour le bilan d’un coin.',
         ),
       );
       return;
@@ -220,7 +221,7 @@ export function soilSection(store: Store): { el: HTMLElement; sync(state: AppSta
   return { el: section.el, sync };
 }
 
-/** Météo des 20 derniers jours : pluie cumulée ou indice de pousse, sur une grille. */
+/** Météo des 30 derniers jours : pluie cumulée ou indice de pousse, sur une grille. */
 export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLElement; sync(state: AppState): void } {
   const toggle = switchInput('Afficher la grille météo');
   toggle.addEventListener('change', () =>
@@ -231,7 +232,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
   const inputs = new Map<string, HTMLInputElement>();
   const indexLabel = h('span', {});
   for (const [mode, label] of [
-    ['pluie', h('span', {}, 'Pluie cumulée')],
+    ['pluie', h('span', {}, 'Pluie cumulée sur 20 jours')],
     ['indice', indexLabel],
   ] as const) {
     const input = h('input', { type: 'radio', name: 'meteo', value: mode });
@@ -253,10 +254,10 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
     h(
       'p',
       { class: 'legend-hint' },
-      `Cases de 4,5 km, températures ramenées à l’altitude de chaque case. En mode indice, à partir du zoom ${FINE_MIN_ZOOM} : carrés de 500 m colorés seulement là où poussent les arbres hôtes, avec l’altitude et le sol de chaque carré ; la pluie reste celle de la case. Pour un point précis, touchez la carte. Météo : Open-Meteo.`,
+      `Cases d’environ ${CELL_KM} km sur toute la France, mises à jour chaque nuit. En mode indice, à partir du zoom ${FINE_MIN_ZOOM} : carrés de 500 m colorés seulement là où poussent les arbres hôtes, avec l’altitude et le sol de chaque carré (températures ramenées à leur altitude ; la pluie reste celle de la case). Pour un point précis, touchez la carte. Météo : Open-Meteo (modèles, pas de pluviomètres).`,
     ),
   );
-  const section = collapsible(sectionTitle('Météo des 20 derniers jours', 'rain'), content, false, toggle);
+  const section = collapsible(sectionTitle('Météo des 30 derniers jours', 'rain'), content, false, toggle);
   let wasOn = store.state.weatherMode !== 'off';
 
   let lastStatus: Parameters<typeof describeStatus>[0] = { state: 'off' };
