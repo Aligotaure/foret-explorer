@@ -1,0 +1,40 @@
+# Sonde temporaire n°20 : liste des cases météo avec l'altitude de leurs 16 carrés de 4,5 km.
+name: Sonde n°20
+
+on:
+  push:
+    branches: [data-probe-2]
+    paths: [.github/workflows/probe20.yml, scripts/meteo/cases.mjs]
+
+permissions:
+  contents: write
+
+jobs:
+  cases:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Cases et altitudes
+        run: |
+          mkdir -p verif
+          cp scripts/meteo/cases-france.json verif/cases-france.json
+          node scripts/meteo/cases.mjs "$PWD/verif/cases-france.json" 2>&1 | tee verif/cases20.txt
+          ls -la verif/cases-france.json | tee -a verif/cases20.txt
+          node -e "
+            const a = require('./scripts/meteo/cases-france.json'), b = require('./verif/cases-france.json');
+            const key = (c) => c.slice(0, 4).join(',');
+            const before = new Set(a.cases.map(key));
+            console.log('cases avant', a.cases.length, 'après', b.cases.length, 'points inchangés', b.cases.filter((c) => before.has(key(c))).length);
+            const nuls = b.cases.map((c) => c[4].filter((z) => z === null).length);
+            console.log('cases entièrement à terre', nuls.filter((n) => n === 0).length, '; cases sans aucun carré', nuls.filter((n) => n === 16).length);
+            const ex = (i, j) => JSON.stringify(b.cases.find((c) => c[0] === i && c[1] === j));
+            console.log('Annecy', ex(286, 27)); console.log('Ouessant', ex(302, -23)); console.log('Chamonix', ex(287, 30)); console.log('Paris', ex(305, 10));
+          " | tee -a verif/cases20.txt
+      - name: Publier
+        if: always()
+        run: bash probe17/publier.sh cases20
