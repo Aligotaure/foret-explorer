@@ -1,0 +1,10 @@
+1972 cases, 1972 points de relevé repris, 29518 carrés de 4,5 km avec de la terre.
+35 altitudes inconnues (hors couverture du RGE ALTI) : carrés laissés vides.
+1972 cases de 0.16° × 0.224° écrites dans /home/runner/work/foret-explorer/foret-explorer/verif/cases-france.json ; 29483 carrés avec altitude, de -471 à 4489 m.
+-rw-r--r-- 1 runner runner 167296 Nov 10 20:47 verif/cases-france.json
+cases avant 1972 après 1972 points inchangés 1972
+cases entièrement à terre 1703 ; cases sans aucun carré 0
+Annecy [286,27,45.84,6.16,[1087,865,957,487,739,735,487,1105,618,711,454,1501,473,447,1189,639]]
+Ouessant [302,-23,48.4533,-5.0649,[null,null,null,null,null,null,null,9,null,null,null,null,20,36,null,null]]
+Chamonix [287,30,46,6.832,[973,1336,1749,1600,2100,2290,2208,1512,1907,1428,2686,1346,768,1078,2235,2021]]
+Paris [305,10,48.88,2.352,[73,72,34,65,50,32,43,75,43,45,45,56,28,29,29,48]]
