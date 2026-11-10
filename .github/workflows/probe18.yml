@@ -1,0 +1,46 @@
+# Sonde temporaire n°18 : géologie de toute la France avec les archives regroupées (Nord-Pas-de-Calais,
+# Île-de-France), les nouvelles règles et des tuiles allégées ; table nationale des descriptions.
+name: Sonde n°18
+
+on:
+  push:
+    branches: [data-probe-2]
+    paths: [.github/workflows/probe18.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  geologie:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Géologie de toute la France
+        run: |
+          mkdir -p verif
+          sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
+          M=http://data.cquest.org/brgm/bd_charm_50/2019
+          for g in 059_062 075_077_078_091_092_093_094_095; do
+            curl -fsSL -o /tmp/g.zip "$M/GEO050K_HARM_$g.zip" && unzip -l /tmp/g.zip | grep -i -E "S_FGEOL.*\.shp$" | sed "s/^/$g : /"
+          done > verif/geologie18.txt 2>&1
+          debut=$(date +%s)
+          TABLE_DESCR=/tmp/descr.tsv bash scripts/geologie/construire.sh > /tmp/geologie.log 2>&1
+          code=$?
+          {
+            echo "code de sortie : $code ; durée totale : $(( $(date +%s) - debut )) s"
+            grep -E "::warning|Archive (059|075|02A|074)|Découpage|Tuiles écrites|info.json|Aucun|rror" /tmp/geologie.log | tail -40
+            bash probe17/tailles.sh public/data/geologie
+            tr -d '\n ' < public/data/geologie/info.json | cut -c1-2000; echo
+            wc -l /tmp/descr.tsv
+          } >> verif/geologie18.txt 2>&1
+          sort -t "$(printf '\t')" -k1,1nr /tmp/descr.tsv | gzip -9 > verif/geologie-descr.tsv.gz
+          ls -la verif/geologie-descr.tsv.gz
+          tail -25 verif/geologie18.txt
+      - name: Publier
+        if: always()
+        run: bash probe17/publier.sh geologie18

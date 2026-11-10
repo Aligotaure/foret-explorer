@@ -4,7 +4,9 @@
 // Principe : on normalise la description (minuscules, sans accents) puis on cherche, parmi tous
 // les mots-clés, celui qui apparaît LE PLUS TÔT : la roche dominante est citée en premier
 // (« Calcaires gréseux… » → calcaire ; « Molasse … calcaires lacustres » → grès et molasse).
-// Quelques règles prioritaires gèrent les cas où le premier mot trompe.
+// À position égale, l'expression la plus longue l'emporte (« Coulées basaltiques » est une roche
+// volcanique, pas une coulée de versant). Quelques règles prioritaires gèrent les cas où le premier
+// mot trompe.
 
 const normalize = (s) =>
   (s ?? '')
@@ -24,9 +26,10 @@ const PRIORITY = [
   [/fluvio-?glaciaire/, 'moraine'], // graviers de fonte glaciaire, drainants
   [/glacio-?lacustre/, 'marne'], // argiles et silts de lacs glaciaires
   [/glacier rocheux/, 'eboulis'],
-  // Roches volcaniques citées après un mot trompeur : « Coulées basaltiques », « Brèches volcaniques ».
-  [/\b(coulees?|breches?|tufs?|cendres|projections|depots?|scories?) (de |d |a )?(volcan|basalt|basanit|lave|trachy|andesit|phonolit|pyroclast|ignimbrit)/, 'cristallin'],
 ];
+
+/** Qualificatifs des roches volcaniques. */
+const VOLCANIC = 'volcan|basalt|basanit|laves?\\b|trachy|andesit|phonolit|pyroclast|ignimbrit|rhyolit|scori|ponce';
 
 /** Mots-clés par nature de sol : le plus précoce dans la description l'emporte. */
 const KEYWORDS = {
@@ -36,6 +39,9 @@ const KEYWORDS = {
   gres: [/\bgres\b/, /\bsables?\b/, /sableu/, /molass/, /houiller/, /arkose/, /quar?tzit/, /\bquartz\b/, /poudingue/, /conglomerat/, /terr?asse/, /\bdunes?\b/, /interdunaire/, /eolien/, /cailloutis/, /\bgraviers?\b/, /\bgalets?\b/, /meuliere/, /\bwackes?\b/, /grauwack/, /psammit/],
   cristallin: [/granit/, /gneiss/, /micaschiste/, /migmatit/, /amphib/, /chloritoschiste/, /sericitoschiste/, /leptynit/, /mylonit/, /prasinit/, /ophiolit/, /serpentin/, /diorit/, /gabbro/, /rhyolit/, /pegmatit/, /spilit/, /cinerit/, /metabasit/, /radiolarit/, /metamorphi/, /roches vertes/, /schistes verts/, /cristallin/,
     // Roches volcaniques (Massif central, Esterel, Corse…) : sols acides à neutres, filtrants.
+    // Mot trompeur suivi d'un qualificatif volcanique : « Coulées basaltiques », « Brèches volcaniques »,
+    // « Tufs rhyolitiques », « Coulées de laves »…
+    new RegExp(`\\b(coulees?|breches?|tufs?|cendres|projections|scories?|cones?) (de |d |a |et )?(${VOLCANIC})`),
     /volcan/, /basalt/, /basanit/, /ankaramit/, /trachy/, /andesit/, /phonolit/, /pyroclast/, /pouzzolan/, /ignimbrit/, /\blaves?\b/, /dacit/, /tephr/, /\bmaars?\b/,
     // Autres roches magmatiques et métamorphiques, sols acides.
     /tonalit/, /trondhjem/, /monzonit/, /syenit/, /porphyr/, /\baplit/, /lamprophyr/, /kersantit/, /dolerit/, /diabase/, /eclogit/, /granulit/, /anatexit/, /\barenes?\b/, /phyllad/, /ardois/, /quartzophyllad/, /orthogneiss/, /paragneiss/],
@@ -62,11 +68,14 @@ export function classer(descr, notation = '') {
 
   let best = null;
   let bestIndex = Infinity;
+  let bestLength = 0;
   for (const [soil, patterns] of Object.entries(KEYWORDS)) {
     for (const re of patterns) {
       const m = re.exec(d);
-      if (m && m.index < bestIndex) {
+      if (!m) continue;
+      if (m.index < bestIndex || (m.index === bestIndex && m[0].length > bestLength)) {
         bestIndex = m.index;
+        bestLength = m[0].length;
         best = soil;
       }
     }
