@@ -1,0 +1,104 @@
+# Sonde temporaire n°21 : tuiles en archives PMTiles (GDAL), lues avec la bibliothèque de la carte ;
+# dépendance `pmtiles` et son fichier de verrouillage.
+name: Sonde n°21
+
+on:
+  push:
+    branches: [data-probe-2]
+    paths: [.github/workflows/probe21.yml, probe21/**]
+
+permissions:
+  contents: write
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Ajouter pmtiles
+        run: |
+          mkdir -p verif/npm
+          {
+            npm view pmtiles version time.modified dependencies --json
+            npm install pmtiles@^4 --ignore-scripts --no-audit --no-fund 2>&1 | tail -5
+            cp package.json package-lock.json verif/npm/
+            git diff --stat -- package.json package-lock.json
+            ls -la node_modules/pmtiles node_modules/pmtiles/dist
+            cat node_modules/pmtiles/package.json | head -60
+            echo '--- Protocol (types)'
+            grep -n "class Protocol" -B2 -A40 node_modules/pmtiles/dist/index.d.ts | head -90
+            echo '--- FetchSource / PMTiles (types)'
+            grep -n "class FetchSource\|class PMTiles\|getZxy\|getHeader\|interface Source\|getBytes\|getKey" node_modules/pmtiles/dist/index.d.ts | head -30
+          } 2>&1 | tee verif/npm/pmtiles.txt
+      - name: Publier
+        if: always()
+        run: bash probe17/publier.sh npm21
+
+  zones:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Zones en PMTiles
+        run: |
+          mkdir -p verif
+          sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
+          npm ci --ignore-scripts --no-audit --no-fund > /dev/null && npm install pmtiles@^4 --no-save --ignore-scripts --no-audit --no-fund > /dev/null
+          {
+            ogrinfo --formats | grep -i -E "pmtiles|mbtiles|MVT"
+            debut=$(date +%s)
+            bash scripts/zones/construire.sh 2>&1 | tail -8
+            echo "durée : $(( $(date +%s) - debut )) s"
+            ls -la public/data/zones
+            node probe21/lire.mjs public/data/zones/zones.pmtiles 11,45.86,6.17 10,45.86,6.17 9,48.4,2.6 11,42.3,9.1
+            for z in 9 12; do
+              ogr2ogr -f PMTiles /tmp/z-$z.pmtiles .cache/zones/zones.gpkg -dsco MINZOOM=9 -dsco MAXZOOM=$z -dsco SIMPLIFICATION=1 -dsco MAX_SIZE=600000 && echo "zooms 9 à $z : $(stat -c %s /tmp/z-$z.pmtiles) octets"
+            done
+          } 2>&1 | tee verif/zones21.txt
+      - name: Publier
+        if: always()
+        run: bash probe17/publier.sh zones21
+
+  geologie:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Géologie en PMTiles
+        run: |
+          mkdir -p verif
+          sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
+          npm ci --ignore-scripts --no-audit --no-fund > /dev/null && npm install pmtiles@^4 --no-save --ignore-scripts --no-audit --no-fund > /dev/null
+          # On garde le GeoJSON classé pour essayer plusieurs réglages de tuiles.
+          sed 's# && rm -f "$TRAVAIL/tout.geojsonl"##' scripts/geologie/construire.sh > /tmp/construire.sh
+          cp scripts/geologie/*.mjs /tmp/
+          sed -i 's#ICI="$(cd "$(dirname "$0")" \&\& pwd)"#ICI="$GITHUB_WORKSPACE/scripts/geologie"#' /tmp/construire.sh
+          {
+            debut=$(date +%s)
+            bash /tmp/construire.sh > /tmp/geologie.log 2>&1; echo "code de sortie : $? ; durée : $(( $(date +%s) - debut )) s"
+            grep -E "::warning|Découpage|Archive écrite|info.json|rror" /tmp/geologie.log | tail -12
+            ls -la public/data/geologie
+            cat public/data/geologie/info.json | tr -d '\n ' | cut -c1-900; echo
+            node probe21/lire.mjs public/data/geologie/geologie.pmtiles 11,45.86,6.17 10,45.86,6.17 11,48.4,2.6 11,44.2,-0.75 11,42.3,9.1 11,48.8,2.35
+            echo '--- autres réglages'
+            t=$(date +%s)
+            ogr2ogr -f PMTiles /tmp/g-11-1.pmtiles .cache/geologie/tout.geojsonl -nln geologie -dsco MINZOOM=10 -dsco MAXZOOM=11 -dsco SIMPLIFICATION=4 -dsco SIMPLIFICATION_MAX_ZOOM=1 -dsco MAX_SIZE=600000 && echo "zooms 10-11, simplification 1 au zoom 11 : $(stat -c %s /tmp/g-11-1.pmtiles) octets en $(( $(date +%s) - t )) s"
+            t=$(date +%s)
+            ogr2ogr -f PMTiles /tmp/g-12.pmtiles .cache/geologie/tout.geojsonl -nln geologie -dsco MINZOOM=10 -dsco MAXZOOM=12 -dsco SIMPLIFICATION=4 -dsco SIMPLIFICATION_MAX_ZOOM=1 -dsco MAX_SIZE=600000 && echo "zooms 10-12 : $(stat -c %s /tmp/g-12.pmtiles) octets en $(( $(date +%s) - t )) s"
+          } 2>&1 | tee verif/geologie21.txt
+      - name: Publier
+        if: always()
+        run: bash probe17/publier.sh geologie21

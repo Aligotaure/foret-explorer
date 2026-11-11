@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Construit les tuiles vectorielles « nature du sol » dans public/data/geologie/, pour toute la
-# France métropolitaine (ou les départements de DEPARTEMENTS).
+# Construit les tuiles vectorielles « nature du sol » de toute la France métropolitaine (ou des
+# départements de DEPARTEMENTS) : une archive public/data/geologie/geologie.pmtiles et son info.json.
+# Une seule archive, lue par morceaux (requêtes HTTP partielles), et non des milliers de fichiers :
+# GitHub Pages abandonne une publication au bout de 10 minutes, et 17 000 tuiles n'y passent pas.
 #
 # Source : BRGM, cartes géologiques harmonisées au 1/50 000 (BD Charm-50, version 2019),
 # Licence Ouverte 2.0, téléchargées depuis le miroir référencé par data.gouv.fr
@@ -9,7 +11,7 @@
 # (075_077_078_091_092_093_094_095), regroupés. Une archive absente du miroir est sautée
 # (avertissement) et listée dans info.json (« manquants »).
 #
-# Prérequis : GDAL ≥ 3.8 (ogr2ogr avec le pilote MVT), Node ≥ 20, curl, unzip.
+# Prérequis : GDAL ≥ 3.8 (ogr2ogr avec le pilote PMTiles), Node ≥ 20, curl, unzip.
 # Utilisé par .github/workflows/deploy.yml (tuiles gardées en cache tant que ces scripts ne changent
 # pas) ; en local : `DEPARTEMENTS="074 073" bash scripts/geologie/construire.sh`.
 #
@@ -28,12 +30,12 @@ ICI="$(cd "$(dirname "$0")" && pwd)"
 RACINE="$(cd "$ICI/../.." && pwd)"
 TRAVAIL="${TRAVAIL:-$RACINE/.cache/geologie}"
 SORTIE="$RACINE/public/data/geologie"
-# Tuiles écrites à part, puis mises en place seulement si tout a réussi : en cas d'échec, les
-# tuiles précédentes (cache) restent servies.
+# Archive écrite à part, puis mise en place seulement si tout a réussi : en cas d'échec, la
+# précédente (cache) reste servie.
 NEUVES="$TRAVAIL/tuiles"
 
 mkdir -p "$TRAVAIL" "$(dirname "$SORTIE")"
-rm -rf "$NEUVES" # le pilote MVT crée lui-même le dossier final
+rm -rf "$NEUVES" && mkdir -p "$NEUVES"
 rm -f "$TRAVAIL"/rapport-*.json
 : > "$TRAVAIL/tout.geojsonl"
 traites=""
@@ -79,15 +81,15 @@ if [ -z "$traites" ]; then
   exit 1
 fi
 
-# Zoom 12 au plus : une unité de tuile y vaut 2,4 m, bien assez pour le 1/50 000 (la carte sur-zoome
-# au-delà), et la France entière tient dans la limite de taille de GitHub Pages (1 Go). Aux zooms 9
-# à 11, simplification de 4 unités (un demi-pixel à l'écran) : tuiles bien plus légères sur téléphone.
+# Zooms 10 et 11 seulement (la carte sur-zoome au-delà) : au zoom 11, une unité de tuile vaut 3,3 m,
+# bien assez pour une carte au 1/50 000. Simplification de 4 unités au zoom 10 (un demi-pixel à
+# l'écran), de 2 au zoom 11. Les tuiles sont compressées dans l'archive.
 echo "Découpage en tuiles vectorielles…"
-ogr2ogr -f MVT "$NEUVES" "$TRAVAIL/tout.geojsonl" -nln geologie \
-  -dsco FORMAT=DIRECTORY -dsco TILE_EXTENSION=pbf -dsco COMPRESS=NO \
-  -dsco MINZOOM=9 -dsco MAXZOOM=12 -dsco SIMPLIFICATION=4 -dsco SIMPLIFICATION_MAX_ZOOM=1 -dsco MAX_SIZE=600000
+ogr2ogr -f PMTiles "$NEUVES/geologie.pmtiles" "$TRAVAIL/tout.geojsonl" -nln geologie \
+  -dsco MINZOOM="${MINZOOM:-10}" -dsco MAXZOOM="${MAXZOOM:-11}" \
+  -dsco SIMPLIFICATION=4 -dsco SIMPLIFICATION_MAX_ZOOM="${SIMPLIFICATION_MAX_ZOOM:-2}" -dsco MAX_SIZE=600000
 
 # shellcheck disable=SC2086
 MANQUANTS="${manquants# }" node "$ICI/info.mjs" "$NEUVES" "$TRAVAIL" $traites
 rm -rf "$SORTIE" && mv "$NEUVES" "$SORTIE" && rm -f "$TRAVAIL/tout.geojsonl"
-echo "Tuiles écrites dans $SORTIE ($(find "$SORTIE" -name '*.pbf' | wc -l) fichiers, $(du -sh "$SORTIE" | cut -f1)) ; manquants :${manquants:- aucun}."
+echo "Archive écrite dans $SORTIE ($(du -h "$SORTIE/geologie.pmtiles" | cut -f1)) ; manquants :${manquants:- aucun}."
