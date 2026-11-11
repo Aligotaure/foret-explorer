@@ -347,7 +347,7 @@ export class SpotPanel {
       h(
         'p',
         { class: 'spot__note' },
-        `Indice expérimental, fondé sur des règles de cueilleur : délai après la pluie, températures à cette altitude, arbres hôtes et sol. Il dit où chercher, pas ce qui se mange ni si l’on peut cueillir. Météo : Open-Meteo, ${shared ? `case de ${CELL_KM} km qui contient ce point, mise à jour chaque nuit` : 'interrogé directement pour ce point'}.`,
+        `Indice expérimental, fondé sur des règles de cueilleur : délai après la pluie, températures à cette altitude, arbres hôtes et sol. Il dit où chercher, pas ce qui se mange ni si l’on peut cueillir. Météo : Open-Meteo, ${shared ? `case de ${CELL_KM} km qui contient ce point, mise à jour une fois par jour` : 'interrogé directement pour ce point'}.`,
       ),
     );
     this.body.replaceChildren(...parts);

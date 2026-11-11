@@ -61,7 +61,7 @@ export const LABEL_FONT = 'Source Sans Pro Regular';
 
 /**
  * Fichiers météo communs (cases d'environ 18 km sur toute la France, 30 derniers jours), produits
- * chaque nuit par la tâche GitHub `meteo.yml` et publiés avec le site. En développement, on lit
+ * chaque jour par la tâche GitHub `meteo.yml` et publiés avec le site. En développement, on lit
  * ceux du site en ligne.
  */
 export const METEO_BASE = import.meta.env.DEV

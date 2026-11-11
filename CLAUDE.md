@@ -2,9 +2,9 @@
 
 Carte web des types de forêt de la **BD Forêt® V2** (IGN) avec une légende à cases à cocher pour
 choisir les types affichés, enrichie pour la cueillette : nature du sol (géologie BRGM), météo des
-30 derniers jours (Open-Meteo, recopiée chaque nuit dans des fichiers communs par une tâche GitHub),
-altitude (IGN) et indice de pousse par champignon, en cases de 18 km puis en carrés de 500 m quand on
-zoome ; zones protégées et forêts publiques (droit de cueillir). **Toute la France métropolitaine** :
+30 derniers jours (Open-Meteo, recopiée chaque jour dans des fichiers communs par une tâche GitHub),
+altitude (IGN) et indice de pousse par champignon, en cases de 18 km, puis en carrés de 4,5 km et de
+500 m quand on zoome ; zones protégées et forêts publiques (droit de cueillir). **Toute la France métropolitaine** :
 ne rien coder pour une région en particulier.
 Avertissement bloquant à l'ouverture (3 s) et page « À propos » (conditions, mentions légales,
 confidentialité). Interface inspirée du panneau « Légendes » de cartes.gouv.fr
@@ -16,12 +16,13 @@ en tube, morilles) partout en France. La carte sert aussi sur téléphone, en fo
 autant que le bureau. Première visite : la France entière ; ensuite, la dernière vue (`foret-explorer:vue`).
 
 En ligne : https://aligotaure.github.io/foret-explorer/ (GitHub Pages, republié à chaque push sur
-`main` et à chaque tour complet de la météo par `.github/workflows/deploy.yml` : tuiles de géologie
-(cache), tuiles des zones, fichiers météo (cache de `meteo.yml`), tests et publication du serveur de
-mesure s'il est configuré, `npm run check`, publication de `dist/`). Autres workflows : `meteo.yml`
-(toutes les 2 h : fichiers météo communs, progressivement, voir plus bas), `verification.yml` (chaque
-pull request, Dependabot compris), `surveillance.yml` (chaque matin : les services répondent-ils, la
-météo a-t-elle moins de 36 h ?). Liste des risques du site (document à part) :
+`main` et à chaque tour complet de la météo par `.github/workflows/deploy.yml` : archive des tuiles
+de géologie (cache), archive des zones (cache, refaite chaque semaine), fichiers météo (cache de
+`meteo.yml`), tests et publication du serveur de mesure s'il est configuré, `npm run check`,
+publication de `dist/`). Autres workflows : `meteo.yml` (toutes les heures : fichiers météo communs,
+une demande par case et par jour, voir plus bas), `verification.yml` (chaque pull request, Dependabot
+compris), `surveillance.yml` (chaque jour : les services et les archives répondent-ils, la météo
+a-t-elle plus de 36 h de retard ?). Liste des risques du site (document à part) :
 https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
 
 ## Commandes
@@ -35,19 +36,22 @@ https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
 - `cd worker && npm ci && npm test` : serveur de mesure (26 vérifications, Durable Object simulé sur
   `node:sqlite`, Node ≥ 22.18 qui lit le TypeScript directement) ; aperçus HTML dans `worker/test/apercus/`.
   `npm run typecheck` (types Cloudflare), `npm run dev` (wrangler, secrets dans `worker/.dev.vars`).
-- `bash scripts/geologie/construire.sh` : tuiles « nature du sol » de toute la France dans
-  `public/data/geologie/` (GDAL ≥ 3.8 ; 2,7 Go téléchargés, un quart d'heure ; pour un essai :
-  `DEPARTEMENTS="074 073"`). Inutile en dev : la carte lit alors celles du site en ligne.
-- `bash scripts/zones/construire.sh` : tuiles des zones protégées et forêts publiques dans
-  `public/data/zones/` (GDAL ≥ 3.8, Node ; toute la France depuis le WFS, retéléchargée au plus une
-  fois par semaine). Même remarque en dev.
+- `bash scripts/geologie/construire.sh` : tuiles « nature du sol » de toute la France, dans l'archive
+  `public/data/geologie/geologie.pmtiles` (GDAL ≥ 3.8 avec le pilote PMTiles ; 2,7 Go téléchargés,
+  dix minutes ; pour un essai : `DEPARTEMENTS="074 073"`). Inutile en dev : la carte lit alors
+  l'archive du site en ligne.
+- `bash scripts/zones/construire.sh` : tuiles des zones protégées et forêts publiques, dans l'archive
+  `public/data/zones/zones.pmtiles` (GDAL ≥ 3.8, Node ; toute la France depuis le WFS, retéléchargée
+  au plus une fois par semaine). Même remarque en dev.
 - `node scripts/meteo/mettre-a-jour.mjs --simuler --dossier /tmp/meteo --cases scripts/meteo/cases-france.json`
   : fichiers météo communs avec des séries fictives (sans `--simuler` : vrais appels à Open-Meteo,
   `--budget` en appels pondérés). En dev, la carte lit ceux du site en ligne.
 - `node scripts/meteo/cases.mjs` : refait `scripts/meteo/cases-france.json` (liste versionnée des
-  cases et de leur point de relevé), seulement si la taille des cases change.
+  cases, de leur point de relevé et de l'altitude de leurs 16 carrés de 4,5 km), seulement si la
+  taille des cases change ; les points de relevé existants sont gardés. Pas de CORS ni d'accès depuis
+  le bac à sable : à lancer en local ou dans une tâche GitHub.
 - `npm run test:donnees` : `test:meteo` (mise à jour de la météo commune rejouée sur plusieurs jours
-  avec des séries simulées : budgets, jours manquants, publication) + `test:geologie` (règles des sols
+  avec des séries simulées : budgets, jours manquants, journée provisoire, publication) + `test:geologie` (règles des sols
   sur la table de toutes les descriptions de France, `tests/donnees/`). `node tests/geologie.mjs non`
   liste les formations encore sans sol, `sol <id>` et `grep <motif>` servent à régler les règles.
 
@@ -58,18 +62,20 @@ branche et lancer `verification.yml` (`gh workflow run verification.yml --ref <b
 
 ## Pile
 
-Vite + TypeScript strict + MapLibre GL JS 5, sans framework. Pas de nouvelle dépendance sans raison.
+Vite + TypeScript strict + MapLibre GL JS 5, sans framework. Une seule autre dépendance : `pmtiles`
+(lecture des archives de tuiles du site, protocole `pmtiles://` enregistré dans `main.ts`). Pas de
+nouvelle dépendance sans raison.
 
 ## Architecture (`src/`)
 
 | Fichier | Rôle |
 |---|---|
-| `main.ts` | Point d'entrée : avertissement, carte (France entière puis dernière vue gardée), modules, état → carte, clic → bilan du coin, comptages |
+| `main.ts` | Point d'entrée : avertissement, protocole `pmtiles://`, carte (France entière puis dernière vue gardée), modules, état → carte, clic → bilan du coin, comptages |
 | `disclaimer.ts` | Avertissement bloquant (`<dialog>` modal, ni Échap ni clic à côté) : bouton actif 3 s après le premier affichage (horloge, pas minuteries), mémorisé par version des conditions, 30 jours au plus |
 | `legal.ts` | Version des conditions (`TERMS_VERSION`), adresse de « À propos », données gardées dans le navigateur, effacement |
 | `apropos.ts`, `apropos.css` | Page `a-propos.html` (conseils, règles, conditions, mentions légales, confidentialité) : état de la mesure, « Effacer mes données » |
 | `zones.ts` | Zones protégées et forêt publique sous un point, hachures, `info.json` (sans lui : statut inconnu) |
-| `config.ts` | URLs des services, zooms, emprise de la France (`FRANCE_BOUNDS` : données et première vue), réglages de la météo, clé localStorage |
+| `config.ts` | URLs des services, archives de tuiles (`archiveTiles`, zooms de `GEOLOGY` et `ZONES`), emprise de la France (`FRANCE_BOUNDS` : données et première vue), réglages de la météo, clé localStorage |
 | `forestClasses.ts` | Nomenclature : 32 codes `code_tfv`, libellés, couleurs officielles, groupes, préréglages |
 | `mapStyle.ts` | Style MapLibre (sources + couches), expressions couleur/filtre/motif, fonctions `apply*()` |
 | `state.ts` | Store observable (sélection, opacité, fond, champignon, météo, sol) + persistance localStorage |
@@ -79,9 +85,9 @@ Vite + TypeScript strict + MapLibre GL JS 5, sans framework. Pas de nouvelle dé
 | `mushrooms.ts` | Profils des 5 champignons (hôtes, sols, saison, températures, délai après pluie, précautions) et indice |
 | `soils.ts` | 8 natures de sol, champignons associés, motifs dessinés au canevas |
 | `geology.ts` | Motifs fournis à MapLibre (`styleimagemissing`), forêt et sol sous un point |
-| `meteoGrid.ts` | Grille météo commune (cases de 0,16° × 0,224°, blocs de 8 × 8), format des fichiers, dates ; lu aussi par Node (scripts) : aucun import |
-| `weather.ts` | Fichiers météo communs (index, blocs), résumé de 30 jours daté (épisodes de pluie, gel, `rain20` pour l'humidité), `atAltitude`, Open-Meteo en secours (cache du jour), altitude IGN |
-| `meteoLayer.ts` | Grille météo sur la vue, à tous les zooms (toute la France d'un coup en vue d'ensemble) : pluie cumulée ou indice du champignon choisi ; carrés fins en mode indice |
+| `meteoGrid.ts` | Grille météo commune (cases de 0,16° × 0,224°, blocs de 8 × 8, 16 carrés de 4,5 km par case : `subBox`, `subIndexAt`), format des fichiers, dates ; lu aussi par Node (scripts) : aucun import |
+| `weather.ts` | Fichiers météo communs (index, blocs), résumé de 30 jours daté (épisodes de pluie, gel, `rain20` pour l'humidité, jour estimé), `atAltitude`, `summaryAtAltitude`, Open-Meteo en secours (cache du jour), altitude IGN |
+| `meteoLayer.ts` | Grille météo sur la vue, à tous les zooms (toute la France d'un coup en vue d'ensemble) : pluie cumulée ou indice du champignon choisi, détaillé par carrés de 4,5 km à partir du zoom 8 ; carrés fins en mode indice |
 | `fineGrid.ts` | Carrés de 500 m : découpage, relevé forêt/sol (index spatial sur `queryRenderedFeatures`), altitudes en cache permanent, indice par carré |
 | `metrics.ts` | Compteurs de consommation des API (en mémoire) et envoi groupé au serveur de mesure |
 | `metricsSchema.ts` | Liste des compteurs, partagée avec `worker/` (un compteur absent est refusé par le serveur) |
@@ -91,14 +97,15 @@ Vite + TypeScript strict + MapLibre GL JS 5, sans framework. Pas de nouvelle dé
 | `counts.ts` | Nombre de polygones par type dans les tuiles affichées |
 | `dom.ts`, `icons.ts` | Utilitaires DOM (`h()`, `toast()`…), icônes SVG |
 
-`scripts/geologie/` : `construire.sh` (téléchargement BRGM → GeoJSONSeq WGS84 → classement → MVT),
-`regles.mjs` (règles de classement des descriptions géologiques en natures de sol), `classer.mjs`
-(avec `TABLE_DESCR=fichier.tsv` : table de toutes les descriptions), `info.mjs` (écrit `info.json` :
-provenance, départements, emprise, surfaces par sol).
+`scripts/geologie/` : `construire.sh` (téléchargement BRGM → GeoJSONSeq WGS84 → classement → archive
+PMTiles), `regles.mjs` (règles de classement des descriptions géologiques en natures de sol),
+`classer.mjs` (avec `TABLE_DESCR=fichier.tsv` : table de toutes les descriptions), `info.mjs` (écrit
+`info.json` : provenance, départements, emprise et zooms lus dans l'en-tête de l'archive, surfaces par sol).
 `scripts/meteo/` : `mettre-a-jour.mjs` (fichiers météo communs, voir « Météo commune »), `cases.mjs`
-(liste des cases qui touchent la France, d'après ADMIN EXPRESS), `cases-france.json` (versionné).
+(liste des cases qui touchent la France, d'après ADMIN EXPRESS, et altitude IGN de leurs carrés de
+4,5 km), `cases-france.json` (versionné).
 `scripts/zones/` : `telecharger.mjs` (WFS → GeoJSONSeq Lambert-93, noms nettoyés, `resume.json`),
-`construire.sh` (GPKG simplifié à 5 m → MVT, couches `protection`, `protection_nom` (un point par zone,
+`construire.sh` (GPKG simplifié à 5 m → archive PMTiles, couches `protection`, `protection_nom` (un point par zone,
 pour n'afficher son nom qu'une fois : les sites des conservatoires sont faits de dizaines de parcelles)
 et `foret_publique`, `info.json`).
 
@@ -117,14 +124,21 @@ statut sous un clic, zoom ≥ 10), `meteo-cellules`, `meteo-contours`, `meteo-fi
 `meteo-fin-etiquettes`, `zones-protegees-contours`, `zones-protegees-etiquettes` (au-dessus de
 l'indice), `bdforet-highlight-casing`, `bdforet-highlight`.
 
+Carrés de 4,5 km (`meteoLayer.ts`, zoom ≥ `WEATHER_SUB_MIN_ZOOM` = 8, mode indice) : chaque case
+commune est dessinée en 16 carrés (id « I:J/k », propriété `sub` = 1), même pluie, températures
+ramenées à l'altitude de chaque carré (`a` dans les fichiers, `summaryAtAltitude`) ; un carré sans
+terre française n'est pas dessiné. En deçà du zoom 8, et en mode pluie, cases entières (`sub` = 0, à
+l'altitude médiane de leurs carrés). Étiquettes des carrés à partir du zoom 10 (une expression de
+zoom dans une propriété `layout` n'est évaluée qu'aux zooms entiers).
+
 Grille fine (`fineGrid.ts`, zoom ≥ `FINE_MIN_ZOOM` = 12, mode indice) : chaque case de base de 4,5 km
 (0,04° × 0,056°) est découpée en 9 × 9 carrés (id « I:J ») ; une case météo commune en contient
 exactement 36 × 36 (parent : `cellOfBase`). Forêt et sol relevés sur 3 × 3 points par
 carré, en une seule requête `queryRenderedFeatures` sur toute la vue puis test point-dans-polygone (un
 appel par point serait bien plus lent) ; relevés gardés pour la visite. Altitude IGN au centre, gardée
 dans `localStorage` (`foret-explorer:altitudes`, 40 000 carrés au plus), demandée seulement pour les
-carrés boisés, par lots de 200 points. Températures de la case commune corrigées de −0,65 °C par
-100 m ; la pluie reste celle de la case. Carré dessiné seulement s'il contient un arbre hôte ; opacité
+carrés boisés, par lots de 200 points (service en panne : altitude du carré de 4,5 km). Températures
+de la case commune corrigées de −0,65 °C par 100 m ; la pluie reste celle de la case. Carré dessiné seulement s'il contient un arbre hôte ; opacité
 selon la part d'arbres hôtes ; défavorable = contour seul. Les forêts s'estompent (45 %) à ces zooms.
 ⚠ Zoom MapLibre = zoom « 512 px » : au zoom 13, ≈ 5 m/pixel (pas 10).
 
@@ -175,11 +189,12 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   (Île-de-France) ; les numéros seuls de ces dix départements répondent 404.
   `infoterre.brgm.fr/telechargements/…` renvoie 404 et le WMS `geoservices.brgm.fr` n'a pas de CORS
   (et filtre les robots) : ne pas l'appeler depuis le navigateur.
-  Tuiles produites (vérifié le 10/11/2026 en CI, GDAL 3.12 : 16 minutes, 96 départements,
-  1 035 752 formations) : couche `geologie`, champs `sol`, `notation`, `descr`, zooms 9 à 12 (sur-zoom
-  au-delà), ≈ 17 000 tuiles et 410 Mo (`SIMPLIFICATION=4` aux zooms 9 à 11, `SIMPLIFICATION_MAX_ZOOM=1` ;
-  sans cela 500 Mo), servies sous `data/geologie/{z}/{x}/{y}.pbf` avec `info.json`. Une tuile absente
-  (mer, étranger) répond 404 : ce n'est pas une erreur (`main.ts` l'ignore).
+  Tuiles produites (vérifié le 11/11/2026 en CI, GDAL 3.12 : 9 minutes, 96 départements,
+  1 035 752 formations dont 988 094 classées) : une archive `data/geologie/geologie.pmtiles` (couche
+  `geologie`, champs `sol`, `notation`, `descr`, zooms 10 et 11, sur-zoom au-delà, 4 218 tuiles
+  compressées, 143 Mo ; `SIMPLIFICATION=4` au zoom 10, `SIMPLIFICATION_MAX_ZOOM=2` ; avec le zoom 12 :
+  262 Mo) et son `info.json`. Au zoom 11, une unité de tuile vaut 3,3 m : bien assez pour du 1/50 000.
+  Une tuile absente de l'archive (mer, étranger) est rendue vide par le protocole : pas une erreur.
 - **Zones protégées et forêts publiques** (WFS de la Géoplateforme, sans clé, vérifié le 03/11/2026
   depuis GitHub Actions ; **pas de CORS** : seulement au build) : `TYPENAMES=patrinat_rnn:rnn`,
   `patrinat_rnr:rnr`, `patrinat_pprnn:pprnn`, `patrinat_pprnr:pprnr`, `patrinat_rb:rb` (champ `zone` :
@@ -191,13 +206,24 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   la France métropolitaine), `COUNT=5000` + `STARTINDEX`. France entière (03/11/2026) : 151 RNN, 191 RNR,
   18 périmètres de protection, 267 réserves biologiques, 8 cœurs de parc national, 1 062 arrêtés de
   biotope, 26 arrêtés d'habitats naturels, 623 sites du Conservatoire du littoral, 2 552 sites des CEN ;
-  17 071 forêts publiques (1 285 domaniales ; 360 Mo de GeoJSON). Tuiles : zooms 9 à 12, 13 400 fichiers,
-  83 Mo, 3 minutes de construction ; gardées en cache et refaites chaque semaine (`deploy.yml`).
+  17 071 forêts publiques (1 285 domaniales ; 360 Mo de GeoJSON). Tuiles : une archive
+  `data/zones/zones.pmtiles`, zooms 9 à 11 (sur-zoom au-delà), 4 142 tuiles, 24 Mo, 3 minutes de
+  construction ; gardée en cache et refaite chaque semaine (`deploy.yml`).
   ⚠ Un cœur de parc national compte des centaines de milliers de points : pas de `Math.min(...tableau)`
   ni de `push(...tableau)` sur ces géométries (dépassement de pile).
   Exclus exprès : Natura 2000, ZNIEFF, PNR, sites classés, réserves de chasse (pas d'interdiction de
   cueillette en soi). Aussi disponible : `PROTECTEDAREAS.PRSF:prsf` (points de rencontre des secours en
   forêt, ONF).
+- **Archives PMTiles** (tuiles du site : sols et zones) : un fichier par couche, écrit par GDAL
+  (`ogr2ogr -f PMTiles`, tuiles compressées en gzip), lu par la bibliothèque `pmtiles` (4.5) en
+  requêtes HTTP partielles (`Range`) : en-tête et répertoire d'abord (16 Ko), puis une requête par
+  tuile. La source MapLibre est `tiles: ['pmtiles://<adresse>/{z}/{x}/{y}']` (`archiveTiles`), avec
+  `minzoom`, `maxzoom` et `bounds` écrits dans `config.ts` : les garder égaux à ceux des scripts.
+  Pourquoi : GitHub Pages abandonne une publication au bout de 10 minutes (le 10/11/2026, la première
+  publication des 31 000 fichiers de tuiles de toute la France a échoué ainsi ; la suivante est
+  passée en 30 secondes, les fichiers étant déjà connus). Tests e2e : `pmtilesArchive()` de
+  `tests/e2e/mocks.mjs` fabrique une archive minimale (une entrée de répertoire qui rend la même tuile
+  pour tous les z/x/y) servie par morceaux.
 - **WFS BD Forêt** (pas utilisé, utile pour un export) : `https://data.geopf.fr/wfs`,
   `TYPENAMES=LANDCOVER.FORESTINVENTORY.V2:formation_vegetale`, `OUTPUTFORMAT=application/json`,
   `CQL_FILTER` et `PROPERTYNAME` acceptés. Avec GeoServer, `BBOX=` et `CQL_FILTER=` ne se combinent
@@ -216,28 +242,46 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   coûterait 4 fois plus d'appels pour 7 points de mieux ; au-delà de 22 km l'écart se creuse. Les
   modèles plus lisses (ARPEGE, ECMWF) font nettement moins bien (64 à 69 %) : garder `best_match`.
   Le plus sensible : pluies proches des seuils (Corrèze : 59 %) ; le moins : temps sec ou très arrosé.
+- Altitude des 16 carrés de 4,5 km de chaque case (`cases-france.json`, 5ᵉ élément ; recopiée dans les
+  fichiers, champ `a`) : RGE ALTI au centre du carré, ou au point du territoire le plus proche du
+  centre (5 × 5 points essayés) ; null sans terre française ; 29 483 carrés, de −3 à 4 489 m. La mesure
+  ci-dessus suppose les températures ramenées à l'altitude de chaque point de 4,5 km : c'est ce que
+  fait la grille à partir du zoom 8, et le bilan d'un coin avec l'altitude exacte.
 - Fichiers servis par GitHub Pages : `data/meteo/index.json` (grille, blocs, date de mise à jour `maj`,
-  `dernierJour`) et `data/meteo/b/<bi>_<bj>.json` (blocs de 8 × 8 cases : `dates` = 30 jours complets,
-  par case `p` pluie, `x`/`n` températures max/min, `z` altitude du point de relevé, `c` dernier jour
-  connu). La carte charge seulement les blocs de la vue, avec `?v=<maj>` dans l'adresse (pas de bloc
-  périmé en cache). Aujourd'hui n'est jamais stocké (jour incomplet).
-- Mise à jour progressive : passage toutes les 2 h, budget de 2 500 appels pondérés par passage,
-  plafonds glissants (4 000/h, 8 000/24 h, 240 000/30 j) gardés dans `.meteo-etat.json`, 300 appels
-  par minute au plus, arrêt net sur 429 (les machines de GitHub partagent leurs adresses IP). Une case
-  suivie ne demande que les jours manquants + 2 jours relus (`past_days` ≤ 13 : 1 appel) ; une nouvelle
-  case, 30 jours (2,2 appels). Le premier passage après minuit (heure de Paris) fait d'ordinaire tout
-  le tour : ≈ 2 000 appels par jour, ≈ 60 000 par mois, soit un cinquième des limites, quel que soit le
-  nombre de visiteurs. Premier remplissage : 4 400 appels, en deux passages.
+  `dernierJour` = dernier jour définitif de la plupart des cases) et `data/meteo/b/<bi>_<bj>.json`
+  (blocs de 8 × 8 cases : `dates` = 30 jours complets + la journée du passage, par case `p` pluie,
+  `x`/`n` températures max/min, `z` altitude du point de relevé, `a` altitudes des 16 carrés, `f`
+  dernier jour définitif, `c` dernier jour connu, `m` jour de la dernière demande). La carte charge
+  seulement les blocs de la vue, avec `?v=<maj>` dans l'adresse (pas de bloc périmé en cache).
+- Journée provisoire : chaque passage garde aussi la journée en cours telle qu'Open-Meteo la donne
+  (heures écoulées + prévision), `c` > `f`. La carte n'affiche jamais aujourd'hui ; le lendemain, tant
+  que le passage du jour n'a pas eu lieu, elle se sert de cette valeur comme estimation de la veille
+  et le dit (« dernier jour estimé d'après la prévision », barre pâle dans le bilan). Le passage
+  suivant la remplace par la valeur définitive. Fichiers d'avant (ni `f` ni `m`) : tout est définitif.
+- Mise à jour progressive : déclenchement toutes les heures, budget de 2 500 appels pondérés par
+  passage, plafonds glissants (4 000/h, 8 000/24 h, 240 000/30 j) gardés dans `.meteo-etat.json`,
+  300 appels par minute au plus, arrêt net sur 429 (les machines de GitHub partagent leurs adresses
+  IP). Chaque case est demandée une seule fois par jour (heure de Paris, champ `m`), pour les jours
+  manquants + 2 jours relus (`past_days` ≤ 13 : 1 appel) ; une nouvelle case, 30 jours (2,2 appels).
+  Le premier passage de la journée fait d'ordinaire tout le tour (9 minutes), les autres s'arrêtent
+  en 10 secondes : ≈ 2 000 appels par jour, ≈ 60 000 par mois, soit un cinquième des limites, quel que
+  soit le nombre de visiteurs. Premier remplissage (10 et 11/11/2026) : 4 366 appels, en deux passages.
+- GitHub lance les tâches planifiées quand il peut : le 11/11/2026, la tâche prévue toutes les 2 h
+  n'est passée que 3 fois (0 h 54, 9 h 49 et 18 h 02 UTC), et `surveillance.yml`, prévue à 4 h 17,
+  passe en fait entre 11 h et 13 h. D'où le déclenchement horaire, la demande unique par jour et la
+  journée provisoire : rien ne dépend de l'heure du passage.
 - Depuis GitHub Actions, la connexion à Open-Meteo échoue souvent au premier essai (délai de connexion
   de 10 s de Node) : 5 essais de connexion (non comptés dans le budget), 3 envois au plus par requête
   (tous comptés), une requête abandonnée attend le passage suivant, 3 abandons de suite arrêtent le
   passage.
 - État entre passages : cache Actions `meteo-<run_id>-<attempt>` (on restaure le plus récent), gardé
   seulement quand quelque chose a changé (`garder`) ; sans cache, on repart des fichiers du site en
-  ligne (`--amorce`). `deploy.yml` restaure le même cache ; un tour complet relance `deploy.yml`
+  ligne (`--amorce`). `deploy.yml` restaure le même cache et réécrit les fichiers avec la liste des
+  cases du dépôt (`--budget 0` : aucun appel) ; un tour complet relance `deploy.yml`
   (`actions: write`) ; un tour pas fini n'est publié qu'au bout de 6 h (pas de grille trouée en ligne).
 - La carte se méfie de fichiers en retard de plus de 3 jours (`METEO_MAX_LATE_DAYS`) et interroge
-  alors Open-Meteo elle-même ; `surveillance.yml` échoue si la mise à jour a plus de 36 h.
+  alors Open-Meteo elle-même ; `surveillance.yml` échoue si le dernier jour définitif a plus de 36 h
+  (avant midi, avant-hier suffit ; ensuite il faut hier).
 - GitHub suspend les tâches planifiées d'un dépôt public sans activité depuis 60 jours : la réactiver
   dans l'onglet Actions (la carte affiche « pluie connue jusqu'au … »).
 
@@ -333,10 +377,14 @@ passe : la page privée est servie par le Worker.
   du miroir, la publication échoue (le site en ligne reste tel quel).
 - Météo : modèles (pas de pluviomètres), une série par case de 18 km relevée en un point : un orage
   local ou un versant plus arrosé peuvent manquer (en montagne surtout) ; dans le bilan, températures
-  ramenées à l'altitude exacte du point ; dans les carrés de 500 m, à l'altitude de leur centre.
-  Fichiers mis à jour une fois par nuit : entre minuit et 2 ou 3 h, la veille manque encore.
-- GitHub Pages : site de ≈ 500 Mo (limite : 1 Go), republié chaque nuit avec la météo ; les tâches
-  planifiées s'arrêtent après 60 jours sans activité sur le dépôt.
+  ramenées à l'altitude exacte du point ; dans les carrés de 4,5 km et de 500 m, à l'altitude de leur
+  centre. Fichiers mis à jour une fois par jour, à une heure que GitHub choisit (souvent la nuit,
+  parfois en fin de matinée) : en attendant, la veille est une estimation tirée de la prévision.
+- GitHub Pages : site de ≈ 170 Mo (limite : 1 Go ; publication abandonnée au bout de 10 minutes, d'où
+  les archives PMTiles), republié chaque jour avec la météo ; les tâches planifiées prennent du retard
+  et s'arrêtent après 60 jours sans activité sur le dépôt.
+- Tuiles des sols et des zones jusqu'au zoom 11 seulement (sur-zoom au-delà) : limites précises à
+  quelques mètres, ce que valent les données ; l'archive des sols fait 143 Mo d'un seul tenant.
 - Mesure de consommation : compteurs envoyés par les navigateurs, donc ordres de grandeur (hors
   réseau, GPC ou page fermée brutalement : pas comptés) ; l'adresse de collecte est publique.
 - Comptages des forêts sur les tuiles chargées (débordent un peu de l'écran).
@@ -347,7 +395,9 @@ passe : la page privée est servie par le Worker.
 1. Ajouter les points de rencontre des secours en forêt (PRSF) ; outre-mer (BD Forêt et zones existent,
    pas la météo commune ni la géologie harmonisée).
 2. Météo plus fidèle en montagne sans plus d'appels : moyenne de 2 ou 3 points par case là où le
-   relief est fort (la moyenne de tous les points d'une case gagnait 2 à 3 points de justesse).
+   relief est fort (la moyenne de tous les points d'une case gagnait 2 à 3 points de justesse). Les
+   températures suivent déjà l'altitude de chaque carré de 4,5 km ; reste la pluie, la même dans
+   toute la case.
 3. Recaler l'indice avec des sorties réelles (journal de cueillette : date, lieu, trouvé ou non), et
    le transformer en probabilité (formules proposées le 01/11/2026, choix en attente).
 4. Prévisions : ajouter `forecast_days` pour annoncer les jours favorables à venir.
@@ -356,5 +406,5 @@ passe : la page privée est servie par le Worker.
 7. Mode hors ligne (PWA + cache de tuiles) pour les zones sans réseau.
 8. Exposition des versants (nord/sud) à partir du relief IGN, et enneigement pour les morilles.
 9. Servir les fichiers météo ailleurs que dans le site (branche de données, Worker) pour ne plus
-   republier 500 Mo chaque nuit.
+   republier 170 Mo chaque jour.
 10. Garder une copie des tuiles géologiques dans une release du dépôt (si le miroir disparaît).

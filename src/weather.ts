@@ -2,7 +2,7 @@
  * Météo des 30 derniers jours et altitude (Géoplateforme IGN).
  *
  * La météo vient des fichiers communs publiés avec le site (`data/meteo/`, voir meteoGrid.ts et
- * scripts/meteo/) : une série par case d'environ 18 km, mise à jour chaque nuit par une tâche GitHub
+ * scripts/meteo/) : une série par case d'environ 18 km, mise à jour chaque jour par une tâche GitHub
  * qui seule interroge Open-Meteo. La carte n'appelle Open-Meteo elle-même que si ces fichiers sont
  * injoignables ou en retard de plus de METEO_MAX_LATE_DAYS jours, ou pour un point hors de la France
  * métropolitaine.

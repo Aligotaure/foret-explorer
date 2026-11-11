@@ -36,9 +36,12 @@ légales, la confidentialité et un bouton « Effacer mes données ».
   carte ne garde que leurs forêts hôtes et colore une grille selon l'indice de pousse ; la fiche
   rappelle arbres, sols, délai après la pluie, températures, saison, et les confusions dangereuses
   (gyromitre pour les morilles…).
-- **Carrés de 500 m** : à partir du zoom 12, la grille de l'indice se resserre. Chaque carré est
-  calculé avec son altitude (IGN), les arbres et le sol relevés à l'intérieur ; seuls les carrés
-  où poussent des arbres hôtes sont colorés. La pluie reste celle de la case météo (≈ 18 km).
+- **Carrés de 4,5 km** : à partir du zoom 8, chaque case météo (≈ 18 km) est détaillée en 16 carrés,
+  chacun avec les températures ramenées à sa propre altitude (un fond de vallée et un versant à
+  1 500 m n'ont pas le même indice). La pluie reste celle de la case.
+- **Carrés de 500 m** : à partir du zoom 12, la grille de l'indice se resserre encore. Chaque carré
+  est calculé avec son altitude (IGN), les arbres et le sol relevés à l'intérieur ; seuls les carrés
+  où poussent des arbres hôtes sont colorés.
 - **Toucher la carte** ouvre le bilan du coin : type de forêt, nature du sol, altitude exacte, droit
   de cueillir (zone protégée, forêt publique ou sans doute privée), pluie jour par jour sur 30 jours,
   températures, et un verdict expliqué pour chaque champignon.
@@ -52,7 +55,8 @@ légales, la confidentialité et un bouton « Effacer mes données ».
   départementales du BRGM).
 - **Météo des 30 derniers jours** : grille de cases d'environ 18 km sur toute la France, en pluie
   cumulée sur 20 jours ou en indice de pousse. Les températures sont ramenées à l'altitude de chaque
-  case, de chaque carré de 500 m ou du point touché.
+  carré (4,5 km, puis 500 m) ou du point touché. La légende donne le dernier jour de pluie connu ;
+  tant que la mise à jour du jour n'est pas passée, la veille est une estimation et c'est écrit.
 
 L'indice applique des règles de cueilleur (délai après une grosse pluie, températures, gel, arbre
 hôte, sol). C'est une aide pour choisir où aller, pas une garantie, et il ne dit rien de ce qui se
@@ -121,33 +125,41 @@ Pour tester une version locale depuis un téléphone sur le même Wi-Fi : `npm r
 ## Mise en ligne
 
 Chaque push sur `main` déclenche `.github/workflows/deploy.yml` : tuiles de géologie (gardées en
-cache tant que leurs scripts ne changent pas), tuiles des zones, fichiers météo, tests et publication
-du serveur de mesure (s'il est configuré), vérification TypeScript, build Vite, publication sur
-GitHub Pages. Les dépendances sont installées avec `npm ci
+cache tant que leurs scripts ne changent pas), tuiles des zones (refaites chaque semaine), fichiers
+météo, tests et publication du serveur de mesure (s'il est configuré), vérification TypeScript,
+build Vite, publication sur GitHub Pages. Les dépendances sont installées avec `npm ci
 --ignore-scripts` : versions figées par les `package-lock.json`, sans script d'installation. Les
 actions GitHub sont épinglées sur leur identifiant de commit.
 
 Les tuiles « nature du sol » sont produites par `scripts/geologie/construire.sh` (GDAL 3.8 ou plus,
 Node, curl, unzip ; ≈ 2,7 Go de cartes du BRGM pour toute la France) dans `public/data/geologie/`,
 celles des zones protégées et forêts publiques par `scripts/zones/construire.sh` (GDAL, Node ; WFS
-de la Géoplateforme) dans `public/data/zones/`. En développement, la carte lit celles du site en
-ligne : pas besoin de les construire.
+de la Géoplateforme) dans `public/data/zones/`. Chaque couche tient dans une seule archive
+[PMTiles](https://docs.protomaps.com/pmtiles/) (143 Mo pour les sols, 24 Mo pour les zones), que la
+carte lit par morceaux : GitHub Pages abandonne une publication au bout de 10 minutes, et des
+dizaines de milliers de petits fichiers de tuiles n'y passent pas toujours. En développement, la
+carte lit les archives du site en ligne : pas besoin de les construire.
 
 ### Météo commune
 
 La carte n'appelle pas Open-Meteo depuis chaque navigateur : la tâche `.github/workflows/meteo.yml`
 recopie, pour chaque case d'environ 18 km de la France métropolitaine (1 972 cases), la pluie et
-les températures des 30 derniers jours dans des fichiers publiés avec le site (`data/meteo/`). Elle
-passe toutes les deux heures avec un budget d'appels, ne demande que les jours manquants (une case
-à jour la veille ne coûte qu'un appel, soit ≈ 2 000 appels par jour pour toute la France, quel que
-soit le nombre de visiteurs : un cinquième des 10 000 permis) et relance la publication quand le
-tour du jour est fini. Si ces fichiers sont injoignables ou en retard de plus de 3 jours, la carte
+les températures des 30 derniers jours dans des fichiers publiés avec le site (`data/meteo/`), avec
+l'altitude des 16 carrés de 4,5 km de chaque case. Elle est déclenchée toutes les heures avec un
+budget d'appels, mais chaque case n'est demandée qu'une fois par jour et seulement pour les jours
+qui lui manquent (un appel par case, soit ≈ 2 000 appels par jour pour toute la France, quel que
+soit le nombre de visiteurs : un cinquième des 10 000 permis) ; les autres passages ne font rien.
+Quand le tour du jour est fini, elle relance la publication. GitHub lance ces tâches quand il peut,
+parfois avec des heures de retard : chaque passage garde donc aussi la journée en cours telle que la
+prévision la donne, et la carte s'en sert le lendemain comme estimation de la veille en attendant le
+passage du jour. Si les fichiers sont injoignables ou en retard de plus de 3 jours, la carte
 interroge Open-Meteo elle-même (20 jours, quelques dizaines de cases au plus).
 
 Autres automatismes : `verification.yml` teste chaque pull request (dont celles de Dependabot,
 configuré dans `.github/dependabot.yml` : une fois par semaine, versions d'au moins 7 jours) ;
-`surveillance.yml` vérifie chaque matin que les services IGN, Open-Meteo et le site répondent, et que
-la météo commune a moins de 36 heures ; elle échoue (avec un e-mail de GitHub) sinon. GitHub
+`surveillance.yml` vérifie chaque jour que les services IGN, Open-Meteo et le site répondent (archives
+des tuiles comprises), et que la météo commune n'a pas plus de 36 heures de retard ; elle échoue (avec
+un e-mail de GitHub) sinon. GitHub
 suspend les tâches planifiées d'un dépôt public resté 60 jours sans activité : il suffit alors de
 les réactiver dans l'onglet **Actions**.
 
@@ -161,8 +173,9 @@ les réactiver dans l'onglet **Actions**.
 - Zones protégées : PatriNat (OFB, MNHN), via la Géoplateforme ; forêts publiques : © IGN, BD TOPO®
   (d'après l'ONF), Licence Ouverte Etalab 2.0.
 - Météo : [Open-Meteo](https://open-meteo.com/) (CC BY 4.0), gratuit pour un usage non commercial
-  (moins de 10 000 appels par jour et 300 000 par mois), recopiée chaque nuit dans les fichiers
+  (moins de 10 000 appels par jour et 300 000 par mois), recopiée chaque jour dans les fichiers
   météo du site ; limites des départements (grille météo) : © IGN, ADMIN EXPRESS.
 - La BD Forêt V2 a été photo-interprétée entre 2007 et 2018 selon les départements : les coupes et
   dépérissements récents n'y figurent pas.
-- Bibliothèque cartographique : [MapLibre GL JS](https://maplibre.org/) (licence BSD-3).
+- Bibliothèques : [MapLibre GL JS](https://maplibre.org/) pour la carte et
+  [PMTiles](https://github.com/protomaps/PMTiles) pour lire les archives de tuiles (licences BSD-3).

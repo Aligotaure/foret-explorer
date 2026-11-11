@@ -140,7 +140,7 @@
         <ul>
           <li>Les types de forêt viennent de la BD Forêt® V2 de l'IGN, photo-interprétée entre 2007 et 2018 selon les départements : coupes, chablis et arbres morts récents n'y figurent pas.</li>
           <li>La nature du sol est déduite de la carte géologique au 1/50 000 du BRGM : c'est une tendance, pas le sol exact.</li>
-          <li>La météo vient de modèles (Open-Meteo), sans pluviomètre, par cases d'environ 18 km mises à jour chaque nuit : un orage local peut manquer, et en montagne la pluie varie beaucoup d'un versant à l'autre. Les températures sont ramenées à l'altitude du point.</li>
+          <li>La météo vient de modèles (Open-Meteo), sans pluviomètre, par cases d'environ 18 km mises à jour une fois par jour (en attendant, la veille n'est qu'une estimation tirée de la prévision, et la carte le signale) : un orage local peut manquer, et en montagne la pluie varie beaucoup d'un versant à l'autre. Les températures sont ramenées à l'altitude du point.</li>
           <li>Les zones protégées (PatriNat) et les forêts publiques (IGN, BD TOPO, d'après l'ONF) sont indicatives et peuvent être incomplètes ou dépassées.</li>
           <li>L'indice de pousse applique des règles de cueilleur (saison, délai après la pluie, température, arbres, sol). Il n'a pas été validé scientifiquement : un carré « favorable » peut être vide.</li>
         </ul>
@@ -253,9 +253,9 @@
           <li><strong>IGN</strong> : BD Forêt® V2, Plan IGN, photographies aériennes, RGE ALTI®, BD TOPO® (forêts publiques, d'après l'ONF), géocodage — Licence Ouverte Etalab 2.0.</li>
           <li><strong>PatriNat</strong> (OFB, MNHN) : espaces protégés, diffusés par la Géoplateforme.</li>
           <li><strong>BRGM</strong> : cartes géologiques harmonisées au 1/50 000 (BD Charm-50) — Licence Ouverte.</li>
-          <li><strong>Open-Meteo</strong> : données météo (modèles), recopiées chaque nuit dans les fichiers météo du site — CC BY 4.0.</li>
+          <li><strong>Open-Meteo</strong> : données météo (modèles), recopiées chaque jour dans les fichiers météo du site — CC BY 4.0.</li>
           <li><strong>IGN</strong> : ADMIN EXPRESS (limites des départements, pour la grille météo) — Licence Ouverte Etalab 2.0.</li>
-          <li><strong>MapLibre GL JS</strong> : affichage de la carte — licence BSD.</li>
+          <li><strong>MapLibre GL JS</strong> : affichage de la carte ; <strong>PMTiles</strong> : lecture des archives de tuiles du site — licences BSD.</li>
           <li>Conseils sanitaires : Anses, Santé.fr et réseau des centres antipoison. Règles de cueillette : Code civil (art. 547), Code forestier (art. L163-11 et R163-5).</li>
         </ul>
       </section>
