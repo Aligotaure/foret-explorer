@@ -1,0 +1,31 @@
+{
+  "name": "foret-explorer",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Carte des types de forêt (IGN BD Forêt® V2) avec une légende cliquable pour choisir les types affichés.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "check": "tsc --noEmit && vite build",
+    "test:e2e": "node tests/e2e/run.mjs",
+    "test:meteo": "node tests/meteo.mjs",
+    "test:geologie": "node tests/geologie.mjs",
+    "test:donnees": "node tests/meteo.mjs && node tests/geologie.mjs"
+  },
+  "dependencies": {
+    "maplibre-gl": "^5.6.0",
+    "pmtiles": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.14",
+    "playwright": "^1.50.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}
