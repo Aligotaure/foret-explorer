@@ -1,0 +1,26 @@
+  MBTiles -raster,vector- (rw+v): MBTiles (*.mbtiles)
+  MVT -vector- (rw+v): Mapbox Vector Tiles (*.mvt, *.mvt.gz, *.pbf)
+  PMTiles -vector- (rw+v): ProtoMap Tiles (*.pmtiles)
+patrinat_apb:apb : 1071 objets
+patrinat_aphn:aphn : 32 objets
+patrinat_cdl:conservatoire_littoral : 623 objets
+patrinat_cen:cen : 2552 objets
+BDTOPO_V3:foret_publique : 17071 objets
+Zones : {"perimetre":18,"rnn":151,"rnr":191,"rb":267,"pn":8,"apb":1071,"aphn":32,"cdl":623,"cen":2552,"forets_domaniales":1285,"autres_forets_publiques":15786}
+Découpage en tuiles vectorielles…
+Archive écrite dans /home/runner/work/foret-explorer/foret-explorer/public/data/zones (23M).
+durée : 157 s
+total 23516
+drwxr-xr-x 2 runner runner     4096 Nov 11 07:13 .
+drwxr-xr-x 3 runner runner     4096 Nov 11 07:13 ..
+-rw-r--r-- 1 runner runner      475 Nov 11 07:13 info.json
+-rw-r--r-- 1 runner runner 24065416 Nov 11 07:13 zones.pmtiles
+public/data/zones/zones.pmtiles : 24065416 octets
+en-tête {"specVersion":3,"rootDirectoryOffset":127,"rootDirectoryLength":8906,"jsonMetadataOffset":9033,"jsonMetadataLength":3340,"leafDirectoryOffset":12373,"leafDirectoryLength":0,"tileDataOffset":12373,"tileDataLength":24053043,"numAddressedTiles":4142,"numTileEntries":4142,"numTileContents":4142,"clustered":true,"internalCompression":2,"tileCompression":2,"tileType":1,"minZoom":9,"maxZoom":11,"minLon":-5.1401381,"minLat":41.3660269,"maxLon":9.5558555,"maxLat":51.0870875,"centerZoom":9,"centerLon":2.2078587,"centerLat":46.2265572}
+métadonnées {"name":"zones","description":"","version":"2","minzoom":"9","maxzoom":"11","center":"2.2078587,46.2265572,9","bounds":"-5.1401381,41.3660269,9.5558555,51.0870875","type":"overlay","format":"pbf","vector_layers":[{"id":"protection","description":"","minzoom":9,"maxzoom":11,"fields":{"type":"String","nom":"String","url":"String"}},{"id":"protection_nom","description":"","minzoom":9,"maxzoom":11,"fields":{"nom":"String","type":"String","rang":"Number"}},{"id":"foret_publique","description":"","minzoom":9,"maxzoom":11,"fields":{"nature":"String","nom":"String"}}],"tilestats":{"layerCount":3,"layers":[{"layer":"protection","count":4913,"geometry":"Polygon","attributeCount":3,"attributes":[{"attr
+11/1059/729 : 20102 octets décompressés ; foret_publique : 24 entités, ex. {"nature":"autre","nom":"Forêt communale de Serraval"} | protection : 7 entités, ex. {"type":"rnn","nom":"Roc de Chère","url":"https://inpn.mnhn.fr/espace/protege/FR3600036"} | protection_nom : 3 entités, ex. {"nom":"Roc de Chère","type":"rnn","rang":1}
+10/529/364 : 39775 octets décompressés ; foret_publique : 74 entités, ex. {"nature":"autre","nom":"Forêt communale de Serraval"} | protection : 18 entités, ex. {"type":"rnn","nom":"Roc de Chère","url":"https://inpn.mnhn.fr/espace/protege/FR3600036"} | protection_nom : 14 entités, ex. {"nom":"Roc de Chère","type":"rnn","rang":1}
+9/259/177 : 41573 octets décompressés ; foret_publique : 16 entités, ex. {"nature":"autre","nom":"Forêt du Bois de Flotin"} | protection : 58 entités, ex. {"type":"perimetre","nom":"Périmètre de Protection de la Réserve Géologique du Site de Pierrefitte","url":"https://inpn.mnhn.fr/espace/protege/FR9500096"} | protection_nom : 56 entités, ex. {"nom":"Sites Géologiques du Département de l'Essonne","type":"rnn","rang":1}
+11/1075/757 : 3114 octets décompressés ; foret_publique : 11 entités, ex. {"nature":"autre","nom":"Forêt communale de Calacuccia"} | protection : 3 entités, ex. {"type":"rb","nom":"Valdu Niellu (de)","url":"https://inpn.mnhn.fr/espace/protege/FR2300137"} | protection_nom : 1 entités, ex. {"nom":"Grotte A Sapara","type":"apb","rang":2}
+zooms 9 à 9 : 5593970 octets
+zooms 9 à 12 : 37527345 octets
