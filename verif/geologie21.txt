@@ -1,0 +1,23 @@
+code de sortie : 0 ; durée : 560 s
+Découpage en tuiles vectorielles…
+info.json : 96 départements, 0 manquants, zooms 10 à 11, 4218 tuiles, 143 Mo, emprise -5.141351, 41.333621, 9.55993, 51.089387
+Archive écrite dans /home/runner/work/foret-explorer/foret-explorer/public/data/geologie (137M) ; manquants : aucun.
+total 139644
+drwxr-xr-x 2 runner runner      4096 Nov 11 07:20 .
+drwxr-xr-x 3 runner runner      4096 Nov 11 07:20 ..
+-rw-r--r-- 1 runner runner 142982114 Nov 11 07:20 geologie.pmtiles
+-rw-r--r-- 1 runner runner      1712 Nov 11 07:20 info.json
+{"source":"BRGM,cartesgéologiquesharmoniséesau1/50000(BDCharm-50,2019),LicenceOuverte2.0","departements":["001","002","003","004","005","006","007","008","009","010","011","012","013","014","015","016","017","018","019","021","022","023","024","025","026","027","028","029","02A","02B","030","031","032","033","034","035","036","037","038","039","040","041","042","043","044","045","046","047","048","049","050","051","052","053","054","055","056","057","058","059","060","061","062","063","064","065","066","067","068","069","070","071","072","073","074","075","076","077","078","079","080","081","082","083","084","085","086","087","088","089","090","091","092","093","094","095"],"manquants":[],"formations":1035752,"classees":988094,"genere":"2026-11-11","bounds":[-5.141351,41.333621,9.55993,51.089387],"minzoom":10,"maxzoom":11,"couche":"geologie","archive":{"fichier":"geologie.pmtiles","octet
+
+public/data/geologie/geologie.pmtiles : 142982114 octets
+en-tête {"specVersion":3,"rootDirectoryOffset":127,"rootDirectoryLength":10550,"jsonMetadataOffset":10677,"jsonMetadataLength":5015,"leafDirectoryOffset":15692,"leafDirectoryLength":0,"tileDataOffset":15692,"tileDataLength":142966422,"numAddressedTiles":4218,"numTileEntries":4218,"numTileContents":4218,"clustered":true,"internalCompression":2,"tileCompression":2,"tileType":1,"minZoom":10,"maxZoom":11,"minLon":-5.141351,"minLat":41.333621,"maxLon":9.55993,"maxLat":51.089387,"centerZoom":10,"centerLon":2.2092895,"centerLat":46.211504}
+métadonnées {"name":"geologie","description":"","version":"2","minzoom":"10","maxzoom":"11","center":"2.2092895,46.2115040,10","bounds":"-5.1413510,41.3336210,9.5599300,51.0893870","type":"overlay","format":"pbf","vector_layers":[{"id":"geologie","description":"","minzoom":10,"maxzoom":11,"fields":{"sol":"String","notation":"String","descr":"String"}}],"tilestats":{"layerCount":1,"layers":[{"layer":"geologie","count":988094,"geometry":"Polygon","attributeCount":3,"attributes":[{"attribute":"sol","count":8,"type":"string","values":["calcaire","eboulis","gres","humide","limon","marne","moraine","cristallin"]},{"attribute":"notation","count":1000,"type":"string","values":["Alb","C","Dy","Dz","Dz/OE","Fy","
+11/1059/729 : 49676 octets décompressés ; geologie : 663 entités, ex. {"sol":"humide","notation":"L","descr":"Dépôts lacustres (cailloutis, sables, argiles et tourbes)"}
+10/529/364 : 88036 octets décompressés ; geologie : 1745 entités, ex. {"sol":"humide","notation":"L","descr":"Dépôts lacustres (cailloutis, sables, argiles et tourbes)"}
+11/1038/708 : 38208 octets décompressés ; geologie : 194 entités, ex. {"sol":"eboulis","notation":"CF","descr":"Colluvions de versant et de fond de vallon"}
+11/1019/743 : 16223 octets décompressés ; geologie : 75 entités, ex. {"sol":"gres","notation":"Dz1a","descr":"Dunes paraboliques à l'intérieur du pays (Boréal à Subboréal, 9000-2700 BP)"}
+11/1075/757 : 37193 octets décompressés ; geologie : 517 entités, ex. {"sol":"eboulis","notation":"E","descr":"Eboulis indifférenciés /  Formations quaternaires / Eboulis"}
+11/1037/705 : 21081 octets décompressés ; geologie : 96 entités, ex. {"sol":"eboulis","notation":"CE","descr":"Colluvions polygéniques, éboulis"}
+--- autres réglages
+zooms 10-11, simplification 1 au zoom 11 : 157962303 octets en 143 s
+zooms 10-12 : 262279292 octets en 211 s
