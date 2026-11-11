@@ -2,7 +2,7 @@
  * Sections ajoutées au panneau « Légendes » : « Je cherche… », nature du sol, météo.
  * Comme le reste du panneau, elles ne touchent jamais la carte : elles lisent et modifient le Store.
  */
-import { FINE_MIN_ZOOM, GEOLOGY, ZONES } from './config';
+import { FINE_MIN_ZOOM, GEOLOGY, WEATHER_SUB_MIN_ZOOM, ZONES } from './config';
 import { h } from './dom';
 import { CLASS_BY_CODE } from './forestClasses';
 import { ABOUT_URL } from './legal';
@@ -254,7 +254,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
     h(
       'p',
       { class: 'legend-hint' },
-      `Cases d’environ ${CELL_KM} km sur toute la France, mises à jour chaque nuit. En mode indice, à partir du zoom ${FINE_MIN_ZOOM} : carrés de 500 m colorés seulement là où poussent les arbres hôtes, avec l’altitude et le sol de chaque carré (températures ramenées à leur altitude ; la pluie reste celle de la case). Pour un point précis, touchez la carte. Météo : Open-Meteo (modèles, pas de pluviomètres).`,
+      `Pluie et températures par cases d’environ ${CELL_KM} km sur toute la France, mises à jour chaque nuit. L’indice se précise en zoomant : carrés de 4,5 km à partir du zoom ${WEATHER_SUB_MIN_ZOOM}, puis carrés de 500 m là où poussent les arbres hôtes à partir du zoom ${FINE_MIN_ZOOM}, avec le sol de chacun. Les températures sont ramenées à l’altitude de chaque carré ; la pluie reste celle de la case. Pour un point précis, touchez la carte. Météo : Open-Meteo (modèles, pas de pluviomètres).`,
     ),
   );
   const section = collapsible(sectionTitle('Météo des 30 derniers jours', 'rain'), content, false, toggle);

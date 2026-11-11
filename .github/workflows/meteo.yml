@@ -2,12 +2,17 @@
 # Open-Meteo depuis chaque navigateur : pluie et températures des 30 derniers jours, cases d'environ
 # 18 km sur toute la France métropolitaine (scripts/meteo/mettre-a-jour.mjs).
 #
-# Progressif, pour rester loin des limites d'Open-Meteo : un passage toutes les deux heures, chacun
-# avec un budget d'appels, et seuls les jours manquants sont demandés (une case à jour la veille ne
-# coûte qu'un appel ; le premier passage après minuit fait d'ordinaire tout le tour du jour).
+# Progressif, pour rester loin des limites d'Open-Meteo : chaque passage a un budget d'appels, chaque
+# case n'est demandée qu'une fois par jour et seulement pour les jours qui lui manquent (un appel
+# par case : ≈ 2 000 appels par jour pour toute la France). Le premier passage de la journée fait
+# d'ordinaire tout le tour ; les autres ne trouvent rien à faire et s'arrêtent en quelques secondes.
 # L'état d'un passage à l'autre (fichiers, appels dépensés) est gardé dans le cache d'Actions ; s'il
-# a disparu, on repart des fichiers du site en ligne. Quand le tour est fini (ou toutes les 6 h tant
-# qu'il avance), la publication du site est relancée pour mettre les nouveaux fichiers en ligne.
+# a disparu, on repart des fichiers du site en ligne. Quand le tour est fini (ou au bout de 6 h s'il
+# traîne), la publication du site est relancée pour mettre les nouveaux fichiers en ligne.
+#
+# Un déclenchement par heure, parce que GitHub lance les tâches planifiées quand il peut : souvent
+# avec des heures de retard, parfois pas du tout (constaté ici : un seul passage en dix heures pour
+# une tâche prévue toutes les deux heures). Plus il y a d'occasions, plus le tour du jour est tôt.
 #
 # Attention : GitHub suspend les tâches planifiées d'un dépôt public sans activité depuis 60 jours ;
 # il suffit alors de la réactiver dans l'onglet Actions (la carte affiche la date de la météo).
@@ -15,7 +20,7 @@ name: Météo commune
 
 on:
   schedule:
-    - cron: '41 */2 * * *' # minute peu demandée : les tâches programmées à l'heure pile prennent du retard
+    - cron: '41 * * * *' # minute peu demandée : les tâches programmées à l'heure pile prennent du retard
   workflow_dispatch:
     inputs:
       budget:
@@ -34,7 +39,7 @@ concurrency:
 jobs:
   maj:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

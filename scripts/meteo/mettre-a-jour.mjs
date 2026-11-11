@@ -1,17 +1,22 @@
 // Met à jour les fichiers météo communs (public/data/meteo/) : pluie et températures des 30 derniers
-// jours complets pour chaque case de la grille commune (≈ 18 km) sur la France métropolitaine.
-// La carte lit ces fichiers au lieu d'appeler Open-Meteo depuis chaque navigateur.
+// jours complets, plus la journée en cours, pour chaque case de la grille commune (≈ 18 km) sur la
+// France métropolitaine. La carte lit ces fichiers au lieu d'appeler Open-Meteo depuis chaque navigateur.
 //
 // Progressif, pour ne jamais approcher les limites d'Open-Meteo (gratuit, non commercial : moins de
 // 10 000 appels par jour, 5 000 par heure, 600 par minute, 300 000 par mois) :
-//   - seuls les jours manquants sont demandés : une case à jour la veille ne coûte qu'un appel
-//     (Open-Meteo compte un appel par point jusqu'à 14 jours ; les 2 derniers jours connus sont
-//     redemandés car le modèle les retouche un peu) ; une case nouvelle coûte 2,2 appels (31 jours) ;
+//   - chaque case est demandée une fois par jour (heure de Paris), au premier passage qui l'atteint,
+//     et seulement pour les jours qui lui manquent : une case suivie ne coûte qu'un appel (Open-Meteo
+//     compte un appel par point jusqu'à 14 jours ; les 2 derniers jours connus sont redemandés car le
+//     modèle les retouche un peu) ; une case nouvelle coûte 2,2 appels (31 jours) ;
 //   - chaque passage a un budget, et l'état (appels dépensés sur l'heure, le jour, le mois glissants)
 //     est gardé d'un passage à l'autre dans le fichier d'état ; ce qui n'a pas pu être fait attend
 //     le passage suivant ;
 //   - un rythme de PAR_MINUTE appels pondérés par minute au plus ; arrêt net sur une erreur 429
 //     (limite atteinte, par exemple par d'autres utilisateurs de la même adresse IP chez GitHub).
+// La journée en cours est gardée telle qu'Open-Meteo la donne au moment du passage (heures écoulées
+// et prévision pour le reste du jour) : le lendemain, tant que le passage du jour n'a pas eu lieu
+// (GitHub déclenche les tâches planifiées avec des heures de retard), la carte s'en sert comme
+// estimation de la veille ; le passage suivant la remplace par la valeur définitive.
 // Sans fichiers sur place, on repart de ceux du site en ligne (--amorce).
 //
 // Usage : node scripts/meteo/mettre-a-jour.mjs [options]
@@ -22,9 +27,9 @@
 //   --amorce URL                   dossier météo du site en ligne, lu si --dossier est vide
 //   --simuler                      séries fictives au lieu d'Open-Meteo (tests)
 //   --maintenant ISO               date et heure simulées (tests)
-// Écrit dans $GITHUB_OUTPUT : change (des données ont été ajoutées), complet (toutes les cases à
-// jour), publier (il est temps de republier le site), garder (l'état a changé : à conserver pour le
-// passage suivant).
+// Écrit dans $GITHUB_OUTPUT : change (des données ont été ajoutées), complet (toutes les cases ont
+// été demandées aujourd'hui), publier (il est temps de republier le site), garder (l'état a changé :
+// à conserver pour le passage suivant).
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BLOCK, KEPT_DAYS, METEO_FORMAT, STEP_LAT, STEP_LON, addDays, blockOf, cellId, daysBetween, parisDate } from '../../src/meteoGrid.ts';
@@ -73,8 +78,11 @@ if (Math.abs(liste.pasLat - STEP_LAT) > 1e-9 || Math.abs(liste.pasLon - STEP_LON
   console.error(`${fichierCases} est fait pour des cases de ${liste.pasLat}° × ${liste.pasLon}°, pas ${STEP_LAT}° × ${STEP_LON}° : relancez scripts/meteo/cases.mjs.`);
   process.exit(1);
 }
-/** @type {{ id: string, i: number, j: number, lat: number, lon: number }[]} */
-const cases = liste.cases.map(([i, j, lat, lon]) => ({ id: cellId(i, j), i, j, lat, lon }));
+/**
+ * `sub` : altitudes des 16 carrés de 4,5 km de la case (cases.mjs), recopiées dans les fichiers.
+ * @type {{ id: string, i: number, j: number, lat: number, lon: number, sub?: (number | null)[] }[]}
+ */
+const cases = liste.cases.map(([i, j, lat, lon, sub]) => ({ id: cellId(i, j), i, j, lat, lon, ...(Array.isArray(sub) ? { sub } : {}) }));
 
 // ── État des passages ────────────────────────────────────────────────────────
 
@@ -89,7 +97,12 @@ const depense = (ms) => etat.appels.filter(([t]) => now() - t < ms).reduce((s, [
 
 // ── Données déjà là (dossier, sinon site en ligne) ───────────────────────────
 
-/** id → { lat, lon, z, c, jours: Map(date → [pluie, tmax, tmin]) } */
+/**
+ * id → { lat, lon, z, jours: Map(date → [pluie, tmax, tmin]),
+ *        c: dernier jour connu (la journée du dernier passage : provisoire),
+ *        f: dernier jour définitif (demandé un jour suivant),
+ *        m: jour (heure de Paris) où la case a été demandée pour la dernière fois }
+ */
 const donnees = new Map();
 
 function lireBloc(bloc) {
@@ -100,7 +113,8 @@ function lireBloc(bloc) {
       const v = [cell.p?.[k] ?? null, cell.x?.[k] ?? null, cell.n?.[k] ?? null];
       if (v.some((x) => x !== null)) jours.set(date, v);
     });
-    donnees.set(id, { lat: cell.lat, lon: cell.lon, z: cell.z, c: cell.c, jours });
+    // Fichiers d'avant la journée provisoire : pas de `f` ni de `m`, le dernier jour connu est définitif.
+    donnees.set(id, { lat: cell.lat, lon: cell.lon, z: cell.z, c: cell.c, f: cell.f ?? cell.c, m: cell.m ?? cell.c, jours });
   }
 }
 
@@ -138,16 +152,16 @@ if (existsSync(join(dossier, 'index.json'))) {
 
 // ── Ce qu'il faut demander ───────────────────────────────────────────────────
 
-/** Jours passés à demander pour une case (0 : à jour). */
+/** Jours passés à demander pour une case (0 : déjà demandée aujourd'hui). */
 function joursManquants(cas) {
   const d = donnees.get(cas.id);
   // Point de relevé déplacé (liste des cases refaite) : on repart de zéro pour cette case.
-  if (!d?.c || Math.abs(d.lat - cas.lat) > 1e-4 || Math.abs(d.lon - cas.lon) > 1e-4) return KEPT_DAYS;
-  if (d.c >= lastDay) return 0;
-  return Math.min(KEPT_DAYS, Math.max(1, daysBetween(d.c, today) + RELIRE - 1));
+  if (!d?.f || Math.abs(d.lat - cas.lat) > 1e-4 || Math.abs(d.lon - cas.lon) > 1e-4) return KEPT_DAYS;
+  if (d.m >= today) return 0;
+  return Math.min(KEPT_DAYS, Math.max(1, daysBetween(d.f, today) + RELIRE - 1));
 }
 
-const besoins = cases.map((cas) => ({ cas, jours: joursManquants(cas), depuis: donnees.get(cas.id)?.c ?? '' })).filter((b) => b.jours > 0);
+const besoins = cases.map((cas) => ({ cas, jours: joursManquants(cas), depuis: donnees.get(cas.id)?.f ?? '' })).filter((b) => b.jours > 0);
 // Les cases déjà suivies d'abord (les plus en retard en tête), les nouvelles ensuite.
 besoins.sort((a, b) => (a.depuis ? 0 : 1) - (b.depuis ? 0 : 1) || a.depuis.localeCompare(b.depuis) || a.jours - b.jours);
 
@@ -256,16 +270,19 @@ function ranger(cas, item) {
   const ancien = donnees.get(cas.id);
   const garder = ancien && Math.abs(ancien.lat - cas.lat) <= 1e-4 && Math.abs(ancien.lon - cas.lon) <= 1e-4;
   const jours = garder ? ancien.jours : new Map();
-  let dernier = garder ? ancien.c : '';
+  let definitif = garder ? ancien.f : '';
+  let dernier = definitif;
   d.time.forEach((date, k) => {
-    if (date >= today || date < firstDay) return; // aujourd'hui est incomplet
+    if (date > today || date < firstDay) return;
     const v = [arrondi(d.precipitation_sum?.[k]), arrondi(d.temperature_2m_max?.[k]), arrondi(d.temperature_2m_min?.[k])];
     if (v.every((x) => x === null)) return;
     jours.set(date, v);
-    if (!dernier || date > dernier) dernier = date;
+    // Les jours passés sont définitifs ; la journée en cours est provisoire (prévision pour la fin du jour).
+    if (date < today && date > definitif) definitif = date;
+    if (date > dernier) dernier = date;
   });
-  if (!dernier) return false;
-  donnees.set(cas.id, { lat: cas.lat, lon: cas.lon, z: Math.round(item.elevation ?? ancien?.z ?? 0), c: dernier, jours });
+  if (!definitif) return false;
+  donnees.set(cas.id, { lat: cas.lat, lon: cas.lon, z: Math.round(item.elevation ?? ancien?.z ?? 0), c: dernier, f: definitif, m: today, jours });
   return true;
 }
 
@@ -313,13 +330,15 @@ console.log(`${rangees} cases mises à jour, ${Math.round(depenseIci)} appels po
 
 // ── Écriture des fichiers ────────────────────────────────────────────────────
 
-const dates = Array.from({ length: KEPT_DAYS }, (_, k) => addDays(firstDay, k));
+// Les 30 derniers jours complets, puis la journée en cours (provisoire).
+const dates = Array.from({ length: KEPT_DAYS + 1 }, (_, k) => addDays(firstDay, k));
 const blocs = new Map();
 for (const cas of cases) {
   const d = donnees.get(cas.id);
-  if (!d?.c) continue;
+  if (!d?.f) continue;
   const valeurs = (k) => dates.map((date) => d.jours.get(date)?.[k] ?? null);
-  const cell = { lat: d.lat, lon: d.lon, z: d.z, c: d.c, p: valeurs(0), x: valeurs(1), n: valeurs(2) };
+  // `c` après `f` : la journée du dernier passage, provisoire tant qu'elle n'a pas été redemandée.
+  const cell = { lat: d.lat, lon: d.lon, z: d.z, c: d.c, f: d.f, m: d.m, p: valeurs(0), x: valeurs(1), n: valeurs(2), ...(cas.sub ? { a: cas.sub } : {}) };
   if (cell.p.every((x) => x === null)) continue; // plus rien dans la fenêtre des 30 jours
   const b = blockOf(cas);
   if (!blocs.has(b)) blocs.set(b, {});
@@ -339,14 +358,14 @@ for (const f of readdirSync(join(dossier, 'b'))) if (!blocs.has(f.replace(/\.jso
 for (const [b, cells] of blocs) writeFileSync(join(dossier, 'b', `${b}.json`), JSON.stringify({ v: METEO_FORMAT, dates, cells }));
 
 const presentes = [...blocs.values()].flatMap((cells) => Object.values(cells));
-const aJour = presentes.filter((c) => c.c >= lastDay).length;
+const aJour = presentes.filter((c) => c.f >= lastDay).length;
 const index = {
   v: METEO_FORMAT,
   pasLat: STEP_LAT,
   pasLon: STEP_LON,
   bloc: BLOCK,
   jours: KEPT_DAYS,
-  dernierJour: aJour * 2 >= presentes.length ? lastDay : (presentes.map((c) => c.c).sort().at(-1) ?? ''),
+  dernierJour: aJour * 2 >= presentes.length ? lastDay : (presentes.map((c) => c.f).sort().at(-1) ?? ''),
   maj: new Date(now()).toISOString(),
   cases: presentes.length,
   aJour,
@@ -355,7 +374,7 @@ const index = {
 };
 writeFileSync(join(dossier, 'index.json'), JSON.stringify(index));
 
-const complet = aJour === cases.length;
+const complet = cases.every((cas) => donnees.get(cas.id)?.m === today);
 const change = rangees > 0;
 // À publier : dès que le tour est complet ; sinon au bout de 6 h sans publication (compte depuis
 // le premier passage tant que rien n'a été publié), pour ne pas mettre en ligne une grille trouée.
@@ -371,7 +390,7 @@ writeFileSync(fichierEtat, JSON.stringify(etat));
 
 console.log(
   `${presentes.length} cases dans ${blocs.size} fichiers, ${aJour} à jour du ${lastDay}` +
-    `${complet ? ' : tour complet' : ''}${publier ? ' ; à publier' : ''}.`,
+    `${complet ? ' : tour du jour complet' : ''}${publier ? ' ; à publier' : ''}.`,
 );
 const garder = change || publier || depenseIci > 0;
 if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `change=${change}\ncomplet=${complet}\npublier=${publier}\ngarder=${garder}\n`);

@@ -86,6 +86,13 @@ export const METEO_MAX_LATE_DAYS = 3;
 export const WEATHER_MIN_ZOOM = 4;
 export const WEATHER_MAX_CELLS = 4500;
 export const WEATHER_LABEL_MIN_ZOOM = 7.5;
+/**
+ * Indice de pousse : à partir de ce zoom, chaque case est détaillée en carrés de 4,5 km (même pluie,
+ * températures ramenées à l'altitude de chaque carré) ; leurs étiquettes attendent qu'ils soient
+ * assez grands.
+ */
+export const WEATHER_SUB_MIN_ZOOM = 8;
+export const WEATHER_SUB_LABEL_MIN_ZOOM = 10;
 
 /**
  * Grille fine de l'indice (carrés ≈ 500 m : chaque case de base de 4,5 km découpée en 9 × 9), à
@@ -118,14 +125,24 @@ export const METRICS_URL = (import.meta.env.VITE_METRICS_URL ?? '').replace(/\/+
  */
 export const FRANCE_BOUNDS: [number, number, number, number] = [-5.3, 41.3, 9.7, 51.2];
 
+/**
+ * Adresse de tuiles MapLibre pour une archive PMTiles : toutes les tuiles d'une couche dans un seul
+ * fichier, lu par morceaux (requêtes HTTP partielles) grâce au protocole `pmtiles://` enregistré
+ * dans main.ts. GitHub Pages ne sait pas publier des dizaines de milliers de petits fichiers.
+ */
+export const archiveTiles = (url: string): string => `pmtiles://${url}/{z}/{x}/{y}`;
+
 export const GEOLOGY_TILES_BASE = import.meta.env.DEV
   ? 'https://aligotaure.github.io/foret-explorer/data/geologie/'
   : new URL('data/geologie/', document.baseURI).href;
 
 export const GEOLOGY = {
   sourceLayer: 'geologie',
-  minZoom: 9,
-  maxZoom: 12,
+  /** Archive des tuiles, à côté de `info.json`. */
+  archive: 'geologie.pmtiles',
+  /** Zooms de l'archive (scripts/geologie/construire.sh) : la carte sur-zoome au-delà. */
+  minZoom: 10,
+  maxZoom: 11,
   /** Emprise couverte : France métropolitaine, Corse comprise (ouest, sud, est, nord). */
   bounds: FRANCE_BOUNDS,
   coverage: 'France métropolitaine',
@@ -144,8 +161,11 @@ export const ZONES = {
   /** Un point par zone protégée, pour afficher son nom une seule fois. */
   protectedNameLayer: 'protection_nom',
   publicForestLayer: 'foret_publique',
+  /** Archive des tuiles, à côté de `info.json`. */
+  archive: 'zones.pmtiles',
+  /** Zooms de l'archive (scripts/zones/construire.sh) : la carte sur-zoome au-delà. */
   minZoom: 9,
-  maxZoom: 12,
+  maxZoom: 11,
   /** Zoom à partir duquel le bilan d'un coin donne le statut du terrain (celui de la BD Forêt). */
   queryMinZoom: 10,
   /** Emprise téléchargée : France métropolitaine, Corse comprise (ouest, sud, est, nord). */

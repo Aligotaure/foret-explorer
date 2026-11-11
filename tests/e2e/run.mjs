@@ -251,7 +251,7 @@ async function desktopTests(browser, base) {
     zones.protectedVis === 'visible' && zones.lineVis === 'visible' && zones.publicVis === 'none' && zones.switches.join() === 'true,false' && zones.hatch && zones.drawn > 0,
     JSON.stringify(zones),
   );
-  check('tuiles des zones et info.json demandés', log.zones.some((p) => p.endsWith('/info.json')) && log.zones.some((p) => p.endsWith('.pbf')), log.zones.slice(0, 2).join(', '));
+  check('archive des zones (lue par morceaux) et info.json demandés', log.zones.some((p) => p.endsWith('/info.json')) && log.zones.some((p) => p.endsWith('/zones.pmtiles')), log.zones.slice(0, 2).join(', '));
   await page.locator('#legend .layer', { hasText: 'Où cueillir' }).locator('.layer__toggle').click();
   await page.getByRole('switch', { name: 'Afficher les forêts publiques' }).check();
   check('interrupteur « Forêts publiques »', (await page.evaluate(() => window.map.getLayoutProperty('forets-publiques', 'visibility'))) === 'visible');
@@ -429,6 +429,19 @@ async function desktopTests(browser, base) {
     `${log.meteo.length} appel(s) Open-Meteo, ${log.meteoCommune.length} fichier(s)`,
   );
   check('état de la grille dans la légende (cases de 18 km, date de la pluie)', Boolean(cepes.status) && /pluie connue jusqu’au/.test(cepes.status ?? ''), cepes.status);
+  const squares = await page.evaluate(() => {
+    const features = window.map.querySourceFeatures('meteo');
+    return {
+      squares: features.filter((f) => f.properties.sub === 1).length,
+      whole: features.filter((f) => f.properties.sub === 0).length,
+      altitudes: [...new Set(features.map((f) => f.properties.elevation))].length,
+    };
+  });
+  check(
+    'indice détaillé par carrés de 4,5 km, chacun à son altitude',
+    squares.squares > 10 && squares.whole === 0 && squares.altitudes > 8 && /par carrés de 4,5 km/.test(cepes.status ?? ''),
+    JSON.stringify(squares),
+  );
   await page.screenshot({ path: `${OUT}04-bureau-cepes.png` });
 
   // Grille fine : carrés de 500 m à partir du zoom 13 (mode indice)
@@ -482,6 +495,20 @@ async function desktopTests(browser, base) {
     text: JSON.stringify(window.map.getLayoutProperty('meteo-etiquettes', 'text-field')),
   }));
   check('mode pluie : couleurs et étiquettes en mm', rain.fill.startsWith('["step",["get","rain20"]') && rain.text.includes('rain20'), rain.text);
+  const wholeCells = await page
+    .waitForFunction(
+      () => {
+        const features = window.map.querySourceFeatures('meteo');
+        return features.length > 0 && features.every((f) => f.properties.sub === 0);
+      },
+      null,
+      { timeout: 10000 },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+  check('mode pluie : cases entières (la pluie est celle de toute la case)', wholeCells);
 
   // Nature du sol
   await page.getByRole('switch', { name: 'Afficher la nature du sol' }).check();
@@ -494,7 +521,7 @@ async function desktopTests(browser, base) {
   }));
   check('nature du sol : couche et motifs', soil.visible === 'visible' && soil.pattern, JSON.stringify(soil));
   check('nature du sol : 8 types, sols favorables aux cèpes repérés', soil.rows === 8 && soil.favored.includes('gres') && !soil.favored.includes('calcaire'), soil.favored.join(','));
-  check('tuiles de géologie demandées', log.geologie.length > 0, log.geologie.slice(0, 2).join(', '));
+  check('archive de géologie demandée (lue par morceaux)', log.geologie.some((p) => p.endsWith('/geologie.pmtiles')), log.geologie.slice(0, 2).join(', '));
   await page.screenshot({ path: `${OUT}05-bureau-sol.png` });
   await page.getByRole('switch', { name: 'Afficher la nature du sol' }).uncheck();
 
@@ -638,6 +665,34 @@ async function fallbackTests(browser, base) {
     'secours : fichiers communs trop anciens, Open-Meteo interrogé, aucun bloc lu',
     log2.meteo.length >= 1 && !log2.meteoCommune.some((p) => p.includes('/b/')),
     `${log2.meteo.length} requête(s) Open-Meteo, fichiers lus : ${log2.meteoCommune.map((p) => p.split('/meteo/')[1]).join(', ')}`,
+  );
+
+  // Passage du jour pas encore fait (GitHub lance les tâches planifiées quand il peut) : hier est
+  // connu par l'estimation relevée la veille, et la carte le dit.
+  const page3 = await context.newPage();
+  const log3 = { tms: [], wmts: [], geocode: [], other: [] };
+  await installMocks(page3, log3, { meteoCommune: 'provisoire' });
+  await page3.goto(`${base}#carte=10.5/45.92/6.19`);
+  await waitForMap(page3);
+  await page3.getByRole('button', { name: 'Cèpes', exact: true }).click();
+  await page3.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 0, null, { timeout: 15000 });
+  const status3 = await page3.evaluate(() => [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '');
+  check(
+    'veille provisoire : grille lue dans les fichiers communs, dernier jour annoncé comme estimé',
+    log3.meteo.length === 0 && /dernier jour estimé d’après la prévision/.test(status3) && !/Open-Meteo interrogé/.test(status3),
+    `${log3.meteo.length} appel(s) Open-Meteo ; ${status3.slice(0, 140)}`,
+  );
+  await page3.mouse.click(640, 400);
+  await page3.waitForSelector('#spot .rain-chart', { timeout: 10000 });
+  const provisional = await page3.evaluate(() => ({
+    bars: [...document.querySelectorAll('#spot .rain-chart__bar--estimated')].map((b) => b.querySelector('title')?.textContent ?? ''),
+    summary: [...document.querySelectorAll('#spot .spot__summary')].map((p) => p.textContent).join(' | '),
+    unknown: document.querySelectorAll('#spot .rain-chart__unknown').length,
+  }));
+  check(
+    'veille provisoire : bilan complet jusqu’à hier, barre d’hier marquée « estimation »',
+    provisional.bars.length === 1 && /\(estimation\)$/.test(provisional.bars[0] ?? '') && /dernier jour estimé/.test(provisional.summary) && provisional.unknown === 0 && log3.meteo.length === 0,
+    JSON.stringify(provisional).slice(0, 200),
   );
   await context.close();
 }

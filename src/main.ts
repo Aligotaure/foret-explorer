@@ -1,6 +1,7 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
 import maplibregl from 'maplibre-gl';
+import { Protocol } from 'pmtiles';
 import { BDFORET, FRANCE_BOUNDS, MAP_MAX_ZOOM, MAP_MIN_ZOOM } from './config';
 import { countClasses } from './counts';
 import { showDisclaimer } from './disclaimer';
@@ -54,6 +55,8 @@ function savedView(): { center: [number, number]; zoom: number } | null {
   return null;
 }
 const lastView = savedView();
+// Tuiles servies par le site (nature du sol, zones) : archives PMTiles lues par morceaux.
+maplibregl.addProtocol('pmtiles', new Protocol().tile);
 const map = new maplibregl.Map({
   container: 'map',
   style: buildStyle(store.state),
@@ -171,9 +174,8 @@ map.on('idle', () => {
 const shownErrors = new Set<string>();
 map.on('error', (event) => {
   const sourceId = (event as { sourceId?: string }).sourceId;
-  // Tuile absente des données du site (en mer, à l'étranger, ou sans rien dedans) : pas une erreur.
-  const ours = sourceId === SOURCES.geologie || sourceId === SOURCES.zones;
-  if (ours && (event.error as { status?: number } | undefined)?.status === 404) return;
+  // (Une tuile absente d'une archive du site, en mer ou à l'étranger, n'est pas une erreur : le
+  // protocole rend alors une tuile vide.)
   console.warn('[carte]', sourceId ?? '', event.error?.message ?? event.error);
   if (sourceId === SOURCES.geologie) track('pages.geology.errors');
   else if (sourceId === SOURCES.zones) {

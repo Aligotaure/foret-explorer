@@ -1,6 +1,13 @@
 import type { Feature, Polygon } from 'geojson';
 import type { GeoJSONSource, Map as MapLibreMap } from 'maplibre-gl';
-import { FINE_MIN_ZOOM, FRANCE_BOUNDS, WEATHER_MAX_CELLS, WEATHER_MIN_ZOOM } from './config';
+import {
+  FINE_MIN_ZOOM,
+  FRANCE_BOUNDS,
+  WEATHER_MAX_CELLS,
+  WEATHER_MIN_ZOOM,
+  WEATHER_SUB_LABEL_MIN_ZOOM,
+  WEATHER_SUB_MIN_ZOOM,
+} from './config';
 import { debounce } from './dom';
 import {
   altitudeCache,
@@ -13,11 +20,22 @@ import {
   type Sample,
 } from './fineGrid';
 import { track } from './metrics';
-import { CELL_KM } from './meteoGrid';
+import { CELL_KM, subBox, subIndexAt } from './meteoGrid';
 import { LEVELS, MUSHROOMS, MUSHROOM_BY_ID, scoreMushroom, type MushroomId } from './mushrooms';
 import { LAYERS, SOURCES, applyOpacity, setFineVisible, setMeteoVisible } from './mapStyle';
 import type { AppState, Store } from './state';
-import { atAltitude, cellsForBounds, fetchAltitudes, summarize, todayKey, weatherForCells, type DailySeries } from './weather';
+import {
+  atAltitude,
+  cellsForBounds,
+  fetchAltitudes,
+  medianAltitude,
+  summarize,
+  summaryAtAltitude,
+  todayKey,
+  weatherForCells,
+  type DailySeries,
+  type WeatherSummary,
+} from './weather';
 
 /** État de la grille fine (carrés de 500 m, mode « indice » seulement). */
 export type FineStatus =
@@ -33,8 +51,12 @@ export type MeteoStatus =
   | { state: 'outside' }
   | { state: 'many' }
   | { state: 'loading' }
-  /** `day` : dernier jour connu ; `shared` : fichiers communs (sinon Open-Meteo en direct). */
-  | { state: 'ok'; cells: number; day: string; shared: boolean; fine: FineStatus }
+  /**
+   * `day` : dernier jour connu (`estimated` : d'après la prévision, en attendant la mise à jour du
+   * jour) ; `shared` : fichiers communs (sinon Open-Meteo en direct) ; `sub` : indice détaillé par
+   * carrés de 4,5 km.
+   */
+  | { state: 'ok'; cells: number; day: string; estimated: boolean; shared: boolean; sub: boolean; fine: FineStatus }
   | { state: 'error'; message: string };
 
 /** Paliers de pluie cumulée sur 20 jours (mm) et leurs couleurs. */
@@ -99,8 +121,10 @@ function waitForIdle(map: MapLibreMap, signal: AbortSignal): Promise<void> {
 
 /**
  * Grille météo sur la zone affichée : les cases communes (≈ 18 km), colorées selon la pluie des 20
- * derniers jours ou selon l'indice de pousse. En mode indice, à partir du zoom FINE_MIN_ZOOM,
- * des carrés de 500 m précisent l'indice là où poussent les arbres hôtes (voir fineGrid.ts).
+ * derniers jours ou selon l'indice de pousse. En mode indice, chaque case est détaillée en carrés de
+ * 4,5 km à partir du zoom WEATHER_SUB_MIN_ZOOM (même pluie, températures ramenées à l'altitude de
+ * chaque carré) ; à partir du zoom FINE_MIN_ZOOM, des carrés de 500 m précisent l'indice là où
+ * poussent les arbres hôtes (voir fineGrid.ts).
  */
 export class MeteoLayer {
   private controller: AbortController | null = null;
@@ -163,16 +187,17 @@ export class MeteoLayer {
     const labels = LEVELS.flatMap((l, i) => (i === 0 ? [] : [i, l.label]));
     const opacity = ['match', level, 0, 0.04, 1, 0.16, 2, 0.26, 3, 0.36, 0];
     const text = ['match', level, ...labels, ''];
-    // Avec les carrés fins, la grille des cases reste en fond, très pâle et sans étiquettes.
-    const fade = (normal: unknown, faded: unknown): unknown =>
-      this.fineShown ? ['step', ['zoom'], normal, FINE_MIN_ZOOM, faded] : normal;
+    // Étiquettes : celles des cases entières en vue d'ensemble, celles des carrés de 4,5 km quand ils
+    // sont assez grands ; avec les carrés fins, la grille reste en fond, très pâle et sans étiquettes.
+    const textByZoom: unknown[] = ['step', ['zoom'], text, WEATHER_SUB_MIN_ZOOM, ['case', ['==', ['get', 'sub'], 1], '', text], WEATHER_SUB_LABEL_MIN_ZOOM, text];
+    if (this.fineShown) textByZoom.push(FINE_MIN_ZOOM, '');
     // Vue d'ensemble (France entière) : couleurs plus soutenues, sinon les petites cases se perdent
     // sur le fond de carte ; opacité normale à partir du zoom 9.
     const fillOpacity: unknown[] = ['interpolate', ['linear'], ['zoom'], 6, ['*', 2, opacity], 9, opacity];
     if (this.fineShown) fillOpacity.push(FINE_MIN_ZOOM - 0.01, opacity, FINE_MIN_ZOOM, ['*', 0.35, opacity]);
     this.map.setPaintProperty(LAYERS.meteoFill, 'fill-color', ['match', level, ...colors, 'rgba(0,0,0,0)'] as never);
     this.map.setPaintProperty(LAYERS.meteoFill, 'fill-opacity', fillOpacity as never);
-    this.map.setLayoutProperty(LAYERS.meteoLabel, 'text-field', fade(text, '') as never);
+    this.map.setLayoutProperty(LAYERS.meteoLabel, 'text-field', textByZoom as never);
 
     const coverage = ['get', `c_${id}`];
     const hostOnly = ['>', coverage, 0];
@@ -248,28 +273,49 @@ export class MeteoLayer {
       const series = weather.series;
       const month = new Date().getMonth() + 1;
       const today = todayKey();
+      // L'indice se détaille par carrés de 4,5 km ; la pluie, elle, est la même dans toute la case.
+      const subdivide = state.weatherMode === 'indice' && this.map.getZoom() >= WEATHER_SUB_MIN_ZOOM;
       let day = '';
+      let estimated = false;
+      let count = 0;
+      let detailed = false;
       const features: Feature[] = [];
-      for (const c of cells) {
-        const s = series.get(c.id);
-        if (!s) continue;
-        const w = summarize(s, today);
-        if (w.lastDate && w.lastDate > day) day = w.lastDate;
+      const add = (id: string, w: WeatherSummary, box: Box, sub: 0 | 1): void => {
         const properties: Record<string, number> = {
           rain20: Math.round(w.rain20),
           elevation: Math.round(w.elevation),
           lastRain: w.events[0]?.daysAgo ?? -1,
+          sub,
         };
         for (const m of MUSHROOMS) {
           const score = scoreMushroom(m, w, month);
           properties[`l_${m.id}`] = score.level;
           properties[`s_${m.id}`] = Math.round(score.score * 100) / 100;
         }
-        features.push({ type: 'Feature', id: c.id, properties, geometry: boxPolygon(c) });
+        features.push({ type: 'Feature', id, properties, geometry: boxPolygon(box) });
+      };
+      for (const c of cells) {
+        const s = series.get(c.id);
+        if (!s) continue;
+        const w = summarize(s, today);
+        if (w.lastDate && w.lastDate >= day) {
+          estimated = w.lastDate > day ? w.estimated : estimated || w.estimated;
+          day = w.lastDate;
+        }
+        count++;
+        if (subdivide && s.subAltitudes) {
+          detailed = true;
+          s.subAltitudes.forEach((z, k) => {
+            if (z !== null) add(`${c.id}/${k}`, summaryAtAltitude(w, z), subBox(c, k), 1);
+          });
+        } else {
+          // Case entière : à l'altitude médiane de ses carrés plutôt qu'à celle du point de relevé.
+          add(c.id, summaryAtAltitude(w, medianAltitude(s)), c, 0);
+        }
       }
       this.map.getSource<GeoJSONSource>(SOURCES.meteo)?.setData({ type: 'FeatureCollection', features });
       const fine: FineStatus = state.weatherMode === 'indice' ? { state: 'loading' } : { state: 'off' };
-      this.setStatus({ state: 'ok', cells: features.length, day, shared: weather.shared, fine });
+      this.setStatus({ state: 'ok', cells: count, day, estimated, shared: weather.shared, sub: detailed, fine });
       if (state.weatherMode === 'indice') await this.updateFine(series, controller.signal);
       else this.showFine(false);
     } catch (error) {
@@ -318,7 +364,7 @@ export class MeteoLayer {
         if (signal.aborted || isAbort(error)) return;
         console.warn('[grille fine]', error);
         altitudeOk = false;
-        count = this.renderFine(forested, samples, series, true); // températures de la case
+        count = this.renderFine(forested, samples, series, true); // à l'altitude du carré de 4,5 km
       }
     }
     if (!signal.aborted) this.setFine({ state: 'ok', count, altitude: altitudeOk });
@@ -344,9 +390,11 @@ export class MeteoLayer {
       const parent = series.get(c.parentId);
       const sample = samples.get(c.id);
       if (!parent || !sample) continue;
-      const z = altitudes.get(c.id);
-      if (z === undefined && !fallback) continue;
-      const w = summarize(atAltitude(parent, z ?? null), today);
+      const known = altitudes.get(c.id);
+      if (known === undefined && !fallback) continue;
+      // Altitude IGN indisponible : celle du carré de 4,5 km qui contient ce carré.
+      const z = known ?? parent.subAltitudes?.[subIndexAt(c.lat, c.lon)] ?? null;
+      const w = summarize(atAltitude(parent, z), today);
       const properties: Record<string, number> = { z: z ?? Math.round(parent.elevation) };
       let any = false;
       for (const m of MUSHROOMS) {
@@ -377,7 +425,7 @@ function fineText(fine: FineStatus): string {
     case 'ok':
       return (
         ` ${fine.count} carré${fine.count > 1 ? 's' : ''} de 500 m avec arbres hôtes.` +
-        (fine.altitude ? '' : ' Altitude IGN indisponible : températures de la case.')
+        (fine.altitude ? '' : ' Altitude IGN indisponible : températures à l’altitude du carré de 4,5 km.')
       );
   }
 }
@@ -401,10 +449,11 @@ export function describeStatus(s: MeteoStatus, state: AppState): string {
       const what =
         state.weatherMode === 'pluie'
           ? 'pluie cumulée'
-          : `indice ${MUSHROOM_BY_ID.get(indexMushroom(state))?.label.toLowerCase() ?? ''}`;
+          : `indice ${MUSHROOM_BY_ID.get(indexMushroom(state))?.label.toLowerCase() ?? ''}${s.sub ? ', par carrés de 4,5 km selon leur altitude' : ''}`;
       const date = s.day ? new Date(`${s.day}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '';
       const source = s.shared ? '' : ' Fichiers météo du site indisponibles ou trop anciens : Open-Meteo interrogé directement.';
-      return `${s.cells} cases de ${CELL_KM} km · ${what}${date ? `, pluie connue jusqu’au ${date}` : ''}.${source}${fineText(s.fine)}`;
+      const until = date ? `, pluie connue jusqu’au ${date}${s.estimated ? ' (dernier jour estimé d’après la prévision)' : ''}` : '';
+      return `${s.cells} cases de ${CELL_KM} km · ${what}${until}.${source}${fineText(s.fine)}`;
     }
   }
 }

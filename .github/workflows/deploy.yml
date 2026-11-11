@@ -8,6 +8,8 @@
 #    zones protégées et forêts publiques (cache, refaites chaque semaine depuis le WFS) et les
 #    derniers fichiers météo communs : tout cela est servi par GitHub Pages avec le site. Si une
 #    reconstruction échoue, les tuiles précédentes restent ; sans tuiles du tout, rien n'est publié.
+#    Les tuiles sont rangées dans une archive PMTiles par couche : GitHub Pages abandonne une
+#    publication au bout de 10 minutes, et des dizaines de milliers de petits fichiers n'y passent pas.
 # 2. Teste le serveur de mesure (worker/) et, si les secrets Cloudflare existent, le publie :
 #    son adresse est alors donnée au build pour que la carte y envoie ses compteurs.
 # 3. Vérifie les types, construit la carte et la publie.
@@ -102,19 +104,20 @@ jobs:
             .meteo-etat.json
           key: meteo-${{ github.run_id }}
           restore-keys: meteo-
-      - name: Sans fichiers météo en cache, reprendre ceux du site en ligne
-        # Sans eux, la carte interroge Open-Meteo elle-même (quelques dizaines de cases au plus).
+      - name: Mettre en forme les fichiers météo (sans cache, reprendre ceux du site en ligne)
+        # Aucun appel à Open-Meteo ici (budget 0) : les fichiers sont réécrits avec la liste des cases
+        # du dépôt (altitudes des carrés de 4,5 km). Sans fichiers du tout, la carte interroge
+        # Open-Meteo elle-même (quelques dizaines de cases au plus).
         continue-on-error: true
         run: |
-          if [ ! -f public/data/meteo/index.json ]; then
-            node scripts/meteo/mettre-a-jour.mjs --budget 0 --amorce https://aligotaure.github.io/foret-explorer/data/meteo/
-          fi
+          node scripts/meteo/mettre-a-jour.mjs --budget 0 --etat "$RUNNER_TEMP/meteo-etat.json" \
+            --amorce https://aligotaure.github.io/foret-explorer/data/meteo/
       - name: Vérifier que les données sont là
         # Une couche manquante (première construction ratée) : on ne publie pas, le site en ligne
         # reste tel quel et la prochaine publication réessaie.
         run: |
           manque=0
-          for f in public/data/geologie/info.json public/data/zones/info.json; do
+          for f in public/data/geologie/info.json public/data/geologie/geologie.pmtiles public/data/zones/info.json public/data/zones/zones.pmtiles; do
             if [ ! -s "$f" ]; then
               echo "::error::$f manquant, publication annulée pour ne pas retirer une couche du site en ligne."
               manque=1
@@ -124,6 +127,7 @@ jobs:
             echo "::warning::Pas de fichiers météo communs, la carte interrogera Open-Meteo elle-même."
           fi
           du -sh public/data/* 2>/dev/null || true
+          find public/data -type f | wc -l | sed 's/$/ fichiers de données/'
           exit $manque
       - name: Installer les dépendances
         run: npm ci --ignore-scripts --no-audit --no-fund
@@ -170,9 +174,10 @@ jobs:
       - name: Taille du site
         run: |
           taille=$(du -sm dist | cut -f1)
-          echo "Site : ${taille} Mo (limite de GitHub Pages : 1 Go)"
-          if [ "$taille" -gt 950 ]; then
-            echo "::error::Site trop gros pour GitHub Pages (${taille} Mo)."
+          fichiers=$(find dist -type f | wc -l)
+          echo "Site : ${taille} Mo, ${fichiers} fichiers (GitHub Pages : 1 Go au plus, publication en 10 minutes au plus)"
+          if [ "$taille" -gt 950 ] || [ "$fichiers" -gt 5000 ]; then
+            echo "::error::Site trop gros pour GitHub Pages (${taille} Mo, ${fichiers} fichiers)."
             exit 1
           fi
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

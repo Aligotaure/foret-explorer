@@ -1,8 +1,9 @@
-# Vérifie chaque matin que les services utilisés par la carte répondent : IGN (tuiles, altitude,
-# recherche, polices), Open-Meteo et le site en ligne (tuiles de géologie et des zones, fichiers
-# météo communs, qui doivent dater de moins de 36 heures). Une seule requête par service. En cas
-# d'échec, l'exécution apparaît en rouge dans l'onglet Actions et GitHub envoie un e-mail de
-# notification (réglage par défaut des notifications Actions).
+# Vérifie chaque jour que les services utilisés par la carte répondent : IGN (tuiles, altitude,
+# recherche, polices), Open-Meteo et le site en ligne (archives des tuiles de géologie et des zones,
+# lues par morceaux ; fichiers météo communs, dont le dernier jour ne doit pas avoir plus de
+# 36 heures). Une ou deux requêtes par service. En cas d'échec, l'exécution apparaît en rouge dans
+# l'onglet Actions et GitHub envoie un e-mail de notification (réglage par défaut des notifications
+# Actions).
 #
 # Attention : GitHub suspend les tâches planifiées d'un dépôt public sans activité depuis 60 jours ;
 # il suffit alors de la réactiver dans l'onglet Actions.
@@ -10,7 +11,8 @@ name: Surveillance des services
 
 on:
   schedule:
-    - cron: '17 4 * * *' # 5 h 17 l'hiver, 6 h 17 l'été, heure de Paris
+    # 5 h 17 l'hiver, 6 h 17 l'été, heure de Paris ; en pratique GitHub la lance souvent en fin de matinée.
+    - cron: '17 4 * * *'
   workflow_dispatch:
 
 permissions:
@@ -36,6 +38,17 @@ jobs:
               echo "OK  $nom ($(wc -c < reponse) octets)"
             fi
           }
+          archive() { # nom, adresse : une requête partielle doit rendre l'en-tête de l'archive PMTiles
+            local nom=$1 url=$2
+            local code
+            code=$(curl -sS -m 30 --retry 2 -o reponse -w '%{http_code}' -r 0-126 -H 'Origin: https://aligotaure.github.io' "$url")
+            if [ "$code" != 206 ] || [ "$(head -c 7 reponse)" != PMTiles ]; then
+              echo "::error::$nom : l'archive ne se lit pas par morceaux (HTTP $code) : $url"
+              echec=1
+            else
+              echo "OK  $nom (archive lue par morceaux)"
+            fi
+          }
           W='https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&STYLE=normal'
           verifier 'BD Forêt (tuiles vectorielles)' 'https://data.geopf.fr/tms/1.0.0/LANDCOVER-TMS.FORESTINVENTORY.V2/10/529/364.pbf'
           verifier 'BD Forêt (aperçu raster)' "$W&LAYER=LANDCOVER.FORESTINVENTORY.V2&TILEMATRIXSET=PM_6_16&FORMAT=image/png&TILEMATRIX=10&TILEROW=364&TILECOL=529"
@@ -47,15 +60,20 @@ jobs:
           verifier 'Open-Meteo' 'https://api.open-meteo.com/v1/forecast?latitude=45.92&longitude=6.19&daily=precipitation_sum&past_days=1&forecast_days=1&timezone=Europe/Paris' 'precipitation_sum'
           verifier 'Site en ligne' 'https://aligotaure.github.io/foret-explorer/' 'Forêt Explorer'
           verifier 'Page À propos' 'https://aligotaure.github.io/foret-explorer/a-propos.html' 'Mentions légales'
-          verifier 'Tuiles de géologie' 'https://aligotaure.github.io/foret-explorer/data/geologie/info.json'
+          verifier 'Nature du sol' 'https://aligotaure.github.io/foret-explorer/data/geologie/info.json' 'departements'
+          archive 'Nature du sol' 'https://aligotaure.github.io/foret-explorer/data/geologie/geologie.pmtiles'
           verifier 'Zones protégées et forêts publiques' 'https://aligotaure.github.io/foret-explorer/data/zones/info.json' 'genere'
+          archive 'Zones protégées et forêts publiques' 'https://aligotaure.github.io/foret-explorer/data/zones/zones.pmtiles'
           verifier 'Météo commune' 'https://aligotaure.github.io/foret-explorer/data/meteo/index.json' 'dernierJour'
-          maj=$(jq -r '.maj // empty' reponse 2>/dev/null)
-          age=$(( ( $(date +%s) - $(date -d "${maj:-1970-01-01}" +%s 2>/dev/null || echo 0) ) / 3600 ))
-          if [ "$age" -gt 36 ]; then
-            echo "::error::Météo commune : dernière mise à jour il y a ${age} h (tâche « Météo commune » suspendue ou en panne ?)"
+          # Le tour du jour se fait d'ordinaire dans la nuit, mais GitHub lance les tâches planifiées avec
+          # parfois des heures de retard : alerte seulement si le dernier jour connu a plus de 36 heures
+          # (avant midi, heure de Paris, avant-hier suffit encore ; ensuite il faut hier).
+          dernier=$(jq -r '.dernierJour // empty' reponse 2>/dev/null)
+          attendu=$(TZ=Europe/Paris date -d '36 hours ago' +%F)
+          if [ -z "$dernier" ] || [ "$dernier" \< "$attendu" ]; then
+            echo "::error::Météo commune en retard : dernier jour connu ${dernier:-inconnu}, attendu $attendu au moins (tâche « Météo commune » suspendue ou en panne ?)"
             echec=1
           else
-            echo "OK  Météo commune mise à jour il y a ${age} h ($(jq -r '"\(.aJour) cases à jour sur \(.cases)"' reponse))"
+            echo "OK  Météo commune à jour du $dernier ($(jq -r '"\(.aJour) cases à jour sur \(.cases)"' reponse))"
           fi
           exit $echec

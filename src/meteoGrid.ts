@@ -5,7 +5,9 @@
  *
  * Une case commune regroupe METEO_FACTOR × METEO_FACTOR cases de base (0,04° × 0,056°, ≈ 4,5 km) ;
  * les carrés de 500 m de la grille fine (9 × 9 par case de base) s'y emboîtent exactement. Les
- * cases sont rangées par blocs de BLOCK × BLOCK, un fichier par bloc.
+ * cases sont rangées par blocs de BLOCK × BLOCK, un fichier par bloc. La pluie et les températures
+ * sont relevées en un point par case ; l'altitude de chacun de ses 16 carrés de 4,5 km est connue
+ * (fichiers), ce qui permet d'y ramener les températures.
  *
  * Ce module est aussi lu tel quel par Node (scripts) : pas d'import, rien que des types effaçables.
  */
@@ -21,7 +23,7 @@ export const STEP_LON = BASE_STEP_LON * METEO_FACTOR;
 export const CELL_KM = Math.round(STEP_LAT * 111.2);
 /** Côté d'un bloc (un fichier), en cases communes. */
 export const BLOCK = 8;
-/** Jours complets gardés dans les fichiers (aujourd'hui exclu). */
+/** Jours complets gardés dans les fichiers (la journée en cours s'y ajoute, provisoire). */
 export const KEPT_DAYS = 30;
 /** Version du format des fichiers : la carte ignore un format qu'elle ne connaît pas. */
 export const METEO_FORMAT = 1;
@@ -44,6 +46,12 @@ export const cellOfBase = (bi: number, bj: number): CellRef => ({
   i: Math.floor(bi / METEO_FACTOR),
   j: Math.floor(bj / METEO_FACTOR),
 });
+
+/** Numéro (ordre de `subBox`) du carré de 4,5 km de sa case commune qui contient un point. */
+export function subIndexAt(lat: number, lon: number): number {
+  const mod = (a: number): number => ((a % METEO_FACTOR) + METEO_FACTOR) % METEO_FACTOR;
+  return mod(Math.floor(lat / BASE_STEP_LAT)) * METEO_FACTOR + mod(Math.floor(lon / BASE_STEP_LON));
+}
 
 /** Bloc (fichier) d'une case. */
 export const blockOf = (c: CellRef): string => blockId(Math.floor(c.i / BLOCK), Math.floor(c.j / BLOCK));
@@ -71,6 +79,24 @@ export function cellBox(c: CellRef): CellBox {
   };
 }
 
+/** Nombre de carrés de 4,5 km (cases de base) dans une case commune. */
+export const SUB_COUNT = METEO_FACTOR * METEO_FACTOR;
+
+/**
+ * Carré de 4,5 km numéro `k` d'une case commune : rangés du sud au nord, puis d'ouest en est
+ * (k = ligne × METEO_FACTOR + colonne), dans le même ordre que les altitudes des fichiers.
+ */
+export function subBox(c: CellRef, k: number): { south: number; north: number; west: number; east: number } {
+  const south = (c.i * METEO_FACTOR + Math.floor(k / METEO_FACTOR)) * BASE_STEP_LAT;
+  const west = (c.j * METEO_FACTOR + (k % METEO_FACTOR)) * BASE_STEP_LON;
+  return {
+    south: +south.toFixed(5),
+    north: +(south + BASE_STEP_LAT).toFixed(5),
+    west: +west.toFixed(5),
+    east: +(west + BASE_STEP_LON).toFixed(5),
+  };
+}
+
 // ── Fichiers ─────────────────────────────────────────────────────────────────
 
 /** Une case dans un fichier de bloc : valeurs alignées sur `dates` (null : jour inconnu). */
@@ -79,12 +105,25 @@ export interface StoredCell {
   lat: number;
   lon: number;
   z: number;
-  /** Dernier jour complet connu (AAAA-MM-JJ). */
+  /**
+   * Dernier jour connu (AAAA-MM-JJ) et dernier jour définitif : entre les deux, la journée du dernier
+   * passage de la mise à jour, telle qu'Open-Meteo la donnait alors (heures écoulées et prévision
+   * pour la fin du jour). Le lendemain, la carte s'en sert comme estimation de la veille tant que
+   * le passage du jour n'a pas eu lieu. `f` absent (anciens fichiers) : tout est définitif.
+   */
   c: string;
+  f?: string;
+  /** Jour de la dernière demande à Open-Meteo (pour la mise à jour : une demande par jour). */
+  m?: string;
   /** Pluie (mm), températures maximale et minimale (°C), une décimale. */
   p: (number | null)[];
   x: (number | null)[];
   n: (number | null)[];
+  /**
+   * Altitude (m) des SUB_COUNT carrés de 4,5 km de la case, dans l'ordre de `subBox` ; null : carré
+   * sans terre française (mer, étranger). Absent des fichiers les plus anciens.
+   */
+  a?: (number | null)[];
 }
 
 export interface BlockFile {

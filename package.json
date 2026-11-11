@@ -16,7 +16,8 @@
     "test:donnees": "node tests/meteo.mjs && node tests/geologie.mjs"
   },
   "dependencies": {
-    "maplibre-gl": "^5.6.0"
+    "maplibre-gl": "^5.6.0",
+    "pmtiles": "^4.5.0"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.14",

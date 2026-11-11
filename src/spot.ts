@@ -45,10 +45,10 @@ function rainChart(w: WeatherSummary): SVGSVGElement {
       width: barW - 2,
       height: bh,
       rx: 1.5,
-      class: peaks.has(d.date) ? 'rain-chart__bar rain-chart__bar--peak' : 'rain-chart__bar',
+      class: `rain-chart__bar${peaks.has(d.date) ? ' rain-chart__bar--peak' : ''}${d.estimated ? ' rain-chart__bar--estimated' : ''}`,
     });
     const title = svg('title', {});
-    title.textContent = `${new Date(`${d.date}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} : ${d.rain.toFixed(1)} mm`;
+    title.textContent = `${new Date(`${d.date}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} : ${d.rain.toFixed(1)} mm${d.estimated ? ' (estimation)' : ''}`;
     bar.append(title);
     chart.append(bar);
     if (peaks.has(d.date)) {
@@ -274,6 +274,7 @@ export class SpotPanel {
             late && weather.lastDate
               ? ` · connue jusqu’au ${new Date(`${weather.lastDate}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`
               : '',
+            weather.estimated ? ' · dernier jour estimé d’après la prévision' : '',
           ),
           rainChart(weather),
           h(

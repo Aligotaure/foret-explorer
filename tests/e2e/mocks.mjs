@@ -1,5 +1,6 @@
-// Faux services pour tester l'appli sans réseau : tuiles BD Forêt et géologie (MVT encodées ici),
-// tuiles WMTS (PNG fixes), géocodage et altitude (Géoplateforme), météo (Open-Meteo).
+// Faux services pour tester l'appli sans réseau : tuiles BD Forêt (MVT encodées ici), archives PMTiles
+// de la géologie et des zones (écrites ici, servies par morceaux), tuiles WMTS (PNG fixes), géocodage
+// et altitude (Géoplateforme), fichiers météo communs et Open-Meteo.
 import { readFileSync } from 'node:fs';
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url));
@@ -174,6 +175,59 @@ export function zonesTile() {
   return Buffer.concat([protection, forests]); // une tuile = suite de couches : on les met bout à bout
 }
 
+// ── Archives PMTiles (version 3) ─────────────────────────────────────────────
+// Une archive minimale, sans compression : l'en-tête (127 octets), un répertoire d'une seule entrée
+// qui renvoie la même tuile pour tous les z/x/y des zooms couverts, des métadonnées vides, la tuile.
+// Les numéros de tuile se suivent d'un zoom à l'autre : le zoom z commence à (4^z − 1) / 3.
+function pmtilesArchive(tile, minZoom, maxZoom) {
+  const first = (4 ** minZoom - 1) / 3;
+  const count = (4 ** (maxZoom + 1) - 1) / 3 - first;
+  const root = [];
+  for (const v of [1, first, count, tile.length, 1]) varint(v, root); // 1 entrée : numéro, étendue, taille, position + 1
+  const metadata = Buffer.from('{}');
+  const header = Buffer.alloc(127);
+  header.write('PMTiles', 0, 'latin1');
+  header[7] = 3;
+  const sections = [root.length, metadata.length, 0, tile.length]; // répertoire, métadonnées, sous-répertoires, tuiles
+  let offset = 127;
+  sections.forEach((length, k) => {
+    header.writeBigUInt64LE(BigInt(offset), 8 + 16 * k);
+    header.writeBigUInt64LE(BigInt(length), 16 + 16 * k);
+    offset += length;
+  });
+  header.writeBigUInt64LE(BigInt(count), 72); // tuiles adressées
+  header.writeBigUInt64LE(1n, 80); // entrées
+  header.writeBigUInt64LE(1n, 88); // contenus
+  header[96] = 1; // tuiles rangées dans l'ordre
+  header[97] = 1; // répertoires non compressés
+  header[98] = 1; // tuiles non compressées
+  header[99] = 1; // tuiles vectorielles (MVT)
+  header[100] = minZoom;
+  header[101] = maxZoom;
+  header.writeInt32LE(-180e7, 102);
+  header.writeInt32LE(-85e7, 106);
+  header.writeInt32LE(180e7, 110);
+  header.writeInt32LE(85e7, 114);
+  header[118] = minZoom;
+  return Buffer.concat([header, Buffer.from(root), metadata, tile]);
+}
+
+/** Répond à une requête partielle (`Range: bytes=a-b`) comme le fait GitHub Pages. */
+function fulfillRange(route, body) {
+  const range = /bytes=(\d+)-(\d*)/.exec(route.request().headers().range ?? '');
+  const headers = { ...CORS, 'accept-ranges': 'bytes' };
+  if (!range) return route.fulfill({ status: 200, contentType: 'application/octet-stream', headers, body });
+  const start = Number(range[1]);
+  const end = Math.min(range[2] ? Number(range[2]) : body.length - 1, body.length - 1);
+  if (start >= body.length) return route.fulfill({ status: 416, headers: { ...headers, 'content-range': `bytes */${body.length}` }, body: '' });
+  return route.fulfill({
+    status: 206,
+    contentType: 'application/octet-stream',
+    headers: { ...headers, 'content-range': `bytes ${start}-${end}/${body.length}` },
+    body: body.subarray(start, end + 1),
+  });
+}
+
 // Météo : 30 jours passés + aujourd'hui, avec deux grosses pluies il y a 10 et 13 jours
 // (relevés réels du 11 au 31 octobre 2026 vers 930 m, au-dessus de Nâves-Parmelan, précédés de
 // 10 jours secs).
@@ -218,18 +272,24 @@ function openMeteo(url) {
 const STEP_LAT = 0.16;
 const STEP_LON = 0.224;
 const BLOCK = 8;
-/** `late` : jours de retard de la mise à jour (0 : à jour d'hier). */
+/**
+ * `late` : jours écoulés depuis le dernier passage de la mise à jour. 0 : passage du jour fait (hier
+ * est définitif) ; 1 : pas encore (hier n'est connu que par l'estimation du passage de la veille).
+ */
 function meteoIndex(late = 0) {
   const blocs = [];
   for (let bi = 32; bi <= 40; bi++) for (let bj = -4; bj <= 5; bj++) blocs.push(`${bi}_${bj}`);
   const day = addDays(parisToday(), -late);
   return { v: 1, pasLat: STEP_LAT, pasLon: STEP_LON, bloc: BLOCK, jours: 30, dernierJour: addDays(day, -1), maj: `${day}T01:40:00.000Z`, cases: blocs.length * 64, aJour: blocs.length * 64, blocs, source: 'essai' };
 }
-function meteoBlock(id) {
+function meteoBlock(id, late = 0) {
   const [bi, bj] = id.split('_').map(Number);
-  const today = parisToday();
-  const dates = Array.from({ length: 30 }, (_, k) => addDays(today, k - 30));
-  const past = (xs) => xs.slice(0, 30); // sans aujourd'hui
+  // Comme les écrit scripts/meteo/mettre-a-jour.mjs : 30 jours complets, puis le jour du passage,
+  // provisoire (`c` : dernier jour connu, `f` : dernier jour définitif, `m` : jour de la demande).
+  const day = addDays(parisToday(), -late);
+  const dates = Array.from({ length: 31 }, (_, k) => addDays(day, k - 30));
+  // Passage de la veille : sa journée, estimée, était pluvieuse (une barre à part dans le bilan).
+  const rain = late ? [...DAILY.rain.slice(0, 30), 6.5] : DAILY.rain;
   const cells = {};
   for (let i = bi * BLOCK; i < (bi + 1) * BLOCK; i++) {
     for (let j = bj * BLOCK; j < (bj + 1) * BLOCK; j++) {
@@ -240,10 +300,14 @@ function meteoBlock(id) {
         lat: +((i + 0.5) * STEP_LAT).toFixed(4),
         lon: +((j + 0.5) * STEP_LON).toFixed(4),
         z,
-        c: dates[29],
-        p: past(DAILY.rain).map((r) => Math.round(r * wetter * 10) / 10),
-        x: past(DAILY.tmax).map((t) => Math.round((t + shift) * 10) / 10),
-        n: past(DAILY.tmin).map((t) => Math.round((t + shift) * 10) / 10),
+        c: day,
+        f: addDays(day, -1),
+        m: day,
+        p: rain.map((r) => Math.round(r * wetter * 10) / 10),
+        x: DAILY.tmax.map((t) => Math.round((t + shift) * 10) / 10),
+        n: DAILY.tmin.map((t) => Math.round((t + shift) * 10) / 10),
+        // Altitudes des 16 carrés de 4,5 km : de 300 à 2 550 m, le dernier en mer (null).
+        a: Array.from({ length: 16 }, (_, k) => (k === 15 ? null : 300 + k * 150 + (z - 600) / 10)),
       };
     }
   }
@@ -270,7 +334,8 @@ const COMPLETION = {
 /**
  * Intercepte les requêtes vers les services externes et les consigne dans `log`.
  * `meteoCommune: false` : fichiers météo communs injoignables ; `'ancienne'` : en retard de 6 jours
- * (dans les deux cas, la carte se rabat sur Open-Meteo).
+ * (dans les deux cas, la carte se rabat sur Open-Meteo) ; `'provisoire'` : le passage du jour n'a
+ * pas encore eu lieu, hier n'est connu que par l'estimation de la veille.
  */
 export async function installMocks(page, log, { meteoCommune = true } = {}) {
   log.meteo ??= [];
@@ -279,6 +344,9 @@ export async function installMocks(page, log, { meteoCommune = true } = {}) {
   log.altitude ??= [];
   log.mesures ??= [];
   log.zones ??= [];
+  // Archives des tuiles du site, aux zooms de src/config.ts (GEOLOGY et ZONES).
+  const geologyArchive = pmtilesArchive(geologyTile(), 10, 11);
+  const zonesArchive = pmtilesArchive(zonesTile(), 9, 11);
   await page.route('https://aligotaure.github.io/foret-explorer/data/zones/**', (route) => {
     const path = new URL(route.request().url()).pathname;
     log.zones.push(path);
@@ -286,7 +354,8 @@ export async function installMocks(page, log, { meteoCommune = true } = {}) {
       const info = { genere: '2026-11-03T06:00:00.000Z', compteurs: { rnn: 1, autres_forets_publiques: 1 } };
       return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(info) });
     }
-    return route.fulfill({ status: 200, contentType: 'application/x-protobuf', headers: CORS, body: zonesTile() });
+    if (path.endsWith('/zones.pmtiles')) return fulfillRange(route, zonesArchive);
+    return route.fulfill({ status: 404, headers: CORS, body: '' });
   });
   // Serveur de mesure (adresse fictive définie au build des tests) : on garde les envois.
   await page.route('https://mesures.test/**', (route) => {
@@ -294,17 +363,18 @@ export async function installMocks(page, log, { meteoCommune = true } = {}) {
     log.mesures.push({ method: request.method(), path: new URL(request.url()).pathname, body: request.postData() ?? '' });
     return route.fulfill({ status: 204, headers: CORS, body: '' });
   });
+  const late = meteoCommune === 'ancienne' ? 6 : meteoCommune === 'provisoire' ? 1 : 0;
   await page.route('https://aligotaure.github.io/foret-explorer/data/meteo/**', (route) => {
     const path = new URL(route.request().url()).pathname;
     log.meteoCommune.push(path);
     if (!meteoCommune) return route.fulfill({ status: 404, headers: CORS, body: '' });
     if (path.endsWith('/index.json')) {
-      const index = meteoIndex(meteoCommune === 'ancienne' ? 6 : 0);
+      const index = meteoIndex(late);
       return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(index) });
     }
     const block = path.match(/\/b\/(-?\d+_-?\d+)\.json$/);
     if (!block) return route.fulfill({ status: 404, headers: CORS, body: '' });
-    return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(meteoBlock(block[1])) });
+    return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(meteoBlock(block[1], late)) });
   });
   await page.route('https://api.open-meteo.com/**', (route) => {
     const url = new URL(route.request().url());
@@ -312,8 +382,10 @@ export async function installMocks(page, log, { meteoCommune = true } = {}) {
     return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(openMeteo(url)) });
   });
   await page.route('https://aligotaure.github.io/foret-explorer/data/geologie/**', (route) => {
-    log.geologie.push(new URL(route.request().url()).pathname);
-    return route.fulfill({ status: 200, contentType: 'application/x-protobuf', headers: CORS, body: geologyTile() });
+    const path = new URL(route.request().url()).pathname;
+    log.geologie.push(path);
+    if (path.endsWith('/geologie.pmtiles')) return fulfillRange(route, geologyArchive);
+    return route.fulfill({ status: 404, headers: CORS, body: '' });
   });
   await page.route('https://data.geopf.fr/**', (route) => {
     const url = new URL(route.request().url());

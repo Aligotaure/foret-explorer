@@ -2,6 +2,7 @@ import type { FilterSpecification, LayerSpecification, Map as MapLibreMap, Style
 import {
   ATTRIBUTION,
   BDFORET,
+  archiveTiles,
   GEOLOGY,
   GEOLOGY_TILES_BASE,
   GLYPHS_URL,
@@ -142,7 +143,7 @@ export function buildStyle(state: AppState): StyleSpecification {
       },
       [SOURCES.geologie]: {
         type: 'vector',
-        tiles: [`${GEOLOGY_TILES_BASE}{z}/{x}/{y}.pbf`],
+        tiles: [archiveTiles(`${GEOLOGY_TILES_BASE}${GEOLOGY.archive}`)],
         minzoom: GEOLOGY.minZoom,
         maxzoom: GEOLOGY.maxZoom,
         bounds: GEOLOGY.bounds,
@@ -156,7 +157,7 @@ export function buildStyle(state: AppState): StyleSpecification {
       [SOURCES.meteoFine]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
       [SOURCES.zones]: {
         type: 'vector',
-        tiles: [`${ZONES_BASE}{z}/{x}/{y}.pbf`],
+        tiles: [archiveTiles(`${ZONES_BASE}${ZONES.archive}`)],
         minzoom: ZONES.minZoom,
         maxzoom: ZONES.maxZoom,
         bounds: ZONES.bounds,

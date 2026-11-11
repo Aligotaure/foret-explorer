@@ -1120,6 +1120,14 @@ li.is-off .swatch {
   fill: #9ecae1;
 }
 
+/* Jour estimé d'après la prévision, en attendant la mise à jour : barre plus pâle, en pointillés. */
+.rain-chart__bar--estimated {
+  fill-opacity: 0.45;
+  stroke: #9ecae1;
+  stroke-width: 0.8;
+  stroke-dasharray: 2 1.5;
+}
+
 .rain-chart__unknown {
   stroke: var(--muted);
   stroke-width: 1.5;

@@ -26,12 +26,14 @@ import {
   METEO_FORMAT,
   STEP_LAT,
   STEP_LON,
+  SUB_COUNT,
   addDays,
   blockOf,
   cellAt,
   cellBox,
   cellId,
   parisDate,
+  subIndexAt,
   type BlockFile,
   type CellRef,
   type MeteoIndexFile,
@@ -47,6 +49,16 @@ export interface DailySeries {
   tmin: (number | null)[];
   /** Altitude à laquelle les températures sont données (m). */
   elevation: number;
+  /**
+   * Fichiers communs seulement : altitude (m) de chacun des carrés de 4,5 km de la case, dans l'ordre
+   * de `subBox` (null : carré sans terre française).
+   */
+  subAltitudes?: readonly (number | null)[];
+  /**
+   * Fichiers communs seulement : dernier jour définitif. Un jour plus récent est une estimation
+   * (relevé pris en cours de journée, complété par la prévision), remplacée à la mise à jour suivante.
+   */
+  finalUntil?: string;
 }
 
 export interface RainEvent {
@@ -64,6 +76,8 @@ export interface PastDay {
   rain: number | null;
   tmin: number | null;
   tmax: number | null;
+  /** Valeurs provisoires (prévision au moment du relevé), en attendant la mise à jour du jour. */
+  estimated: boolean;
 }
 
 export interface WeatherSummary {
@@ -72,6 +86,8 @@ export interface WeatherSummary {
   days: PastDay[];
   /** Dernier jour connu (null : aucun). */
   lastDate: string | null;
+  /** Le dernier jour connu est une estimation (voir `PastDay.estimated`). */
+  estimated: boolean;
   rain30: number;
   /** Pluie des 20 derniers jours : c'est elle qui mesure l'humidité du sol dans l'indice. */
   rain20: number;
@@ -112,6 +128,7 @@ export function summarize(series: DailySeries, today = todayKey()): WeatherSumma
       rain: i === undefined ? null : (series.rain[i] ?? null),
       tmin: i === undefined ? null : (series.tmin[i] ?? null),
       tmax: i === undefined ? null : (series.tmax[i] ?? null),
+      estimated: i !== undefined && series.finalUntil !== undefined && date > series.finalUntil,
     });
   }
   const rains = days.map((d) => d.rain ?? 0);
@@ -148,6 +165,7 @@ export function summarize(series: DailySeries, today = todayKey()): WeatherSumma
     elevation: series.elevation,
     days,
     lastDate: known[known.length - 1]?.date ?? null,
+    estimated: known[known.length - 1]?.estimated ?? false,
     rain30: rainOf(days),
     rain20: rainOf(last(20)),
     rain7: rainOf(last(7)),
@@ -165,6 +183,33 @@ export function atAltitude(series: DailySeries, z: number | null): DailySeries {
   const shift = -LAPSE_RATE * (z - series.elevation);
   const move = (t: number | null): number | null => (t === null ? null : Math.round((t + shift) * 10) / 10);
   return { ...series, tmax: series.tmax.map(move), tmin: series.tmin.map(move), elevation: z };
+}
+
+/**
+ * Même résumé, températures ramenées à l'altitude `z` : le décalage est le même chaque jour, donc
+ * inutile de tout recalculer (la grille le fait pour les 16 carrés de chaque case).
+ */
+export function summaryAtAltitude(w: WeatherSummary, z: number | null): WeatherSummary {
+  if (z === null || !Number.isFinite(w.elevation) || z === w.elevation) return w;
+  const shift = -LAPSE_RATE * (z - w.elevation);
+  const move = (t: number | null): number | null => (t === null ? null : round1(t + shift));
+  const tmin5 = move(w.tmin5);
+  return {
+    ...w,
+    elevation: z,
+    days: w.days.map((d) => ({ ...d, tmin: move(d.tmin), tmax: move(d.tmax) })),
+    tmean7: move(w.tmean7),
+    tmin5,
+    frost: tmin5 !== null && tmin5 <= FROST_C,
+  };
+}
+
+/** Altitude médiane des carrés de 4,5 km d'une case (null : inconnue). */
+export function medianAltitude(series: DailySeries): number | null {
+  const zs = (series.subAltitudes ?? []).filter((z): z is number => z !== null).sort((a, b) => a - b);
+  if (!zs.length) return null;
+  const mid = zs.length >> 1;
+  return zs.length % 2 ? (zs[mid] ?? null) : Math.round(((zs[mid - 1] ?? 0) + (zs[mid] ?? 0)) / 2);
 }
 
 // ── Fichiers météo communs ────────────────────────────────────────────────────
@@ -230,6 +275,8 @@ function parseBlock(file: BlockFile): Map<string, DailySeries> {
       tmax: c.x.filter((_, k) => keep[k]),
       tmin: c.n.filter((_, k) => keep[k]),
       elevation: typeof c.z === 'number' ? c.z : 0,
+      ...(Array.isArray(c.a) && c.a.length === SUB_COUNT ? { subAltitudes: c.a.map((z) => (typeof z === 'number' ? z : null)) } : {}),
+      ...(typeof c.f === 'string' ? { finalUntil: c.f } : {}),
     });
   }
   return out;
@@ -436,7 +483,8 @@ export async function weatherAt(lat: number, lon: number, altitude: number | nul
   const cell = cellAt(lat, lon);
   const shared = await sharedSeries([cell]);
   const s = shared?.series.get(cellId(cell.i, cell.j));
-  if (s && shared) return { series: atAltitude(s, altitude), shared: true, updated: shared.updated };
+  // Altitude IGN indisponible : celle du carré de 4,5 km qui contient le point.
+  if (s && shared) return { series: atAltitude(s, altitude ?? s.subAltitudes?.[subIndexAt(lat, lon)] ?? null), shared: true, updated: shared.updated };
   const [direct] = await fetchDaily(
     [{ lat: round2(lat), lon: round2(lon), ...(altitude !== null ? { elevation: altitude } : {}) }],
     signal,
