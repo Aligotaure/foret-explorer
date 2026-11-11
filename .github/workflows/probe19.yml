@@ -1,0 +1,52 @@
+# Sonde temporaire n°19 : le site en ligne dans un vrai navigateur (captures et rapport dans verif/live/).
+name: Sonde n°19
+
+on:
+  push:
+    branches: [data-probe-2]
+    paths: [.github/workflows/probe19.yml, probe19/**]
+
+permissions:
+  contents: write
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Navigateur
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund > /dev/null
+          npx playwright install --with-deps chromium > /dev/null
+      - name: Données en ligne
+        run: |
+          mkdir -p verif/live
+          {
+            S=https://aligotaure.github.io/foret-explorer
+            for f in data/meteo/index.json data/geologie/info.json data/zones/info.json; do
+              echo "== $f : $(curl -sS -m 30 -o /tmp/f -w '%{http_code} %{size_download} octets' "$S/$f")"
+              head -c 700 /tmp/f | tr -d '\n'; echo
+            done
+            echo "== un bloc météo (Annecy)"
+            curl -sS -m 30 "$S/data/meteo/b/35_3.json" | jq -c '{dates: (.dates | length), premier: .dates[0], dernier: .dates[-1], cases: (.cells | length), exemple: (.cells | to_entries[0] | {id: .key, z: .value.z, c: .value.c, f: .value.f, m: .value.m, a: .value.a, pluie: .value.p[-4:]})}'
+            # Archives de tuiles : en-têtes, puis un morceau au début et un autre vers la fin.
+            for a in "data/geologie/geologie.pmtiles 140000000" "data/zones/zones.pmtiles 20000000"; do
+              set -- $a
+              echo "== $1"
+              curl -sS -m 60 -I "$S/$1" | tr -d '\r' | grep -i -E "^HTTP|^content-length|^accept-ranges|^etag|^content-type|^cache-control|^x-cache|^age|^access-control" | tr '\n' ';'; echo
+              curl -sS -m 60 -o /tmp/h -r 0-126 -w 'début : HTTP %{http_code}, %{size_download} octets en %{time_total} s ; ' "$S/$1"; head -c 7 /tmp/h; echo
+              curl -sS -m 120 -o /tmp/t -r "$2-$(( $2 + 99999 ))" -w "morceau à $2 : HTTP %{http_code}, %{size_download} octets en %{time_total} s\n" "$S/$1"
+              curl -sS -m 120 -o /tmp/t -r "$2-$(( $2 + 99999 ))" -w "le même, une seconde fois : HTTP %{http_code}, %{size_download} octets en %{time_total} s\n" "$S/$1"
+              echo "ancienne tuile séparée : $(curl -sS -m 30 -o /dev/null -w '%{http_code}' "$S/$(dirname "$1")/10/529/364.pbf")"
+            done
+          } | tee verif/live/donnees.txt
+      - name: Visite du site en ligne
+        run: node probe19/live.mjs
+      - name: Publier
+        if: always()
+        run: bash probe17/publier.sh live
