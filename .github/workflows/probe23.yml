@@ -1,0 +1,24 @@
+# Sonde temporaire n°23 : réponses de l'IGN pour des tuiles BD Forêt hors de France.
+name: Sonde n°23
+
+on:
+  push:
+    branches: [data-probe-2]
+    paths: [.github/workflows/probe23.yml, probe23/**]
+
+permissions:
+  contents: write
+
+jobs:
+  tuiles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Tuiles hors de France
+        run: |
+          mkdir -p verif
+          python3 probe23/tuiles.py | tee verif/tuiles23.txt
+      - name: Publier
+        if: always()
+        run: bash probe17/publier.sh tuiles23
