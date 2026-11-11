@@ -1,0 +1,42 @@
+# Sonde temporaire n°22 : dépendance `pmtiles` (fichier de verrouillage, déclarations de types).
+name: Sonde n°22
+
+on:
+  push:
+    branches: [data-probe-2]
+    paths: [.github/workflows/probe22.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Ajouter pmtiles
+        run: |
+          mkdir -p verif/npm
+          npm install pmtiles@^4 --ignore-scripts --no-audit --no-fund 2>&1 | tail -3
+          cp package.json package-lock.json verif/npm/
+          echo '=== DIFF'
+          git diff -- package.json package-lock.json
+          echo '=== FIN DIFF'
+          {
+            echo '--- types (dist/esm/index.d.ts)'
+            cat node_modules/pmtiles/dist/esm/index.d.ts
+            ls -la node_modules/pmtiles/dist/esm node_modules/pmtiles/dist/cjs
+            echo '--- taille'
+            wc -c node_modules/pmtiles/dist/esm/*.js node_modules/fflate/esm/browser.js 2>/dev/null
+            gzip -c node_modules/pmtiles/dist/esm/index.js | wc -c
+          } > verif/npm/pmtiles.txt 2>&1
+          sed -n '1,400p' verif/npm/pmtiles.txt
+          git checkout -- package.json package-lock.json
+      - name: Publier
+        if: always()
+        run: bash probe17/publier.sh npm22
