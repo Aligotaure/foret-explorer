@@ -1,26 +1,26 @@
 avertissement : texte national ; Lyon cité : false ; version du 10 novembre 2026
-première vue : carte=5.41/46.475/2.2 après 15625 ms
-indice cèpes, France : 1972 cases de 18 km · indice cèpes, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour des carrés de 500 m.
-fichiers météo lus : 46 (index.json, b/32_4.json?v=2026-11-11T23%3A12%3A00.887Z, b/32_5.json?v=2026-11-11T23%3A12%3A00.887Z…) ; appels directs à Open-Meteo : 0
-indice Girolles : 1972 cases de 18 km · indice girolles, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour de
-indice Trompettes : 1972 cases de 18 km · indice trompettes, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour 
-indice Chanterelles en tube : 1972 cases de 18 km · indice chanterelles en tube, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau
-indice Morilles : 1972 cases de 18 km · indice morilles, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour de
-carrés de 4,5 km (Savoie, zoom 9) : 48 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour des carrés de 500 m.
-carrés de 4,5 km (Cévennes, zoom 10,5) : 12 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour des carrés de 500 m.
-archives après ces vues : zones.pmtiles : 14 requêtes partielles, 408 Ko, médiane 22 ms, la plus lente 1228 ms ; geologie.pmtiles : 7 requêtes partielles, 551 Ko, médiane 27 ms, la plus lente 44 ms
-pluie, France : 1970 cases de 18 km · pluie cumulée, pluie connue jusqu’au 10 novembre.
+première vue : carte=5.41/46.475/2.2 après 12955 ms
+indice cèpes, France : 1972 cases de 18 km · indice cèpes, pluie connue jusqu’au 11 novembre. Meilleure chance dans la vue : 80 %. Zoomez davantage (niveau 12) pour des carrés de 500 m.
+fichiers météo lus : 46 (index.json, b/32_4.json?v=2026-11-12T17%3A00%3A37.904Z, b/32_5.json?v=2026-11-12T17%3A00%3A37.904Z…) ; appels directs à Open-Meteo : 0
+indice Girolles : 1972 cases de 18 km · indice girolles, pluie connue jusqu’au 11 novembre. Meilleure chance dans la vue : 62 %.
+indice Trompettes : 1972 cases de 18 km · indice trompettes, pluie connue jusqu’au 11 novembre. Meilleure chance dans la vue : 90 
+indice Chanterelles en tube : 1972 cases de 18 km · indice chanterelles en tube, pluie connue jusqu’au 11 novembre. Meilleure chance dans la
+indice Morilles : 1972 cases de 18 km · indice morilles, pluie connue jusqu’au 11 novembre. Aucun secteur à 50 % ou plus dans la
+carrés de 4,5 km (Savoie, zoom 9) : 48 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 11 novembre. Meilleure chance dans la vue : 63 %. Zoomez davantage (niveau 12) pour des carrés de 500 m.
+carrés de 4,5 km (Cévennes, zoom 10,5) : 12 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 11 novembre. Meilleure chance dans la vue : 80 %. Zoomez davantage (niveau 12) pour des carrés de 500 m.
+archives après ces vues : zones.pmtiles : 14 requêtes partielles, 408 Ko, médiane 50 ms, la plus lente 855 ms ; geologie.pmtiles : 7 requêtes partielles, 551 Ko, médiane 55 ms, la plus lente 86 ms
+pluie, France : 1970 cases de 18 km · pluie cumulée, pluie connue jusqu’au 11 novembre.
 
 Annecy, Semnoz (Préalpes calcaires)
   ForêtForêt fermée de sapin ou épicéa
   SolCalcaires et dolomiesFacies Urgonien: grès et conglomérat (assise détritique terminale), calcaires massifs clairs, calcaires - schistes noirs (couc
-  Altitude…
+  Altitude1135 m
   droit : Forêt sans doute privée : elle ne figure pas parmi les forêts publiques de l’IGN. Il faut l’accord du propriétaire pour cueillir.Sans
-  météo : 
-  verdicts : 
-  Lecture de la météo des derniers jours…r. Météo : Open-Meteo, case de 18 km qui contient ce point, mise à jour une fois par jour.
-  grille : 6 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour des carrés de 500 m.
-  archives : geologie.pmtiles : 6 requêtes partielles, 182 Ko, médiane 20 ms, la plus lente 34 ms ; zones.pmtiles : 6 requêtes partielles, 65 Ko, médiane 29 ms, la plus lente 38 ms
+  météo : 101 mm de pluie · dernière grosse pluie : 17 mm il y a 1 jours | 5 °C en moyenne sur 7 jours · minimum -3 °C sur 5 jours · gel
+  verdicts : Cèpes : ≈ 0 % · défavorable ; Chanterelles en tube : ≈ 55 % · possible ; Trompettes : ≈ 21 % · défavorable ; Girolles : ≈ 0 % · défavorable ; Morilles : ≈ 0 % · défavorable
+  r. Météo : Open-Meteo, case de 18 km qui contient ce point, mise à jour une fois par jour.
+  grille : 6 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 11 novembre. Aucun secteur à 50 % ou plus dans la vue. Zoomez davantage (niveau 12) pour des 
+  archives : geologie.pmtiles : 6 requêtes partielles, 182 Ko, médiane 1071 ms, la plus lente 1073 ms ; zones.pmtiles : 6 requêtes partielles, 65 Ko, médiane 1072 ms, la plus lente 1076 ms
   Open-Meteo direct : 0
 
 Fontainebleau (sables, Île-de-France)
@@ -28,11 +28,11 @@ Fontainebleau (sables, Île-de-France)
   SolCalcaires et dolomiesCalcaire d'Etampes (Essonne), meulières, marnes, Calcaires du Gâtinais
   Altitude132 m
   droit : Forêt domaniale de Fontainebleau : forêt publique (domaniale), gérée par l’ONF. Une cueillette familiale y est en général tolérée, sa
-  météo : 44 mm de pluie · dernière grosse pluie : 17 mm il y a 2 jours · connue jusqu’au 10 novembre | 7 °C en moyenne sur 7 jours · minimum 1 °C sur 5 jours
-  verdicts : Cèpes : Défavorable ; Trompettes : Possible ; Chanterelles en tube : Peu probable ; Girolles : Défavorable ; Morilles : Défavorable
+  météo : 44 mm de pluie · dernière grosse pluie : 17 mm il y a 2 jours | 8 °C en moyenne sur 7 jours · minimum 1 °C sur 5 jours
+  verdicts : Cèpes : ≈ 21 % · défavorable ; Trompettes : ≈ 66 % · possible ; Chanterelles en tube : ≈ 39 % · peu probable ; Girolles : ≈ 15 % · défavorable ; Morilles : ≈ 0 % · défavorable
   r. Météo : Open-Meteo, case de 18 km qui contient ce point, mise à jour une fois par jour.
-  grille : 4 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour des carrés de 500 m.
-  archives : geologie.pmtiles : 6 requêtes partielles, 140 Ko, médiane 27 ms, la plus lente 36 ms ; zones.pmtiles : 6 requêtes partielles, 27 Ko, médiane 32 ms, la plus lente 254 ms
+  grille : 4 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 11 novembre. Aucun secteur à 50 % ou plus dans la vue. Zoomez davantage (niveau 12) pour des 
+  archives : geologie.pmtiles : 6 requêtes partielles, 140 Ko, médiane 2783 ms, la plus lente 2783 ms ; zones.pmtiles : 6 requêtes partielles, 27 Ko, médiane 2778 ms, la plus lente 2778 ms
   Open-Meteo direct : 0
 
 Landes de Gascogne (sables)
@@ -40,11 +40,11 @@ Landes de Gascogne (sables)
   SolGrès, molasses et sablesSables éoliens des Landes : sables éoliens ferrugineux, jaunâtres (Tardiglaciaires)
   Altitude78 m
   droit : Forêt sans doute privée : elle ne figure pas parmi les forêts publiques de l’IGN. Il faut l’accord du propriétaire pour cueillir.Sans
-  météo : 19 mm de pluie · dernière grosse pluie : 15 mm il y a 20 jours · connue jusqu’au 10 novembre | 11 °C en moyenne sur 7 jours · minimum 1 °C sur 5 jours
-  verdicts : Cèpes : Défavorable ; Girolles : Défavorable ; Trompettes : Défavorable ; Chanterelles en tube : Défavorable ; Morilles : Défavorable
+  météo : 19 mm de pluie · dernière grosse pluie : 15 mm il y a 20 jours | 12 °C en moyenne sur 7 jours · minimum 1 °C sur 5 jours
+  verdicts : Cèpes : ≈ 3 % · défavorable ; Girolles : ≈ 0 % · défavorable ; Trompettes : ≈ 0 % · défavorable ; Chanterelles en tube : ≈ 0 % · défavorable ; Morilles : ≈ 0 % · défavorable
   r. Météo : Open-Meteo, case de 18 km qui contient ce point, mise à jour une fois par jour.
-  grille : 6 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour des carrés de 500 m.
-  archives : geologie.pmtiles : 6 requêtes partielles, 66 Ko, médiane 19 ms, la plus lente 31 ms ; zones.pmtiles : 6 requêtes partielles, 8 Ko, médiane 39 ms, la plus lente 51 ms
+  grille : 6 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 11 novembre. Aucun secteur à 50 % ou plus dans la vue. Zoomez davantage (niveau 12) pour des 
+  archives : geologie.pmtiles : 6 requêtes partielles, 66 Ko, médiane 30 ms, la plus lente 58 ms ; zones.pmtiles : 6 requêtes partielles, 8 Ko, médiane 55 ms, la plus lente 69 ms
   Open-Meteo direct : 0
 
 Chaîne des Puys (roches volcaniques)
@@ -52,11 +52,11 @@ Chaîne des Puys (roches volcaniques)
   SolÉboulis et colluvionsColluvions alimentées par des roches volcaniques diverses (pyroclastites, scories basaltiques, basaltes, rhyolites, picrites, 
   Altitude936 m
   droit : Hors forêt cartographiée : la cueillette demande l’accord du propriétaire du terrain.Sans autorisation, cueillir est une contraventio
-  météo : 53 mm de pluie · dernière grosse pluie : 26 mm il y a 24 jours · connue jusqu’au 10 novembre | 8 °C en moyenne sur 7 jours · minimum 1 °C sur 5 jours
-  verdicts : Cèpes : Défavorable ; Girolles : Défavorable ; Trompettes : Défavorable ; Chanterelles en tube : Défavorable ; Morilles : Défavorable
+  météo : 55 mm de pluie · dernière grosse pluie : 26 mm il y a 24 jours | 8 °C en moyenne sur 7 jours · minimum 1 °C sur 5 jours
+  verdicts : Cèpes : ≈ 0 % · défavorable ; Girolles : ≈ 0 % · défavorable ; Trompettes : ≈ 0 % · défavorable ; Chanterelles en tube : ≈ 0 % · défavorable ; Morilles : ≈ 0 % · défavorable
   r. Météo : Open-Meteo, case de 18 km qui contient ce point, mise à jour une fois par jour.
-  grille : 4 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour des carrés de 500 m.
-  archives : geologie.pmtiles : 6 requêtes partielles, 243 Ko, médiane 25 ms, la plus lente 3149 ms ; zones.pmtiles : 6 requêtes partielles, 41 Ko, médiane 27 ms, la plus lente 3148 ms
+  grille : 4 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 11 novembre. Aucun secteur à 50 % ou plus dans la vue. Zoomez davantage (niveau 12) pour des 
+  archives : geologie.pmtiles : 6 requêtes partielles, 243 Ko, médiane 2667 ms, la plus lente 2669 ms ; zones.pmtiles : 6 requêtes partielles, 41 Ko, médiane 2664 ms, la plus lente 2667 ms
   Open-Meteo direct : 0
 
 Huelgoat (granites, Bretagne)
@@ -64,11 +64,11 @@ Huelgoat (granites, Bretagne)
   SolRoches cristallines et schistesGranite du Huelgoat s.s.: Monzogranite porphyroïde à biotite et cordiérite (massif granitique du Huelgoat) - 336 +/-
   Altitude177 m
   droit : Forêt domaniale de Huelgoat : forêt publique (domaniale), gérée par l’ONF. Une cueillette familiale y est en général tolérée, sauf in
-  météo : 76 mm de pluie · dernière grosse pluie : 44 mm il y a 20 jours · connue jusqu’au 10 novembre | 9 °C en moyenne sur 7 jours · minimum 2 °C sur 5 jours
-  verdicts : Cèpes : Peu probable ; Trompettes : Possible ; Girolles : Peu probable ; Chanterelles en tube : Défavorable ; Morilles : Défavorable
+  météo : 81 mm de pluie · dernière grosse pluie : 44 mm il y a 20 jours | 9 °C en moyenne sur 7 jours · minimum 2 °C sur 5 jours
+  verdicts : Cèpes : ≈ 39 % · peu probable ; Trompettes : ≈ 69 % · possible ; Girolles : ≈ 42 % · peu probable ; Chanterelles en tube : ≈ 0 % · défavorable ; Morilles : ≈ 0 % · défavorable
   r. Météo : Open-Meteo, case de 18 km qui contient ce point, mise à jour une fois par jour.
-  grille : 6 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour des carrés de 500 m.
-  archives : geologie.pmtiles : 6 requêtes partielles, 147 Ko, médiane 35 ms, la plus lente 42 ms ; zones.pmtiles : 5 requêtes partielles, 14 Ko, médiane 30 ms, la plus lente 40 ms
+  grille : 6 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 11 novembre. Aucun secteur à 50 % ou plus dans la vue. Zoomez davantage (niveau 12) pour des 
+  archives : geologie.pmtiles : 6 requêtes partielles, 147 Ko, médiane 52 ms, la plus lente 79 ms ; zones.pmtiles : 5 requêtes partielles, 14 Ko, médiane 36 ms, la plus lente 70 ms
   Open-Meteo direct : 0
 
 Gérardmer (Vosges)
@@ -76,11 +76,11 @@ Gérardmer (Vosges)
   SolRoches cristallines et schistesGranite porphyroïde calco-alcalin Mg-K, à biotite et amphibole, des Crêtes (Namurien)
   Altitude1059 m
   droit : Forêt domaniale de Gérardmer : forêt publique (domaniale), gérée par l’ONF. Une cueillette familiale y est en général tolérée, sauf i
-  météo : 99 mm de pluie · dernière grosse pluie : 33 mm il y a 3 jours · connue jusqu’au 10 novembre | 4 °C en moyenne sur 7 jours · minimum -1 °C sur 5 jours · gel
-  verdicts : Cèpes : Défavorable ; Chanterelles en tube : Favorable ; Trompettes : Défavorable ; Girolles : Défavorable ; Morilles : Défavorable
+  météo : 117 mm de pluie · dernière grosse pluie : 50 mm il y a 3 jours | 5 °C en moyenne sur 7 jours · minimum -1 °C sur 5 jours · gel
+  verdicts : Cèpes : ≈ 0 % · défavorable ; Chanterelles en tube : ≈ 90 % · favorable ; Trompettes : ≈ 17 % · défavorable ; Girolles : ≈ 0 % · défavorable ; Morilles : ≈ 0 % · défavorable
   r. Météo : Open-Meteo, case de 18 km qui contient ce point, mise à jour une fois par jour.
-  grille : 4 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour des carrés de 500 m.
-  archives : zones.pmtiles : 9 requêtes partielles, 123 Ko, médiane 316 ms, la plus lente 340 ms ; geologie.pmtiles : 9 requêtes partielles, 249 Ko, médiane 591 ms, la plus lente 605 ms
+  grille : 4 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 11 novembre. Meilleure chance dans la vue : 59 %. Zoomez davantage (niveau 12) pour des carré
+  archives : geologie.pmtiles : 9 requêtes partielles, 249 Ko, médiane 89 ms, la plus lente 126 ms ; zones.pmtiles : 9 requêtes partielles, 123 Ko, médiane 84 ms, la plus lente 125 ms
   Open-Meteo direct : 0
 
 Forêt de Compiègne (limons, sables)
@@ -88,11 +88,11 @@ Forêt de Compiègne (limons, sables)
   SolGrès, molasses et sablesSables à galets, sables argileux coquilliers ("Sables de Sinceny"), Faluns à cyrènes et à huîtres ("Fausses glaises") (faci
   Altitude72 m
   droit : Forêt domaniale de Compiègne : forêt publique (domaniale), gérée par l’ONF. Une cueillette familiale y est en général tolérée, sauf i
-  météo : 78 mm de pluie · dernière grosse pluie : 51 mm il y a 19 jours · connue jusqu’au 10 novembre | 6 °C en moyenne sur 7 jours · minimum 1 °C sur 5 jours
-  verdicts : Cèpes : Défavorable ; Chanterelles en tube : Favorable ; Girolles : Défavorable ; Trompettes : Défavorable ; Morilles : Défavorable
+  météo : 78 mm de pluie · dernière grosse pluie : 51 mm il y a 19 jours | 7 °C en moyenne sur 7 jours · minimum 1 °C sur 5 jours
+  verdicts : Cèpes : ≈ 29 % · défavorable ; Chanterelles en tube : ≈ 72 % · favorable ; Girolles : ≈ 18 % · défavorable ; Trompettes : ≈ 0 % · défavorable ; Morilles : ≈ 0 % · défavorable
   r. Météo : Open-Meteo, case de 18 km qui contient ce point, mise à jour une fois par jour.
-  grille : 4 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour des carrés de 500 m.
-  archives : geologie.pmtiles : 6 requêtes partielles, 183 Ko, médiane 33 ms, la plus lente 44 ms ; zones.pmtiles : 6 requêtes partielles, 15 Ko, médiane 36 ms, la plus lente 40 ms
+  grille : 4 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 11 novembre. Aucun secteur à 50 % ou plus dans la vue. Zoomez davantage (niveau 12) pour des 
+  archives : zones.pmtiles : 6 requêtes partielles, 15 Ko, médiane 359 ms, la plus lente 390 ms ; geologie.pmtiles : 6 requêtes partielles, 183 Ko, médiane 1330 ms, la plus lente 1350 ms
   Open-Meteo direct : 0
 
 Vizzavona (Corse)
@@ -100,11 +100,11 @@ Vizzavona (Corse)
   SolÉboulis et colluvionsEboulis indifférenciés / Formations quaternaires / Eboulis
   Altitude1531 m
   droit : Forêt régionale de Vizzavona : forêt publique, gérée par l’ONF. Une cueillette familiale y est en général tolérée, sauf interdiction 
-  météo : 62 mm de pluie · dernière grosse pluie : 23 mm il y a 7 jours · connue jusqu’au 10 novembre | 7 °C en moyenne sur 7 jours · minimum 1 °C sur 5 jours
-  verdicts : Cèpes : Défavorable ; Girolles : Défavorable ; Trompettes : Défavorable ; Chanterelles en tube : Défavorable ; Morilles : Défavorable
+  météo : 64 mm de pluie · dernière grosse pluie : 23 mm il y a 7 jours | 7 °C en moyenne sur 7 jours · minimum 1 °C sur 5 jours
+  verdicts : Cèpes : ≈ 0 % · défavorable ; Girolles : ≈ 0 % · défavorable ; Trompettes : ≈ 0 % · défavorable ; Chanterelles en tube : ≈ 0 % · défavorable ; Morilles : ≈ 0 % · défavorable
   r. Météo : Open-Meteo, case de 18 km qui contient ce point, mise à jour une fois par jour.
-  grille : 6 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour des carrés de 500 m.
-  archives : geologie.pmtiles : 6 requêtes partielles, 129 Ko, médiane 35 ms, la plus lente 46 ms ; zones.pmtiles : 6 requêtes partielles, 19 Ko, médiane 28 ms, la plus lente 39 ms
+  grille : 6 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 11 novembre. Meilleure chance dans la vue : 80 %. Zoomez davantage (niveau 12) pour des carré
+  archives : geologie.pmtiles : 6 requêtes partielles, 129 Ko, médiane 56 ms, la plus lente 89 ms ; zones.pmtiles : 6 requêtes partielles, 19 Ko, médiane 62 ms, la plus lente 93 ms
   Open-Meteo direct : 0
 
 Massif des Maures (Var)
@@ -112,11 +112,11 @@ Massif des Maures (Var)
   SolRoches cristallines et schistesGneiss migmatitiques (Gneiss de Bormes)
   Altitude617 m
   droit : Forêt domaniale des Maures : forêt publique (domaniale), gérée par l’ONF. Une cueillette familiale y est en général tolérée, sauf int
-  météo : 244 mm de pluie · dernière grosse pluie : 54 mm il y a 7 jours · connue jusqu’au 10 novembre | 10 °C en moyenne sur 7 jours · minimum 4 °C sur 5 jours
-  verdicts : Cèpes : Favorable ; Chanterelles en tube : Favorable ; Trompettes : Peu probable ; Girolles : Peu probable ; Morilles : Défavorable
+  météo : 245 mm de pluie · dernière grosse pluie : 54 mm il y a 7 jours | 10 °C en moyenne sur 7 jours · minimum 4 °C sur 5 jours
+  verdicts : Cèpes : ≈ 77 % · favorable ; Chanterelles en tube : ≈ 80 % · favorable ; Trompettes : ≈ 48 % · peu probable ; Girolles : ≈ 47 % · peu probable ; Morilles : ≈ 0 % · défavorable
   r. Météo : Open-Meteo, case de 18 km qui contient ce point, mise à jour une fois par jour.
-  grille : 6 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour des carrés de 500 m.
-  archives : geologie.pmtiles : 9 requêtes partielles, 224 Ko, médiane 27 ms, la plus lente 85 ms ; zones.pmtiles : 9 requêtes partielles, 48 Ko, médiane 50 ms, la plus lente 101 ms
+  grille : 6 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 11 novembre. Meilleure chance dans la vue : 80 %. Zoomez davantage (niveau 12) pour des carré
+  archives : geologie.pmtiles : 9 requêtes partielles, 224 Ko, médiane 64 ms, la plus lente 105 ms ; zones.pmtiles : 9 requêtes partielles, 48 Ko, médiane 71 ms, la plus lente 115 ms
   Open-Meteo direct : 0
 
 Forêt de Mormal (Nord)
@@ -124,24 +124,24 @@ Forêt de Mormal (Nord)
   SolLimons, lœss et argiles à silexLoess, pouvant inclure à la base des vestiges tertiaires (sableux ou galets ou Lutétien silicifié) et des RS, Quater
   Altitude160 m
   droit : Forêt domaniale de Mormal : forêt publique (domaniale), gérée par l’ONF. Une cueillette familiale y est en général tolérée, sauf inte
-  météo : 86 mm de pluie · dernière grosse pluie : 63 mm il y a 20 jours · connue jusqu’au 10 novembre | 5 °C en moyenne sur 7 jours · minimum 0 °C sur 5 jours
-  verdicts : Cèpes : Défavorable ; Trompettes : Possible ; Girolles : Défavorable ; Chanterelles en tube : Défavorable ; Morilles : Défavorable
+  météo : 97 mm de pluie · dernière grosse pluie : 17 mm il y a 1 jours | 6 °C en moyenne sur 7 jours · minimum 0 °C sur 5 jours
+  verdicts : Cèpes : ≈ 6 % · défavorable ; Trompettes : ≈ 70 % · possible ; Girolles : ≈ 0 % · défavorable ; Chanterelles en tube : ≈ 0 % · défavorable ; Morilles : ≈ 0 % · défavorable
   r. Météo : Open-Meteo, case de 18 km qui contient ce point, mise à jour une fois par jour.
-  grille : 6 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour des carrés de 500 m.
-  archives : geologie.pmtiles : 6 requêtes partielles, 139 Ko, médiane 31 ms, la plus lente 40 ms ; zones.pmtiles : 6 requêtes partielles, 7 Ko, médiane 29 ms, la plus lente 40 ms
+  grille : 6 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 11 novembre. Aucun secteur à 50 % ou plus dans la vue. Zoomez davantage (niveau 12) pour des 
+  archives : geologie.pmtiles : 6 requêtes partielles, 139 Ko, médiane 52 ms, la plus lente 74 ms ; zones.pmtiles : 6 requêtes partielles, 7 Ko, médiane 57 ms, la plus lente 77 ms
   Open-Meteo direct : 0
 
-carrés de 500 m (Semnoz) : 2 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 10 novembre. 173 carrés de 500 m avec arbres hôtes.
+carrés de 500 m (Semnoz) : 2 cases de 18 km · indice cèpes, par carrés de 4,5 km selon leur altitude, pluie connue jusqu’au 11 novembre. Aucun secteur à 50 % ou plus dans la vue. 173 carrés de 500 m avec arbres hôtes.
 
 À propos : conditions du 10 novembre 2026 ; centres antipoison : Angers 02 41 48 21 21 ; Bordeaux 05 56 96 40 80 ; Lille 0 800 59 59 59 ; Lyon 04 72 11 69 11 ; Marseille 04 91 75 25 25 ; Nancy 03 83 22 50 50 ; Paris 01 40 05 48 48 ; Toulouse 05 61 77 74 47
   gardé dans le navigateur : Altitudes des carrés de 500 m déjà vus · 5,6 Ko | Acceptation de l’avertissement, le 12 novembre 2026 · 128 o | Vos réglages (types de forêt, champignon, fond de carte, couches affichées) · 674 o | Dernière vue de la carte (lieu et zoom) · 88 o
 
-archives sur toute la visite : zones.pmtiles : 83 requêtes partielles, 819 Ko, médiane 29 ms, la plus lente 3148 ms ; geologie.pmtiles : 77 requêtes partielles, 2375 Ko, médiane 27 ms, la plus lente 3149 ms
+archives sur toute la visite : zones.pmtiles : 83 requêtes partielles, 819 Ko, médiane 59 ms, la plus lente 2778 ms ; geologie.pmtiles : 77 requêtes partielles, 2375 Ko, médiane 57 ms, la plus lente 2783 ms
 anciennes tuiles en fichiers séparés demandées : 0
-requêtes en échec : 404 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=LANDCOVER.FORESTINVENTORY.V2&STYLE=normal&TILEMATRIXSET=PM_6_16& ; 404 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=LANDCOVER.FORESTINVENTORY.V2&STYLE=normal&TILEMATRIXSET=PM_6_16& ; 404 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=LANDCOVER.FORESTINVENTORY.V2&STYLE=normal&TILEMATRIXSET=PM_6_16& ; 404 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=LANDCOVER.FORESTINVENTORY.V2&STYLE=normal&TILEMATRIXSET=PM_6_16& ; 404 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=LANDCOVER.FORESTINVENTORY.V2&STYLE=normal&TILEMATRIXSET=PM_6_16& ; 404 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=LANDCOVER.FORESTINVENTORY.V2&STYLE=normal&TILEMATRIXSET=PM_6_16& ; 404 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=LANDCOVER.FORESTINVENTORY.V2&STYLE=normal&TILEMATRIXSET=PM_6_16& ; 404 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=LANDCOVER.FORESTINVENTORY.V2&STYLE=normal&TILEMATRIXSET=PM_6_16&
-erreurs JavaScript : console: Failed to load resource: the server responded with a status of 404 () ; console: Failed to load resource: the server responded with a status of 404 () ; console: Failed to load resource: the server responded with a status of 404 () ; console: Failed to load resource: the server responded with a status of 404 () ; console: Failed to load resource: the server responded with a status of 404 () ; console: Failed to load resource: the server responded with a status of 404 () ; console: Failed to load resource: the server responded with a status of 404 () ; console: Failed to load resource: the server responded with a status of 404 ()
+requêtes en échec : 404 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM& ; 404 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM& ; 404 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM& ; 502 https://data.geopf.fr/tms/1.0.0/LANDCOVER-TMS.FORESTINVENTORY.V2/11/1046/693.pbf ; 502 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM& ; 502 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM& ; 400 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM& ; 400 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM&
+erreurs JavaScript : console: Failed to load resource: the server responded with a status of 404 () ; console: Failed to load resource: the server responded with a status of 404 () ; console: Failed to load resource: the server responded with a status of 404 () ; console: Failed to load resource: the server responded with a status of 502 () ; console: Failed to load resource: the server responded with a status of 502 () ; console: Failed to load resource: the server responded with a status of 400 () ; console: Failed to load resource: the server responded with a status of 400 () ; console: Failed to load resource: the server responded with a status of 400 ()
 appels directs à Open-Meteo sur toute la visite : 0
 
-téléphone, girolles : 1972 cases de 18 km · indice girolles, pluie connue jusqu’au 10 novembre. Zoomez davantage (niveau 12) pour des carrés de 500 m.
-téléphone, archives : geologie.pmtiles : 3 requêtes partielles, 41 Ko, médiane 10 ms, la plus lente 12 ms ; zones.pmtiles : 3 requêtes partielles, 19 Ko, médiane 20 ms, la plus lente 31 ms
-téléphone : appels directs à Open-Meteo 0, erreurs aucune, échecs aucun
+téléphone, girolles : 1972 cases de 18 km · indice girolles, pluie connue jusqu’au 11 novembre. Meilleure chance dans la vue : 62 %. Zoomez davantage (niveau 12) pour des carrés de 500 m.
+téléphone, archives : geologie.pmtiles : 3 requêtes partielles, 41 Ko, médiane 13 ms, la plus lente 21 ms ; zones.pmtiles : 3 requêtes partielles, 19 Ko, médiane 18 ms, la plus lente 22 ms
+téléphone : appels directs à Open-Meteo 0, erreurs console: Failed to load resource: the server responded with a status of 400 (), échecs 400 https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM&
