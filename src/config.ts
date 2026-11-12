@@ -87,6 +87,14 @@ export const WEATHER_MIN_ZOOM = 4;
 export const WEATHER_MAX_CELLS = 4500;
 export const WEATHER_LABEL_MIN_ZOOM = 7.5;
 /**
+ * Bilan d'un coin : si l'altitude exacte (IGN) n'est pas arrivée au bout de SPOT_ALTITUDE_WAIT_MS, la
+ * météo s'affiche déjà, à l'altitude que la grille météo donne au carré de 4,5 km ; la demande
+ * d'altitude est abandonnée au bout de SPOT_ALTITUDE_TIMEOUT_MS.
+ */
+export const SPOT_ALTITUDE_WAIT_MS = 2500;
+export const SPOT_ALTITUDE_TIMEOUT_MS = 12_000;
+
+/**
  * Indice de pousse : à partir de ce zoom, chaque case est détaillée en carrés de 4,5 km (même pluie,
  * températures ramenées à l'altitude de chaque carré) ; leurs étiquettes attendent qu'ils soient
  * assez grands.

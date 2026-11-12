@@ -477,14 +477,22 @@ export interface PointWeather extends SharedStatus {
 
 /**
  * Météo d'un point, températures à l'altitude `altitude` : la case commune qui le contient, sinon
- * (fichiers injoignables, point hors de France) un appel direct à Open-Meteo.
+ * (fichiers injoignables, point hors de France) un appel direct à Open-Meteo, sauf si `sharedOnly`
+ * (on rend alors null : l'appelant attend d'avoir l'altitude exacte pour ne faire qu'un appel).
  */
-export async function weatherAt(lat: number, lon: number, altitude: number | null, signal?: AbortSignal): Promise<PointWeather | null> {
+export async function weatherAt(
+  lat: number,
+  lon: number,
+  altitude: number | null,
+  signal?: AbortSignal,
+  sharedOnly = false,
+): Promise<PointWeather | null> {
   const cell = cellAt(lat, lon);
   const shared = await sharedSeries([cell]);
   const s = shared?.series.get(cellId(cell.i, cell.j));
   // Altitude IGN indisponible : celle du carré de 4,5 km qui contient le point.
   if (s && shared) return { series: atAltitude(s, altitude ?? s.subAltitudes?.[subIndexAt(lat, lon)] ?? null), shared: true, updated: shared.updated };
+  if (sharedOnly) return null;
   const [direct] = await fetchDaily(
     [{ lat: round2(lat), lon: round2(lon), ...(altitude !== null ? { elevation: altitude } : {}) }],
     signal,

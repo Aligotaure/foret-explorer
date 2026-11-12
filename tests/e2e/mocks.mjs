@@ -337,7 +337,7 @@ const COMPLETION = {
  * (dans les deux cas, la carte se rabat sur Open-Meteo) ; `'provisoire'` : le passage du jour n'a
  * pas encore eu lieu, hier n'est connu que par l'estimation de la veille.
  */
-export async function installMocks(page, log, { meteoCommune = true } = {}) {
+export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0 } = {}) {
   log.meteo ??= [];
   log.meteoCommune ??= [];
   log.geologie ??= [];
@@ -404,6 +404,8 @@ export async function installMocks(page, log, { meteoCommune = true } = {}) {
     }
     if (url.pathname.startsWith('/altimetrie/')) {
       log.altitude.push(url.search);
+      // `altitudeLente` : le service d'altitude met ce délai (ms) à répondre.
+      if (altitudeLente) return new Promise((r) => setTimeout(r, altitudeLente)).then(() => route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(altitudes(url)) }));
       return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(altitudes(url)) });
     }
     if (url.pathname.startsWith('/annexes/ressources/vectorTiles/fonts/')) {

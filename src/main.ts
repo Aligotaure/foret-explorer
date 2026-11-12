@@ -176,6 +176,9 @@ map.on('error', (event) => {
   const sourceId = (event as { sourceId?: string }).sourceId;
   // (Une tuile absente d'une archive du site, en mer ou à l'étranger, n'est pas une erreur : le
   // protocole rend alors une tuile vide.)
+  // BD Forêt : l'IGN répond 404 pour une tuile sans forêt (ville, mer, étranger) : pas une panne.
+  const status = (event.error as { status?: number } | undefined)?.status;
+  if (status === 404 && (sourceId === SOURCES.bdForet || sourceId === SOURCES.bdForetRaster)) return;
   console.warn('[carte]', sourceId ?? '', event.error?.message ?? event.error);
   if (sourceId === SOURCES.geologie) track('pages.geology.errors');
   else if (sourceId === SOURCES.zones) {

@@ -74,7 +74,7 @@ jobs:
       - name: Installer GDAL
         if: steps.geologie.outputs.cache-hit != 'true' || steps.zones.outputs.cache-hit != 'true'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
-      - name: Construire les tuiles « nature du sol » (France entière, un quart d'heure)
+      - name: Construire les tuiles « nature du sol » (France entière, une dizaine de minutes)
         id: geologie-construire
         if: steps.geologie.outputs.cache-hit != 'true'
         continue-on-error: true

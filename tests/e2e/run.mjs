@@ -694,6 +694,17 @@ async function fallbackTests(browser, base) {
     provisional.bars.length === 1 && /\(estimation\)$/.test(provisional.bars[0] ?? '') && /dernier jour estimé/.test(provisional.summary) && provisional.unknown === 0 && log3.meteo.length === 0,
     JSON.stringify(provisional).slice(0, 200),
   );
+
+  // Altitude IGN lente : la météo s'affiche sans l'attendre, puis le bilan est refait.
+  const page4 = await context.newPage();
+  await installMocks(page4, { tms: [], wmts: [], geocode: [], other: [] }, { altitudeLente: 7000 });
+  await page4.goto(`${base}#carte=10.5/45.92/6.19`);
+  await waitForMap(page4);
+  await page4.mouse.click(640, 400);
+  await page4.waitForSelector('#spot .rain-chart', { timeout: 6000 });
+  const early = await page4.evaluate(() => document.querySelector('#spot .spot__facts')?.textContent ?? '');
+  await page4.waitForFunction(() => /930 m/.test(document.querySelector('#spot .spot__facts')?.textContent ?? ''), null, { timeout: 12000 });
+  check('altitude lente : météo affichée sans attendre, puis altitude exacte', /≈ \d+ m \(d’après la grille météo\) · altitude exacte en cours/.test(early), early.slice(-80));
   await context.close();
 }
 

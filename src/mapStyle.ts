@@ -2,6 +2,7 @@ import type { FilterSpecification, LayerSpecification, Map as MapLibreMap, Style
 import {
   ATTRIBUTION,
   BDFORET,
+  FRANCE_BOUNDS,
   archiveTiles,
   GEOLOGY,
   GEOLOGY_TILES_BASE,
@@ -132,6 +133,7 @@ export function buildStyle(state: AppState): StyleSpecification {
         tileSize: 256,
         minzoom: BDFORET.rasterMinZoom,
         maxzoom: BDFORET.maxZoom,
+        bounds: FRANCE_BOUNDS, // rien hors de France métropolitaine (l'IGN y répond 404)
         attribution: ATTRIBUTION.bdForet,
       },
       [SOURCES.bdForet]: {
@@ -139,6 +141,7 @@ export function buildStyle(state: AppState): StyleSpecification {
         tiles: [TILES.bdForetVector],
         minzoom: BDFORET.minZoom,
         maxzoom: BDFORET.maxZoom,
+        bounds: FRANCE_BOUNDS,
         attribution: ATTRIBUTION.bdForet,
       },
       [SOURCES.geologie]: {

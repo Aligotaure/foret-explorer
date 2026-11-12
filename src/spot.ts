@@ -1,5 +1,5 @@
 import maplibregl, { type LngLat, type Map as MapLibreMap, type PointLike } from 'maplibre-gl';
-import { DIRECT_PAST_DAYS, GEOLOGY } from './config';
+import { DIRECT_PAST_DAYS, GEOLOGY, SPOT_ALTITUDE_TIMEOUT_MS, SPOT_ALTITUDE_WAIT_MS } from './config';
 import { h, toast } from './dom';
 import { forestAt, soilAt, type ForestAtPoint, type SoilAtPoint } from './geology';
 import { icon } from './icons';
@@ -211,9 +211,27 @@ export class SpotPanel {
     this.render(forest, soil, zones, null, null, 'loading');
 
     try {
-      const altitude = await fetchAltitude(lngLat.lng, lngLat.lat, controller.signal).catch(() => null);
-      // Case météo commune qui contient le point (températures ramenées à son altitude) ; Open-Meteo
-      // n'est appelé que hors de France ou si les fichiers communs sont injoignables.
+      // Altitude exacte (IGN) : la demande s'arrête d'elle-même si le service ne répond pas.
+      const asking = new AbortController();
+      controller.signal.addEventListener('abort', () => asking.abort());
+      const giveUp = window.setTimeout(() => asking.abort(), SPOT_ALTITUDE_TIMEOUT_MS);
+      const exact = fetchAltitude(lngLat.lng, lngLat.lat, asking.signal)
+        .catch(() => null)
+        .finally(() => window.clearTimeout(giveUp));
+      // Si elle tarde, la météo s'affiche déjà : la case commune qui contient le point, températures
+      // à l'altitude de son carré de 4,5 km. Le bilan est refait quand l'altitude exacte arrive.
+      const late = Symbol('late');
+      const first = await Promise.race([exact, new Promise<typeof late>((resolve) => window.setTimeout(() => resolve(late), SPOT_ALTITUDE_WAIT_MS))]);
+      if (controller.signal.aborted) return;
+      if (first === late) {
+        const early = await weatherAt(lngLat.lat, lngLat.lng, null, controller.signal, true);
+        if (controller.signal.aborted) return;
+        if (early) this.render(forest, soil, zones, null, summarize(early.series), 'ok', true, true);
+      }
+      const altitude = await exact;
+      if (controller.signal.aborted) return;
+      // Case météo commune (températures ramenées à l'altitude du point) ; Open-Meteo n'est appelé
+      // que hors de France ou si les fichiers communs sont injoignables.
       const weather = await weatherAt(lngLat.lat, lngLat.lng, altitude, controller.signal);
       if (controller.signal.aborted) return;
       this.render(forest, soil, zones, altitude, weather ? summarize(weather.series) : null, 'ok', weather?.shared ?? false);
@@ -232,7 +250,11 @@ export class SpotPanel {
     weather: WeatherSummary | null,
     status: 'loading' | 'ok' | 'error',
     shared = true,
+    /** L'altitude exacte n'est pas encore arrivée : le bilan sera refait. */
+    altitudePending = false,
   ): void {
+    // Sans altitude exacte, celle que la grille météo donne au carré de 4,5 km (fichiers communs).
+    const approximate = altitude === null && weather && shared ? `≈ ${Math.round(weather.elevation)} m (d’après la grille météo)` : null;
     const terrain = h('dl', { class: 'spot__facts' });
     terrain.append(
       row(
@@ -247,7 +269,16 @@ export class SpotPanel {
           ? [patternSwatch(soil.soil), h('span', { class: 'spot__value' }, soil.soil.label), h('small', { class: 'spot__descr' }, soil.description)]
           : [`inconnu ici (couverture : ${GEOLOGY.coverage}, zoom 10 et plus)`]),
       ),
-      row('Altitude', status === 'loading' ? '…' : altitude !== null ? `${altitude} m` : 'inconnue'),
+      row(
+        'Altitude',
+        status === 'loading'
+          ? '…'
+          : altitude !== null
+            ? `${altitude} m`
+            : approximate
+              ? `${approximate}${altitudePending ? ' · altitude exacte en cours…' : ''}`
+              : 'inconnue',
+      ),
     );
 
     const parts: Node[] = [h('section', { class: 'spot__section' }, terrain), rulesSection(zones, forest)];
