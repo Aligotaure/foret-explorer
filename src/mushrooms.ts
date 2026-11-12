@@ -190,7 +190,8 @@ export function chanceOf(score: number): number {
   for (let k = 1; k < CHANCE_SCALE.length; k++) {
     const [s0, p0] = CHANCE_SCALE[k - 1] ?? [0, 0];
     const [s1, p1] = CHANCE_SCALE[k] ?? [1, 95];
-    if (s <= s1) return Math.round(p0 + ((s - s0) / (s1 - s0)) * (p1 - p0));
+    // Arrondi vers le bas : 69,8 % reste « 50 à 70 % », comme son niveau.
+    if (s <= s1) return Math.floor(p0 + ((s - s0) / (s1 - s0)) * (p1 - p0) + 1e-9);
   }
   return 95;
 }
