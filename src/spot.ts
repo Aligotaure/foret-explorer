@@ -336,7 +336,7 @@ export class SpotPanel {
               'div',
               { class: 'verdict__head' },
               h('strong', {}, m?.label ?? s.id),
-              h('span', { class: 'level-pill', style: `--level: ${level?.color ?? '#999'}` }, level?.label ?? ''),
+              h('span', { class: 'level-pill', style: `--level: ${level?.color ?? '#999'}` }, `≈ ${s.chance} % · ${(level?.label ?? '').toLowerCase()}`),
             ),
             h('ul', { class: 'verdict__reasons' }, ...s.reasons.map((r) => h('li', {}, r))),
           ),

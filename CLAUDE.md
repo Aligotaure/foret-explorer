@@ -343,6 +343,12 @@ passe : la page privée est servie par le Worker.
   gel ≤ −1 °C) × arbre hôte × sol (le sol module : 0,4 + 0,6 × préférence). Niveaux : ≥ 0,5 favorable,
   ≥ 0,28 possible, ≥ 0,12 peu probable. Règles de cueilleur, pas un modèle validé : à recaler avec les
   retours de terrain.
+- Chance estimée en % (`chanceOf`, choix du 12/11/2026) : l'indice ramené sur une échelle calée sur
+  les niveaux (0,12 → 35 %, 0,28 → 50 %, 0,5 → 70 %, 1 → 95 %, linéaire entre deux). Seuil
+  `CHANCE_THRESHOLD` = 50 % : en dessous, rien n'est mis en avant (pas d'étiquette, case presque
+  effacée). Vue d'ensemble (zoom < 10) : pastilles `meteo-points` sur les 12 meilleurs secteurs de la
+  vue, espacés ; à partir du zoom 10, pourcentage dans chaque carré ; bilan : « ≈ 62 % · possible ».
+  Toujours écrire « estimée » ou « ≈ » : ce n'est pas une probabilité mesurée.
 
 ## Conventions
 
@@ -399,7 +405,7 @@ passe : la page privée est servie par le Worker.
    températures suivent déjà l'altitude de chaque carré de 4,5 km ; reste la pluie, la même dans
    toute la case.
 3. Recaler l'indice avec des sorties réelles (journal de cueillette : date, lieu, trouvé ou non), et
-   le transformer en probabilité (formules proposées le 01/11/2026, choix en attente).
+   recaler alors l'échelle des pourcentages (`chanceOf`).
 4. Prévisions : ajouter `forecast_days` pour annoncer les jours favorables à venir.
 5. Export GeoJSON/GPX des polygones sélectionnés (WFS + `CQL_FILTER`) pour une appli hors ligne.
 6. Sélection dans l'URL (`#carte=…&types=…`) pour partager une vue.

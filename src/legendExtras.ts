@@ -8,7 +8,7 @@ import { CLASS_BY_CODE } from './forestClasses';
 import { ABOUT_URL } from './legal';
 import { CELL_KM } from './meteoGrid';
 import { RAIN_STEPS, describeStatus, indexMushroom, type MeteoLayer } from './meteoLayer';
-import { GENERAL_CAUTION, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, hostCodes, type Mushroom } from './mushrooms';
+import { CHANCE_THRESHOLD, GENERAL_CAUTION, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, hostCodes, type Mushroom } from './mushrooms';
 import { SOIL_CLASSES, drawPattern } from './soils';
 import type { AppState, Store } from './state';
 import { collapsible, sectionTitle, switchInput } from './ui';
@@ -254,7 +254,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
     h(
       'p',
       { class: 'legend-hint' },
-      `Pluie et températures par cases d’environ ${CELL_KM} km sur toute la France, mises à jour une fois par jour. L’indice se précise en zoomant : carrés de 4,5 km à partir du zoom ${WEATHER_SUB_MIN_ZOOM}, puis carrés de 500 m là où poussent les arbres hôtes à partir du zoom ${FINE_MIN_ZOOM}, avec le sol de chacun. Les températures sont ramenées à l’altitude de chaque carré ; la pluie reste celle de la case. Pour un point précis, touchez la carte. Météo : Open-Meteo (modèles, pas de pluviomètres).`,
+      `Pluie et températures par cases d’environ ${CELL_KM} km sur toute la France, mises à jour une fois par jour. L’indice se précise en zoomant : carrés de 4,5 km à partir du zoom ${WEATHER_SUB_MIN_ZOOM}, puis carrés de 500 m là où poussent les arbres hôtes à partir du zoom ${FINE_MIN_ZOOM}, avec le sol de chacun. Les températures sont ramenées à l’altitude de chaque carré ; la pluie reste celle de la case. Les pourcentages sont des chances estimées : en dessous de ${CHANCE_THRESHOLD} %, peu d’espoir sans connaître un coin précis, et la carte ne met en avant que les secteurs au-dessus (pastilles en vue d’ensemble). Pour un point précis, touchez la carte. Météo : Open-Meteo (modèles, pas de pluviomètres).`,
     ),
   );
   const section = collapsible(sectionTitle('Météo des 30 derniers jours', 'rain'), content, false, toggle);
@@ -279,7 +279,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
     indexLabel.textContent = `Indice de pousse : ${m?.label.toLowerCase() ?? ''}`;
     const items =
       state.weatherMode === 'indice'
-        ? LEVELS.map((l) => [l.color, l.label] as const)
+        ? LEVELS.map((l) => [l.color, `${l.label} (${l.range})`] as const)
         : RAIN_STEPS.map((s) => [s.color, s.label] as const);
     scale.replaceChildren(
       ...items.map(([color, label]) => h('li', {}, h('span', { class: 'swatch', style: `--swatch: ${color}` }), label)),

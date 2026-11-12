@@ -58,7 +58,9 @@ légales, la confidentialité et un bouton « Effacer mes données ».
   carré (4,5 km, puis 500 m) ou du point touché. La légende donne le dernier jour de pluie connu ;
   tant que la mise à jour du jour n'est pas passée, la veille est une estimation et c'est écrit.
 
-L'indice applique des règles de cueilleur (délai après une grosse pluie, températures, gel, arbre
+La carte affiche une **chance estimée en %** : 70 % et plus, bonnes conditions ; 50 à 70 %, ça se
+tente ; en dessous de 50 %, peu d'espoir sans connaître un coin précis. En vue d'ensemble, des
+pastilles marquent les meilleurs secteurs. L'indice applique des règles de cueilleur (délai après une grosse pluie, températures, gel, arbre
 hôte, sol). C'est une aide pour choisir où aller, pas une garantie, et il ne dit rien de ce qui se
 mange : au moindre doute, faites contrôler la récolte par un pharmacien ou une société mycologique.
 

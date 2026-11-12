@@ -444,6 +444,29 @@ async function desktopTests(browser, base) {
   );
   await page.screenshot({ path: `${OUT}04-bureau-cepes.png` });
 
+  // Vue d'ensemble : chance en % dans chaque case, pastilles sur les secteurs à 50 % et plus
+  // (selon la saison du jour du test, il peut n'y en avoir aucun).
+  const zoomBefore = await page.evaluate(() => window.map.getZoom());
+  await page.evaluate(() => window.map.jumpTo({ zoom: 7 }));
+  await page.waitForFunction(() => window.map.querySourceFeatures('meteo').some((f) => f.properties.sub === 0), null, { timeout: 15000 });
+  await idle(page);
+  const top = await page.evaluate(() => {
+    const cells = window.map.querySourceFeatures('meteo');
+    return {
+      chances: cells.every((f) => f.properties.p_cepe >= 0 && f.properties.p_cepe <= 95),
+      above: cells.some((f) => f.properties.p_cepe >= 50),
+      points: window.map.querySourceFeatures('meteo-points').map((f) => f.properties.p),
+      status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '',
+    };
+  });
+  check(
+    'chance estimée en % dans chaque case, pastilles seulement à 50 % et plus',
+    top.chances && top.points.every((p) => p >= 50) && top.points.length > 0 === top.above && (top.above ? /Meilleure chance dans la vue : \d+ %/ : /Aucun secteur à 50 %/).test(top.status),
+    `${top.points.length} pastille(s) ${top.points.slice(0, 5).join(', ')} ; ${top.status.slice(0, 130)}`,
+  );
+  await page.evaluate((z) => window.map.jumpTo({ zoom: z }), zoomBefore);
+  await idle(page);
+
   // Grille fine : carrés de 500 m à partir du zoom 13 (mode indice)
   const before = log.altitude.length;
   await page.evaluate(() => window.map.jumpTo({ zoom: 13.6 }));
@@ -688,12 +711,14 @@ async function fallbackTests(browser, base) {
     bars: [...document.querySelectorAll('#spot .rain-chart__bar--estimated')].map((b) => b.querySelector('title')?.textContent ?? ''),
     summary: [...document.querySelectorAll('#spot .spot__summary')].map((p) => p.textContent).join(' | '),
     unknown: document.querySelectorAll('#spot .rain-chart__unknown').length,
+    pills: [...document.querySelectorAll('#spot .level-pill')].map((p) => p.textContent),
   }));
   check(
     'veille provisoire : bilan complet jusqu’à hier, barre d’hier marquée « estimation »',
     provisional.bars.length === 1 && /\(estimation\)$/.test(provisional.bars[0] ?? '') && /dernier jour estimé/.test(provisional.summary) && provisional.unknown === 0 && log3.meteo.length === 0,
     JSON.stringify(provisional).slice(0, 200),
   );
+  check('bilan : chance estimée en % pour chaque champignon', provisional.pills.length === 5 && provisional.pills.every((t) => /^≈ \d+ % · /.test(t)), provisional.pills.join(' | '));
 
   // Altitude IGN lente : la météo s'affiche sans l'attendre, puis le bilan est refait.
   const page4 = await context.newPage();

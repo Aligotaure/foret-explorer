@@ -11,6 +11,7 @@ import {
   FINE_MIN_ZOOM,
   TILES,
   WEATHER_LABEL_MIN_ZOOM,
+  WEATHER_SUB_LABEL_MIN_ZOOM,
   WEATHER_MIN_ZOOM,
   ZONES,
   ZONES_BASE,
@@ -27,6 +28,7 @@ export const SOURCES = {
   geologie: 'geologie',
   meteo: 'meteo',
   meteoFine: 'meteo-fin',
+  meteoTop: 'meteo-points',
   zones: 'zones',
 } as const;
 
@@ -61,6 +63,8 @@ export const LAYERS = {
   meteoFineLine: 'meteo-fin-contours',
   meteoLabel: 'meteo-etiquettes',
   meteoFineLabel: 'meteo-fin-etiquettes',
+  meteoTop: 'meteo-points',
+  meteoTopLabel: 'meteo-points-etiquettes',
   highlightCasing: 'bdforet-highlight-casing',
   highlight: 'bdforet-highlight',
 } as const;
@@ -158,6 +162,7 @@ export function buildStyle(state: AppState): StyleSpecification {
         attribution: ATTRIBUTION.meteo,
       },
       [SOURCES.meteoFine]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+      [SOURCES.meteoTop]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
       [SOURCES.zones]: {
         type: 'vector',
         tiles: [archiveTiles(`${ZONES_BASE}${ZONES.archive}`)],
@@ -277,6 +282,28 @@ export function buildStyle(state: AppState): StyleSpecification {
           'text-allow-overlap': false,
         },
         paint: { 'text-color': '#0b1f44', 'text-halo-color': 'rgba(255,255,255,0.9)', 'text-halo-width': 1.4 },
+      },
+      // Vue d'ensemble : pastilles sur les secteurs où la chance estimée atteint le seuil (meteoLayer.ts).
+      {
+        id: LAYERS.meteoTop,
+        type: 'circle',
+        source: SOURCES.meteoTop,
+        maxzoom: WEATHER_SUB_LABEL_MIN_ZOOM,
+        paint: { 'circle-radius': 17, 'circle-color': ['get', 'color'], 'circle-opacity': 0.92, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 },
+      },
+      {
+        id: LAYERS.meteoTopLabel,
+        type: 'symbol',
+        source: SOURCES.meteoTop,
+        maxzoom: WEATHER_SUB_LABEL_MIN_ZOOM,
+        layout: {
+          'text-field': ['concat', ['to-string', ['get', 'p']], ' %'],
+          'text-font': [LABEL_FONT],
+          'text-size': 12,
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
+        },
+        paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(0,0,0,0.4)', 'text-halo-width': 1 },
       },
       {
         id: LAYERS.meteoFineLabel,

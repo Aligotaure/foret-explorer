@@ -164,11 +164,11 @@ export function hostCodes(m: Mushroom, minWeight = 0.5): string[] {
 }
 
 export type Level = 0 | 1 | 2 | 3;
-export const LEVELS: readonly { label: string; color: string }[] = [
-  { label: 'Défavorable', color: '#9a9ab8' },
-  { label: 'Peu probable', color: '#e9c46a' },
-  { label: 'Possible', color: '#e07a1f' },
-  { label: 'Favorable', color: '#a33b0b' },
+export const LEVELS: readonly { label: string; color: string; range: string }[] = [
+  { label: 'Défavorable', color: '#9a9ab8', range: 'moins de 35 %' },
+  { label: 'Peu probable', color: '#e9c46a', range: '35 à 50 %' },
+  { label: 'Possible', color: '#e07a1f', range: '50 à 70 %' },
+  { label: 'Favorable', color: '#a33b0b', range: '70 % et plus' },
 ];
 
 export function levelOf(score: number): Level {
@@ -178,9 +178,33 @@ export function levelOf(score: number): Level {
   return 0;
 }
 
+/**
+ * Chance estimée d'en trouver (%), tirée de l'indice (saison × pluie × température × arbre hôte ×
+ * sol, entre 0 et 1) par une échelle calée sur les niveaux : 0,12 → 35 %, 0,28 → 50 %, 0,5 → 70 %,
+ * 1 → 95 % (jamais 100 %), linéaire entre deux repères. Une règle de cueilleur mise en pourcentage,
+ * pas une probabilité mesurée : à recaler avec des sorties réelles.
+ */
+const CHANCE_SCALE: readonly (readonly [number, number])[] = [[0, 0], [0.12, 35], [0.28, 50], [0.5, 70], [1, 95]];
+export function chanceOf(score: number): number {
+  const s = clamp(score);
+  for (let k = 1; k < CHANCE_SCALE.length; k++) {
+    const [s0, p0] = CHANCE_SCALE[k - 1] ?? [0, 0];
+    const [s1, p1] = CHANCE_SCALE[k] ?? [1, 95];
+    if (s <= s1) return Math.round(p0 + ((s - s0) / (s1 - s0)) * (p1 - p0));
+  }
+  return 95;
+}
+/**
+ * En dessous de cette chance (%), inutile de se déplacer sans connaître un coin précis : la carte ne
+ * met en avant (étiquettes, pastilles de la vue d'ensemble) que les secteurs au-dessus.
+ */
+export const CHANCE_THRESHOLD = 50;
+
 export interface MushroomScore {
   id: MushroomId;
   score: number;
+  /** Chance estimée (%), voir `chanceOf`. */
+  chance: number;
   level: Level;
   reasons: string[];
 }
@@ -281,7 +305,7 @@ export function scoreMushroom(m: Mushroom, w: WeatherSummary, month: number, ctx
   if (ctx.soilFactor !== undefined) score *= ctx.soilFactor;
 
   score = clamp(score);
-  return { id: m.id, score, level: levelOf(score), reasons };
+  return { id: m.id, score, chance: chanceOf(score), level: levelOf(score), reasons };
 }
 
 /** Le sol module sans exclure : la géologie n'est qu'une tendance. */

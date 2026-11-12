@@ -21,7 +21,7 @@ import {
 } from './fineGrid';
 import { track } from './metrics';
 import { CELL_KM, subBox, subIndexAt } from './meteoGrid';
-import { LEVELS, MUSHROOMS, MUSHROOM_BY_ID, scoreMushroom, type MushroomId } from './mushrooms';
+import { CHANCE_THRESHOLD, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, chanceOf, scoreMushroom, type MushroomId } from './mushrooms';
 import { LAYERS, SOURCES, applyOpacity, setFineVisible, setMeteoVisible } from './mapStyle';
 import type { AppState, Store } from './state';
 import {
@@ -56,8 +56,11 @@ export type MeteoStatus =
    * jour) ; `shared` : fichiers communs (sinon Open-Meteo en direct) ; `sub` : indice détaillé par
    * carrés de 4,5 km.
    */
-  | { state: 'ok'; cells: number; day: string; estimated: boolean; shared: boolean; sub: boolean; fine: FineStatus }
+  | { state: 'ok'; cells: number; day: string; estimated: boolean; shared: boolean; sub: boolean; best: number | null; fine: FineStatus }
   | { state: 'error'; message: string };
+
+/** Pastilles de la vue d'ensemble, au plus. */
+const HOTSPOT_MAX = 12;
 
 /** Paliers de pluie cumulée sur 20 jours (mm) et leurs couleurs. */
 export const RAIN_STEPS: readonly { min: number; color: string; label: string }[] = [
@@ -166,6 +169,7 @@ export class MeteoLayer {
     setFineVisible(this.map, state.weatherMode === 'indice');
     if (!on) {
       this.controller?.abort();
+      this.showHotspots([], indexMushroom(state), 1);
       this.showFine(false);
       this.setStatus({ state: 'off' });
       return;
@@ -184,12 +188,14 @@ export class MeteoLayer {
   private paintIndex(id: MushroomId): void {
     const level = ['get', `l_${id}`];
     const colors = LEVELS.flatMap((l, i) => [i, l.color]);
-    const labels = LEVELS.flatMap((l, i) => (i === 0 ? [] : [i, l.label]));
-    const opacity = ['match', level, 0, 0.04, 1, 0.16, 2, 0.26, 3, 0.36, 0];
-    const text = ['match', level, ...labels, ''];
+    // Sous le seuil, un secteur ne vaut pas le déplacement : presque effacé, sans étiquette.
+    const chance = ['get', `p_${id}`];
+    const opacity = ['match', level, 0, 0.04, 1, 0.1, 2, 0.26, 3, 0.36, 0];
+    const text = ['case', ['>=', chance, CHANCE_THRESHOLD], ['concat', ['to-string', chance], ' %'], ''];
     // Étiquettes : celles des cases entières en vue d'ensemble, celles des carrés de 4,5 km quand ils
     // sont assez grands ; avec les carrés fins, la grille reste en fond, très pâle et sans étiquettes.
-    const textByZoom: unknown[] = ['step', ['zoom'], text, WEATHER_SUB_MIN_ZOOM, ['case', ['==', ['get', 'sub'], 1], '', text], WEATHER_SUB_LABEL_MIN_ZOOM, text];
+    // (En vue d'ensemble, ce sont les pastilles des meilleurs secteurs qui portent les pourcentages.)
+    const textByZoom: unknown[] = ['step', ['zoom'], '', WEATHER_SUB_LABEL_MIN_ZOOM, text];
     if (this.fineShown) textByZoom.push(FINE_MIN_ZOOM, '');
     // Vue d'ensemble (France entière) : couleurs plus soutenues, sinon les petites cases se perdent
     // sur le fond de carte ; opacité normale à partir du zoom 9.
@@ -218,7 +224,38 @@ export class MeteoLayer {
       'line-width',
       ['interpolate', ['linear'], ['zoom'], FINE_MIN_ZOOM, ['match', level, 3, 1.2, 0.6], 16, ['match', level, 3, 2.4, 1.2]] as never,
     );
-    this.map.setLayoutProperty(LAYERS.meteoFineLabel, 'text-field', ['match', level, 2, LEVELS[2]?.label ?? '', 3, LEVELS[3]?.label ?? '', ''] as never);
+    this.map.setLayoutProperty(LAYERS.meteoFineLabel, 'text-field', text as never);
+  }
+
+  /**
+   * Vue d'ensemble : une pastille sur chacun des meilleurs secteurs (chance ≥ CHANCE_THRESHOLD), les
+   * plus forts d'abord, espacés d'un septième de la vue, HOTSPOT_MAX au plus. Rend la meilleure
+   * chance de la vue (null : aucun secteur au-dessus du seuil).
+   */
+  private showHotspots(features: readonly Feature[], id: MushroomId, width: number): number | null {
+    const gap = width / 7;
+    const ranked = features
+      .map((f) => ({
+        p: Number(f.properties?.[`p_${id}`] ?? 0),
+        l: Number(f.properties?.[`l_${id}`] ?? 0),
+        x: Number(f.properties?.x),
+        y: Number(f.properties?.y),
+      }))
+      .filter((c) => c.p >= CHANCE_THRESHOLD)
+      .sort((a, b) => b.p - a.p);
+    const picked: typeof ranked = [];
+    for (const c of ranked) {
+      if (picked.length >= HOTSPOT_MAX) break;
+      if (picked.some((o) => Math.abs(o.x - c.x) < gap && Math.abs(o.y - c.y) < gap * 0.7)) continue;
+      picked.push(c);
+    }
+    const points = picked.map((c) => ({
+      type: 'Feature',
+      properties: { p: c.p, color: LEVELS[c.l]?.color ?? '#e07a1f' },
+      geometry: { type: 'Point', coordinates: [c.x, c.y] },
+    }));
+    this.map.getSource<GeoJSONSource>(SOURCES.meteoTop)?.setData({ type: 'FeatureCollection', features: points } as never);
+    return ranked[0]?.p ?? null;
   }
 
   private showFine(on: boolean): void {
@@ -286,11 +323,14 @@ export class MeteoLayer {
           elevation: Math.round(w.elevation),
           lastRain: w.events[0]?.daysAgo ?? -1,
           sub,
+          x: +((box.west + box.east) / 2).toFixed(4),
+          y: +((box.south + box.north) / 2).toFixed(4),
         };
         for (const m of MUSHROOMS) {
           const score = scoreMushroom(m, w, month);
           properties[`l_${m.id}`] = score.level;
           properties[`s_${m.id}`] = Math.round(score.score * 100) / 100;
+          properties[`p_${m.id}`] = score.chance;
         }
         features.push({ type: 'Feature', id, properties, geometry: boxPolygon(box) });
       };
@@ -314,8 +354,9 @@ export class MeteoLayer {
         }
       }
       this.map.getSource<GeoJSONSource>(SOURCES.meteo)?.setData({ type: 'FeatureCollection', features });
+      const best = this.showHotspots(state.weatherMode === 'indice' ? features : [], indexMushroom(state), view.east - view.west);
       const fine: FineStatus = state.weatherMode === 'indice' ? { state: 'loading' } : { state: 'off' };
-      this.setStatus({ state: 'ok', cells: count, day, estimated, shared: weather.shared, sub: detailed, fine });
+      this.setStatus({ state: 'ok', cells: count, day, estimated, shared: weather.shared, sub: detailed, best, fine });
       if (state.weatherMode === 'indice') await this.updateFine(series, controller.signal);
       else this.showFine(false);
     } catch (error) {
@@ -400,6 +441,7 @@ export class MeteoLayer {
       for (const m of MUSHROOMS) {
         const s = scoreFineCell(m, w, month, sample);
         properties[`l_${m.id}`] = s?.level ?? 0;
+        properties[`p_${m.id}`] = s ? chanceOf(s.score) : 0;
         properties[`c_${m.id}`] = s ? Math.round(s.coverage * 100) / 100 : 0;
         if (s) any = true;
         if (s && m.id === shown) count++;
@@ -453,7 +495,13 @@ export function describeStatus(s: MeteoStatus, state: AppState): string {
       const date = s.day ? new Date(`${s.day}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '';
       const source = s.shared ? '' : ' Fichiers météo du site indisponibles ou trop anciens : Open-Meteo interrogé directement.';
       const until = date ? `, pluie connue jusqu’au ${date}${s.estimated ? ' (dernier jour estimé d’après la prévision)' : ''}` : '';
-      return `${s.cells} cases de ${CELL_KM} km · ${what}${until}.${source}${fineText(s.fine)}`;
+      const best =
+        state.weatherMode !== 'indice'
+          ? ''
+          : s.best === null
+            ? ` Aucun secteur à ${CHANCE_THRESHOLD} % ou plus dans la vue.`
+            : ` Meilleure chance dans la vue : ${s.best} %.`;
+      return `${s.cells} cases de ${CELL_KM} km · ${what}${until}.${best}${source}${fineText(s.fine)}`;
     }
   }
 }
