@@ -232,3 +232,4 @@ async function accept(page) {
 
 await browser.close();
 writeFileSync(`${OUT}rapport.txt`, `${lines.join('\n')}\n`);
+// relance 2026-11-12T17:01:35
