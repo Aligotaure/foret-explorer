@@ -33,10 +33,15 @@ function show(view: ViewId): void {
   if (!loading.has(view)) {
     loading.set(
       view,
-      loaders[view]().catch((error: unknown) => {
-        loading.delete(view); // nouvel essai à la prochaine ouverture de la vue
-        reportFailure(view, error);
-      }),
+      loaders[view]().then(
+        () => {
+          byId('view-error').hidden = true; // un nouvel essai a réussi
+        },
+        (error: unknown) => {
+          loading.delete(view); // nouvel essai à la prochaine ouverture de la vue
+          reportFailure(view, error);
+        },
+      ),
     );
   }
   // L'avertissement ne concerne que la carte : il s'affiche avec elle, sans attendre qu'elle soit

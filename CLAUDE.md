@@ -11,6 +11,10 @@ confidentialité). Interface inspirée du panneau « Légendes » de cartes.gouv
 (thème sombre bleu nuit, icônes lavande, légende sur carte blanche). Une page privée (serveur
 Cloudflare, `worker/`) suit la consommation des API.
 
+Deux vues dans la même page, choisies par un îlot noir en haut au centre : « Carte » (tout ce qui
+précède) et « Analytics » (comment le produit est piloté : pari en cours, analyses, paris tranchés),
+à l'adresse `#vue=analytics`. Voir « Deux vues : Carte et Analytics ».
+
 Usage visé : repérer les coins favorables aux champignons (cèpes, girolles, trompettes, chanterelles
 en tube, morilles) partout en France. La carte sert aussi sur téléphone, en forêt : le mobile compte
 autant que le bureau. Première visite : la France entière ; ensuite, la dernière vue (`foret-explorer:vue`).
@@ -30,9 +34,12 @@ https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
 - `npm ci` puis `npm run dev` : serveur Vite sur http://localhost:5173 (versions figées par
   `package-lock.json` ; `npm install <paquet>` pour en ajouter un, puis committer le lockfile)
 - `npm run typecheck` : TypeScript strict, sans émission
-- `npm run build` : build statique dans `dist/` ; `npm run check` = typecheck + build
+- `npm run build` : build statique dans `dist/` ; `npm run check` = typecheck + build + contrôle du
+  build (`tests/build.mjs`, aussi `npm run test:build` : la page d'entrée et la vue Analytics
+  n'embarquent pas MapLibre, le code de la carte est préchargé, ordre des feuilles de style)
 - `npm run test:e2e` : test de bout en bout (Playwright + vrai MapLibre, services simulés ; avertissement,
-  À propos et zones compris). Première fois : `npx playwright install chromium`. Captures dans `tests/e2e/shots/`.
+  À propos et zones compris ; îlot et vue Analytics dans `tests/e2e/views.mjs`). Première fois :
+  `npx playwright install chromium`. Captures dans `tests/e2e/shots/`.
 - `cd worker && npm ci && npm test` : serveur de mesure (26 vérifications, Durable Object simulé sur
   `node:sqlite`, Node ≥ 22.18 qui lit le TypeScript directement) ; aperçus HTML dans `worker/test/apercus/`.
   `npm run typecheck` (types Cloudflare), `npm run dev` (wrangler, secrets dans `worker/.dev.vars`).
@@ -63,14 +70,19 @@ branche et lancer `verification.yml` (`gh workflow run verification.yml --ref <b
 ## Pile
 
 Vite + TypeScript strict + MapLibre GL JS 5, sans framework. Une seule autre dépendance : `pmtiles`
-(lecture des archives de tuiles du site, protocole `pmtiles://` enregistré dans `main.ts`). Pas de
+(lecture des archives de tuiles du site, protocole `pmtiles://` enregistré dans `mapView.ts`). Pas de
 nouvelle dépendance sans raison.
 
 ## Architecture (`src/`)
 
 | Fichier | Rôle |
 |---|---|
-| `main.ts` | Point d'entrée : avertissement, protocole `pmtiles://`, carte (France entière puis dernière vue gardée), modules, état → carte, clic → bilan du coin, comptages |
+| `main.ts` | Point d'entrée (petit) : feuilles de style, îlot, avertissement, et chaque vue chargée par `import()` à sa première ouverture |
+| `view.ts` | Les deux vues : lecture et écriture de `#vue=analytics` dans l'adresse, historique, îlot, annonce aux lecteurs d'écran |
+| `mapView.ts` | La vue Carte (chargée à la demande) : protocole `pmtiles://`, carte (France entière puis dernière vue gardée), modules, état → carte, clic → bilan du coin, comptages |
+| `analyticsView.ts`, `analytics.css` | La vue Analytics (chargée à la demande, sans rien de la carte) : en-tête, entonnoir (emplacement vide), pari en cours, analyses, paris tranchés, états vides |
+| `analyticsData.ts` | **Le** fichier de contenu de la vue Analytics, modifié à la main (guide en tête du fichier) |
+| `analyticsTypes.ts`, `analyticsCheck.ts` | Format de ce contenu (types stricts : dates, adresse https) et relecture de ce que les types ne voient pas (date impossible, texte vide, valeur négative) |
 | `disclaimer.ts` | Avertissement bloquant (`<dialog>` modal, ni Échap ni clic à côté) : bouton actif 3 s après le premier affichage (horloge, pas minuteries), mémorisé par version des conditions, 30 jours au plus |
 | `legal.ts` | Version des conditions (`TERMS_VERSION`), adresse de « À propos », données gardées dans le navigateur, effacement |
 | `apropos.ts`, `apropos.css` | Page `a-propos.html` (conseils, règles, conditions, mentions légales, confidentialité) : état de la mesure, « Effacer mes données » |
@@ -109,10 +121,10 @@ PMTiles), `regles.mjs` (règles de classement des descriptions géologiques en n
 pour n'afficher son nom qu'une fois : les sites des conservatoires sont faits de dizaines de parcelles)
 et `foret_publique`, `info.json`).
 
-Flux : l'interface ne touche jamais la carte. Elle appelle `store.update()` ; `main.ts` est abonné au
+Flux : l'interface ne touche jamais la carte. Elle appelle `store.update()` ; `mapView.ts` est abonné au
 store et appelle `applySelection` / `applyOpacity` / `applyBasemap` / `applyGeology` /
 `meteo.applyMode()`. Pour ajouter une option : champ dans `AppState` (+ persistance dans `state.ts`),
-contrôle dans `legend.ts` ou `legendExtras.ts`, effet dans `mapStyle.ts`, abonnement dans `main.ts`,
+contrôle dans `legend.ts` ou `legendExtras.ts`, effet dans `mapStyle.ts`, abonnement dans `mapView.ts`,
 vérification dans `tests/e2e/run.mjs`.
 
 Couches (ordre) : `base-plan`, `base-ortho`, `bdforet-overview` (raster, zoom < 10), `bdforet-fill`
@@ -141,6 +153,62 @@ carrés boisés, par lots de 200 points (service en panne : altitude du carré d
 de la case commune corrigées de −0,65 °C par 100 m ; la pluie reste celle de la case. Carré dessiné seulement s'il contient un arbre hôte ; opacité
 selon la part d'arbres hôtes ; défavorable = contour seul. Les forêts s'estompent (45 %) à ces zooms.
 ⚠ Zoom MapLibre = zoom « 512 px » : au zoom 13, ≈ 5 m/pixel (pas 10).
+
+## Deux vues : Carte et Analytics
+
+- **Adresse** : `#vue=analytics` à côté de la position que MapLibre tient à jour (`hash: 'carte'`),
+  par exemple `#carte=11.5/45.92/6.19&vue=analytics` ; sans `vue=analytics`, c'est la carte.
+  `view.ts` découpe le fragment à la main (jamais `URLSearchParams` : il encoderait les « / » de
+  `carte=`, que MapLibre ne relirait plus) et passe toujours une adresse complète à `pushState`
+  (une chaîne vide y est ignorée : l'adresse garderait `vue=analytics`).
+- **Historique** : un clic sur l'îlot ajoute une entrée sans émettre `hashchange`, donc MapLibre ne
+  déplace pas la carte ; Précédent et Suivant rendent à chaque entrée sa vue et, par MapLibre, sa
+  position. En quittant la carte par l'îlot, `map.stop()` arrête le déplacement en cours : la
+  position exacte est écrite dans l'entrée quittée. Pas de lien `href="#…"` dans la vue Analytics :
+  il remplacerait tout le fragment, `vue=analytics` compris.
+- **Chargement** : `main.ts` (≈ 4 ko) charge chaque vue à sa première ouverture. Arriver sur
+  `#vue=analytics` ne demande ni MapLibre, ni tuile, ni fichier météo. Toutes les feuilles de style
+  sont dans l'entrée, MapLibre d'abord (`style.css` corrige `.maplibregl-ctrl-bottom-right` et
+  `.maplibregl-ctrl-scale`, de même poids), `analytics.css` compris : pas d'éclair au premier
+  affichage, et un module chargé à la demande ne porte aucune feuille de style. Ses sélecteurs
+  commencent tous par `.analytics` ou `html[data-view='analytics']` : la carte n'en est pas changée.
+- **En-tête d'`index.html`** : un script pose `data-view="analytics"` sur `<html>` avant le premier
+  affichage (même règle que `view.ts`) ; sinon il précharge le code de la carte, dont
+  `vite.config.ts` écrit le nom au build à la place de `__MAP_CHUNK__`. Mesuré le 13/11/2026 (build
+  servi en gzip, réseau bridé) : la carte arrive comme avant le découpage (4G lente : 2,2 s ; 3G :
+  7,9 s, soit +0,07 et +0,1 s) ; sans ce préchargement, +0,2 et +0,5 s. L'avertissement, lui,
+  s'affiche 1,6 à 6 s plus tôt qu'avant (il n'attend plus MapLibre).
+- **Carte masquée** : en vue Analytics, `#app` et tous ses descendants sont en `visibility: hidden`
+  (`#app *` est nécessaire : MapLibre force `visibility: visible` sur ses crédits dépliés). Pas de
+  `display: none` : la carte garde sa taille, sa position, sa légende et son bilan, et rien n'est
+  rechargé au retour. `#app` est alors figé à `100vw` × `100svh` (ni la barre de défilement ni la
+  barre d'adresse du téléphone ne le redimensionnent). `view.ts` reprend le clavier resté dans la vue
+  masquée.
+- **Avertissement** : c'est `main.ts` qui l'appelle, avec la vue Carte seulement ; quitter la carte
+  sans l'avoir accepté le retire (`withdrawDisclaimer()`), y revenir le remontre, compte à rebours
+  repris de zéro. Tant qu'il est à l'écran, l'îlot est inerte (fenêtre modale) : l'adresse à donner
+  pour montrer la vue Analytics est `…/#vue=analytics`.
+- **Îlot** : `nav` de deux liens (`aria-current="page"`), avant `#app` dans la page (premier arrêt de
+  la touche Tab). 208 px × 46 px (`--island-width`, `--btn`), liens pleine hauteur, fond clair du
+  segment actif en `::before` (glissement de 300 ms, bord meneur en premier ; rien si les animations
+  sont réduites). Placé en `vw`, sans `transform`. Ce qu'il a déplacé :
+  - ≤ 640 px : îlot sur la première rangée, entre le bouton légende et les boutons de droite ; la
+    recherche passe à la deuxième rangée (`.topbar` en `flex-wrap`, `pointer-events: none` sur le
+    vide), le bandeau « Zoomez… » à la troisième, arrêté avant la colonne de boutons ;
+  - de 641 à 1187 px : îlot à droite de la recherche (décentré) ; sous 760 px la recherche se
+    resserre ; de 641 à 1127 px le bilan s'ouvre une rangée plus bas (`.zoom-hint` passe sous les
+    panneaux : `z-index: 1`) ;
+  - à partir de 1188 px : centré, rien ne bouge.
+- **Contenu de la vue Analytics** : tout vient de `src/analyticsData.ts` ("" , `null` ou `[]` : état
+  vide). Guillemets doubles dans ce fichier (les apostrophes du français y sont sans danger), modèles
+  en commentaire dont chaque champ vaut `A_REMPLIR` (un oubli fait échouer `npm run check`). Les
+  types refusent une date à la française, une adresse sans https, un champ mal nommé ;
+  `analyticsCheck.ts` relit le reste, affiché en tête de vue en développement et vérifié par les
+  tests e2e. Le rendu ne casse jamais (date impossible montrée telle quelle, graphique sans barre
+  omis). Graphique : barres horizontales, une série, échelle à zéro, aucune valeur calculée.
+  N'y écrire que des chiffres mesurés ; « Entonnoir en direct » reste un emplacement vide tant
+  qu'aucune mesure n'est branchée. Jamais de modification directe sur `main` : une erreur y
+  bloquerait `npm run check`, donc la publication quotidienne de la météo.
 
 ## Données et API
 
@@ -360,7 +428,9 @@ passe : la page privée est servie par le Worker.
 - Accessibilité : vrais `<input type="checkbox">`, interrupteurs `role="switch"`, `aria-*` à jour.
 - Mobile : légende et bilan en tiroirs bas sous 640 px (un seul ouvert à la fois), boutons de 46 px.
 - En développement, `window.map`, `window.store`, `window.spot` et `window.metrics` (totaux de la
-  visite, `flush()`) sont exposés (console, tests e2e).
+  visite, `flush()`) sont exposés (console, tests e2e) une fois la vue Carte chargée (avant, `window.map`
+  désigne la balise `<div id="map">`) ; `window.analytics` (`data`, `check()`, `render(contenu)`) une
+  fois la vue Analytics chargée.
 - Mesure : seulement des totaux par jour, jamais d'identifiant de visiteur ni de cookie ; envoi coupé
   si le navigateur signale « Global Privacy Control ». Le bilan lit la case météo commune (rien n'est
   envoyé à Open-Meteo) ; en secours seulement, coordonnées arrondies à 0,01° (vie privée). L'altitude
@@ -395,6 +465,11 @@ passe : la page privée est servie par le Worker.
   réseau, GPC ou page fermée brutalement : pas comptés) ; l'adresse de collecte est publique.
 - Comptages des forêts sur les tuiles chargées (débordent un peu de l'écran).
 - Recherche non biaisée vers la zone affichée.
+- Deux vues : tant que l'avertissement est à l'écran, l'îlot ne répond pas (il faut l'accepter, ou
+  arriver par `#vue=analytics`). Quitter la carte par l'îlot moins de 0,3 s après un déplacement peut
+  laisser l'ancienne position dans l'entrée de l'historique (seul Précédent la retrouve). Entre 641 et
+  1187 px de large, l'îlot n'est pas centré. Graphiques de la vue Analytics : une série de barres
+  (ni courbe ni comparaison de deux séries).
 
 ## Pistes pour la suite
 
@@ -414,3 +489,5 @@ passe : la page privée est servie par le Worker.
 9. Servir les fichiers météo ailleurs que dans le site (branche de données, Worker) pour ne plus
    republier 170 Mo chaque jour.
 10. Garder une copie des tuiles géologiques dans une release du dépôt (si le miroir disparaît).
+11. Vue Analytics : brancher l'entonnoir en direct (mesure et consentement à décider), puis une
+    courbe ou une seconde série dans les graphiques quand une analyse en a besoin.

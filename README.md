@@ -77,6 +77,18 @@ mange : au moindre doute, faites contrôler la récolte par un pharmacien ou une
 - Vos choix restent mémorisés dans le navigateur, et la position de la carte est dans l'adresse de
   la page.
 
+### Deux vues : Carte et Analytics
+
+En haut au centre, un îlot bascule entre la **carte** et la vue **Analytics**, qui montre comment le
+produit est piloté : pari en cours, analyses, paris tranchés. Revenir à la carte la retrouve telle
+quelle (position, légende, bilan), et la vue Analytics s'ouvre sans charger la carte. Son adresse
+directe : `…/#vue=analytics` (elle se combine avec la position : `#carte=11.5/45.92/6.19&vue=analytics`).
+
+Tout ce qu'affiche la vue Analytics vient d'un seul fichier, `src/analyticsData.ts`, à modifier à la
+main : son en-tête explique comment (modèles à recopier, dates, nombres). Tant qu'un bloc est vide,
+la vue affiche un état vide. `npm run check` refuse un champ oublié ou mal écrit ; en développement
+(`npm run dev`), la vue liste en haut de page ce qui reste à corriger.
+
 ## Continuer avec Claude Code
 
 Ouvrez un terminal dans ce dossier et lancez `claude`. Le fichier `CLAUDE.md` lui donne le contexte :
@@ -85,7 +97,7 @@ architecture, services vérifiés et leurs pièges, conventions, idées pour la 
 ## Vérifier
 
 ```bash
-npm run check                      # TypeScript + build de production
+npm run check                      # TypeScript + build de production + contrôle du découpage
 npx playwright install chromium    # une seule fois
 npm run test:e2e                   # parcours complet dans un navigateur, services simulés
 cd worker && npm ci && npm test    # serveur de mesure (Node 22.18 ou plus)

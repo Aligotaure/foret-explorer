@@ -58,18 +58,18 @@
 import type { AnalyticsData } from './analyticsTypes';
 
 export const ANALYTICS: AnalyticsData = {
-  // 1. En-tête : une phrase, affichée en grand. Vide : le titre « Analytics » la remplace.
+  // En-tête : une phrase, affichée en grand. Vide : le titre « Analytics » la remplace.
   headline: "",
 
-  // Lien de contact : le texte du lien, puis son adresse (null : pas de lien).
+  // En-tête : le lien de contact, son texte puis son adresse (null : pas de lien).
   contact: { label: "Me contacter sur LinkedIn", url: "https://www.linkedin.com/in/cl%C3%A9ment-bril/" },
 
-  // 3. Pari en cours (null : aucun).
+  // Pari en cours (null : aucun).
   currentBet: null,
 
-  // 4. Analyses, une carte par analyse.
+  // Analyses, une carte par analyse.
   analyses: [],
 
-  // 5. Paris tranchés, une ligne par pari.
+  // Paris tranchés, une ligne par pari.
   settledBets: [],
 };
