@@ -24,9 +24,11 @@ dernière vue (ou celle de l'adresse, `#carte=zoom/lat/lon`).
 
 ## Utilisation
 
-À l'ouverture, un avertissement reste affiché au moins 3 secondes : la carte aide à choisir où
+À l'ouverture, un avertissement court reste affiché au moins 3 secondes : la carte aide à choisir où
 chercher, elle n'identifie aucun champignon et ne donne aucun droit de cueillir. Il revient à chaque
-nouvelle version des conditions et au plus tard après 30 jours. La page **À propos** (bouton ⓘ)
+nouvelle version des conditions et au plus tard après 30 jours. Après un premier accord, « La carte
+en 3 gestes » présente l'écran (à revoir depuis la légende : « Comment ça marche ? »). La page
+**À propos** (bouton ⓘ)
 réunit les conseils avant de cueillir, les règles, les conditions d'utilisation, les mentions
 légales, la confidentialité et un bouton « Effacer mes données ».
 
@@ -42,10 +44,12 @@ légales, la confidentialité et un bouton « Effacer mes données ».
 - **Carrés de 500 m** : à partir du zoom 12, la grille de l'indice se resserre encore. Chaque carré
   est calculé avec son altitude (IGN), les arbres et le sol relevés à l'intérieur ; seuls les carrés
   où poussent des arbres hôtes sont colorés.
-- **Toucher la carte** ouvre le bilan du coin : type de forêt, nature du sol, altitude exacte, droit
-  de cueillir (zone protégée, forêt publique ou sans doute privée), pluie jour par jour sur 30 jours,
-  températures, et un verdict expliqué pour chaque champignon.
-- **Où cueillir** : les zones protégées (réserves naturelles et biologiques, cœurs de parc national,
+- **Toucher la carte** ouvre le bilan du coin, la réponse d'abord : zone protégée s'il y en a une,
+  type de forêt, nature du sol, altitude exacte et statut du terrain (forêt publique ou sans doute
+  privée), puis une ligne par champignon, du plus probable au moins probable (les raisons se
+  déplient, un « ? » explique le pourcentage), la pluie jour par jour sur 30 jours, les températures,
+  et les règles de cueillette, repliées.
+- **Droit de cueillir** : les zones protégées (réserves naturelles et biologiques, cœurs de parc national,
   arrêtés de biotope, terrains des conservatoires) sont hachurées en rouge ; les forêts publiques
   (domaniales et communales) s'affichent en tirets sur demande. Données PatriNat et IGN (BD TOPO),
   indicatives : seuls les textes officiels et les panneaux sur place font foi.
@@ -53,9 +57,11 @@ légales, la confidentialité et un bouton « Effacer mes données ».
   sables, roches cristallines et volcaniques, moraines, éboulis, zones humides), avec entre
   parenthèses les champignons que chacune favorise. Couverture : France métropolitaine (cartes
   départementales du BRGM).
-- **Météo des 30 derniers jours** : grille de cases d'environ 18 km sur toute la France, en pluie
-  cumulée sur 20 jours ou en indice de pousse. Les températures sont ramenées à l'altitude de chaque
-  carré (4,5 km, puis 500 m) ou du point touché. La légende donne le dernier jour de pluie connu ;
+- **Météo** : grille de cases d'environ 18 km sur toute la France, en pluie des 20 derniers jours ou
+  en chance estimée du champignon recherché. Un carré n'est coloré que s'il contient des arbres hôtes
+  de ce champignon (d'après la BD Forêt), et d'autant plus qu'il en contient : villes, mer et plaines
+  sans arbres restent éteintes. Les températures sont ramenées à l'altitude de chaque carré (4,5 km,
+  puis 500 m) ou du point touché. La légende donne le dernier jour de pluie connu ;
   tant que la mise à jour du jour n'est pas passée, la veille est une estimation et c'est écrit.
 
 La carte affiche une **chance estimée en %** : 70 % et plus, bonnes conditions ; 50 à 70 %, ça se
@@ -154,6 +160,10 @@ de la Géoplateforme) dans `public/data/zones/`. Chaque couche tient dans une se
 carte lit par morceaux : GitHub Pages abandonne une publication au bout de 10 minutes, et des
 dizaines de milliers de petits fichiers de tuiles n'y passent pas toujours. En développement, la
 carte lit les archives du site en ligne : pas besoin de les construire.
+
+La part de chaque type de forêt dans chaque carré de 4,5 km (`public/foret/parts.json`, versionné)
+est calculée une fois par `node scripts/foret/parts.mjs` à partir des tuiles vectorielles de la BD
+Forêt (IGN), sans dépendance ; à relancer seulement si la grille ou la BD Forêt changent.
 
 ### Météo commune
 

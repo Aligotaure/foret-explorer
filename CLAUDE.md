@@ -6,7 +6,8 @@ choisir les types affichés, enrichie pour la cueillette : nature du sol (géolo
 altitude (IGN) et indice de pousse par champignon, en cases de 18 km, puis en carrés de 4,5 km et de
 500 m quand on zoome ; zones protégées et forêts publiques (droit de cueillir). **Toute la France métropolitaine** :
 ne rien coder pour une région en particulier.
-Avertissement bloquant à l'ouverture (3 s) et page « À propos » (conditions, mentions légales,
+Accueil à l'ouverture : un avertissement bloquant (3 s, moins de 100 mots) puis, au premier accord,
+« La carte en 3 gestes » ; page « À propos » (conseils, conditions, mentions légales,
 confidentialité). Interface inspirée du panneau « Légendes » de cartes.gouv.fr
 (thème sombre bleu nuit, icônes lavande, légende sur carte blanche). Une page privée (serveur
 Cloudflare, `worker/`) suit la consommation des API.
@@ -58,10 +59,16 @@ https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
   cases, de leur point de relevé et de l'altitude de leurs 16 carrés de 4,5 km), seulement si la
   taille des cases change ; les points de relevé existants sont gardés. Pas de CORS ni d'accès depuis
   le bac à sable : à lancer en local ou dans une tâche GitHub.
+- `node scripts/foret/parts.mjs` : refait `public/foret/parts.json` (part de chaque type de forêt
+  dans chacun des 29 483 carrés de 4,5 km), seulement si la grille change ou si l'IGN publie une
+  nouvelle BD Forêt. 889 tuiles vectorielles du zoom 10 (≈ 320 Mo, gardées dans `.cache/foret/`),
+  une à deux minutes, sans dépendance ; tourne en local (il traduit `src/meteoGrid.ts` lui-même).
 - `npm run test:donnees` : `test:meteo` (mise à jour de la météo commune rejouée sur plusieurs jours
   avec des séries simulées : budgets, jours manquants, journée provisoire, publication) + `test:geologie` (règles des sols
-  sur la table de toutes les descriptions de France, `tests/donnees/`). `node tests/geologie.mjs non`
-  liste les formations encore sans sol, `sol <id>` et `grep <motif>` servent à régler les règles.
+  sur la table de toutes les descriptions de France, `tests/donnees/`) + `test:foret` (géométrie du
+  calcul des parts de forêt, lecteur de tuiles, fichier versionné ; lui seul tourne en local).
+  `node tests/geologie.mjs non` liste les formations encore sans sol, `sol <id>` et `grep <motif>`
+  servent à régler les règles.
 
 Après chaque modification : `npm run check` puis `npm run test:e2e` (`npm run test:donnees` si
 `scripts/`, `src/meteoGrid.ts` ou `src/metricsSchema.ts` changent ; `npm test` dans `worker/` si le
@@ -84,8 +91,9 @@ nouvelle dépendance sans raison.
 | `analyticsView.ts`, `analytics.css` | La vue Analytics (chargée à la demande, sans rien de la carte) : en-tête, entonnoir (emplacement vide), pari en cours, analyses, paris tranchés, états vides |
 | `analyticsData.ts` | **Le** fichier de contenu de la vue Analytics, modifié à la main (guide en tête du fichier) |
 | `analyticsTypes.ts`, `analyticsCheck.ts` | Format de ce contenu (types stricts : dates, adresse https) et relecture de ce que les types ne voient pas (date impossible, texte vide, valeur négative) |
-| `disclaimer.ts` | Avertissement bloquant (`<dialog>` modal, ni Échap ni clic à côté) : bouton actif 3 s après le premier affichage (horloge, pas minuteries), mémorisé par version des conditions, 30 jours au plus |
-| `legal.ts` | Version des conditions (`TERMS_VERSION`), adresse de « À propos », données gardées dans le navigateur, effacement |
+| `disclaimer.ts` | Avertissement bloquant (`<dialog>` modal, ni Échap ni clic à côté), moins de 100 mots : bouton actif 3 s après le premier affichage (horloge, pas minuteries ; il attend aussi la fin du texte si la fenêtre défile), mémorisé par version des conditions, 30 jours au plus ; dit si c'est un premier accord |
+| `tour.ts` | « La carte en 3 gestes » : fenêtre libre montrée après un premier accord et depuis la légende, schéma de l'écran dessiné en HTML/CSS (grand écran et téléphone) ; chargé avec l'entrée, n'importe rien de la carte |
+| `legal.ts` | Version des conditions (`TERMS_VERSION`), jour de la refonte (`TOUR_SINCE`), adresse de « À propos », données gardées dans le navigateur, effacement |
 | `apropos.ts`, `apropos.css` | Page `a-propos.html` (conseils, règles, conditions, mentions légales, confidentialité) : état de la mesure, « Effacer mes données » |
 | `zones.ts` | Zones protégées et forêt publique sous un point, hachures, `info.json` (sans lui : statut inconnu) |
 | `config.ts` | URLs des services, archives de tuiles (`archiveTiles`, zooms de `GEOLOGY` et `ZONES`), emprise de la France (`FRANCE_BOUNDS` : données et première vue), réglages de la météo, clé localStorage |
@@ -93,18 +101,19 @@ nouvelle dépendance sans raison.
 | `mapStyle.ts` | Style MapLibre (sources + couches), expressions couleur/filtre/motif, fonctions `apply*()` |
 | `state.ts` | Store observable (sélection, opacité, fond, champignon, météo, sol) + persistance localStorage |
 | `legend.ts` | Panneau « Légendes » : forêts (cases, groupes, préréglages, comptages), opacité, fond |
-| `legendExtras.ts` | Sections « Je cherche… », « Où cueillir », « Nature du sol », « Météo des 30 derniers jours » |
-| `ui.ts` | Section repliable, interrupteur, titre avec icône (partagés par les panneaux) |
-| `mushrooms.ts` | Profils des 5 champignons (hôtes, sols, saison, températures, délai après pluie, précautions) et indice |
+| `legendExtras.ts` | Sections « Je cherche… » (fiche, lien MycoDB), « Météo », « Nature du sol », « Droit de cueillir » |
+| `ui.ts` | Section repliable (chevron = bouton, titre cliquable aussi), interrupteur, titre avec icône (partagés par les panneaux) |
+| `mushrooms.ts` | Profils des 5 champignons (hôtes, sols, saison, températures, délai après pluie, précautions, fiche MycoDB) et indice (raisons, ce qui l'annule) |
+| `forestShare.ts` | Arbres hôtes de chaque carré de 4,5 km, lus dans `public/foret/parts.json` : part de surface et qualité moyenne des hôtes, par champignon |
 | `soils.ts` | 8 natures de sol, champignons associés, motifs dessinés au canevas |
 | `geology.ts` | Motifs fournis à MapLibre (`styleimagemissing`), forêt et sol sous un point |
 | `meteoGrid.ts` | Grille météo commune (cases de 0,16° × 0,224°, blocs de 8 × 8, 16 carrés de 4,5 km par case : `subBox`, `subIndexAt`), format des fichiers, dates ; lu aussi par Node (scripts) : aucun import |
 | `weather.ts` | Fichiers météo communs (index, blocs), résumé de 30 jours daté (épisodes de pluie, gel, `rain20` pour l'humidité, jour estimé), `atAltitude`, `summaryAtAltitude`, Open-Meteo en secours (cache du jour), altitude IGN |
-| `meteoLayer.ts` | Grille météo sur la vue, à tous les zooms (toute la France d'un coup en vue d'ensemble) : pluie cumulée ou indice du champignon choisi, détaillé par carrés de 4,5 km à partir du zoom 8 ; carrés fins en mode indice |
+| `meteoLayer.ts` | Grille météo sur la vue, à tous les zooms (toute la France d'un coup en vue d'ensemble) : pluie cumulée ou indice du champignon choisi, détaillé par carrés de 4,5 km à partir du zoom 8, allumés à la mesure de leurs arbres hôtes ; carrés fins en mode indice |
 | `fineGrid.ts` | Carrés de 500 m : découpage, relevé forêt/sol (index spatial sur `queryRenderedFeatures`), altitudes en cache permanent, indice par carré |
 | `metrics.ts` | Compteurs de consommation des API (en mémoire) et envoi groupé au serveur de mesure |
 | `metricsSchema.ts` | Liste des compteurs, partagée avec `worker/` (un compteur absent est refusé par le serveur) |
-| `spot.ts` | Bilan d'un coin au clic : forêt, sol, altitude, droit de cueillir, histogramme de pluie, verdicts expliqués |
+| `spot.ts` | Bilan d'un coin au clic, la réponse d'abord : zone protégée, terrain (forêt, sol, altitude, statut), une ligne par champignon, bouton « ? », pluie, règles repliées |
 | `search.ts` | Recherche de lieu (autocomplétion de la Géoplateforme) |
 | `toolbar.ts` | Boutons : légende, fond de carte, géolocalisation, plein écran, zoom |
 | `counts.ts` | Nombre de polygones par type dans les tuiles affichées |
@@ -117,6 +126,9 @@ PMTiles), `regles.mjs` (règles de classement des descriptions géologiques en n
 `scripts/meteo/` : `mettre-a-jour.mjs` (fichiers météo communs, voir « Météo commune »), `cases.mjs`
 (liste des cases qui touchent la France, d'après ADMIN EXPRESS, et altitude IGN de leurs carrés de
 4,5 km), `cases-france.json` (versionné).
+`scripts/foret/` : `parts.mjs` (parts de forêt par carré de 4,5 km → `public/foret/parts.json`,
+versionné), `mvt.mjs` (lecteur de tuiles vectorielles sans dépendance), `geometrie.mjs` (aires,
+découpage d'un anneau par un rectangle, tuiles XYZ).
 `scripts/zones/` : `telecharger.mjs` (WFS → GeoJSONSeq Lambert-93, noms nettoyés, `resume.json`),
 `construire.sh` (GPKG simplifié à 5 m → archive PMTiles, couches `protection`, `protection_nom` (un point par zone,
 pour n'afficher son nom qu'une fois : les sites des conservatoires sont faits de dizaines de parcelles)
@@ -143,6 +155,58 @@ ramenées à l'altitude de chaque carré (`a` dans les fichiers, `summaryAtAltit
 terre française n'est pas dessiné. En deçà du zoom 8, et en mode pluie, cases entières (`sub` = 0, à
 l'altitude médiane de leurs carrés). Étiquettes des carrés à partir du zoom 10 (une expression de
 zoom dans une propriété `layout` n'est évaluée qu'aux zooms entiers).
+
+Arbres hôtes (`forestShare.ts`, `public/foret/parts.json`, mode indice) : avant le 14/11/2026, cases
+et carrés ne regardaient que la météo (Paris affichait « 78 % · favorable », le bilan au même point
+« ≈ 0 % »). Désormais un carré n'est coloré que si les arbres hôtes du champignon y couvrent au moins
+`HOST_MIN_COVER` (5 %) de la surface, et d'autant plus qu'ils en couvrent (teinte pleine à
+`HOST_FULL_COVER`, 50 %) ; son indice est multiplié par la qualité moyenne de ces hôtes (pas par le
+sol, inconnu à cette échelle : le bilan peut donc être plus bas). Propriété `c_<champignon>` : part
+d'hôtes (0 à 1), −1 si le fichier manque (la grille se dessine alors comme avant et la légende le
+dit). Sous le seuil : ni teinte, ni quadrillage, ni étiquette, ni pastille. Case entière (zoom < 8) :
+moyenne de ses carrés, pastille posée sur le plus boisé. Aux zooms des carrés de 500 m, la grille des
+cases reste en fond sans étiquette dès que le relevé fin est fait (`fineDone`), même s'il n'a trouvé
+aucun arbre hôte. Fichier : par case commune, 16 carrés `[rang du code, part en %, …]` (null : pas de
+terre française) ; 899 ko, 223 ko compressé ; aux limites de départements des polygones de la BD
+Forêt se recouvrent (99 carrés ramenés à 100 %). Les identifiants de texte des cases (« I:J/k ») ne
+survivent pas aux tuiles de MapLibre : dans les tests, un carré se reconnaît à son centre (`x`, `y`).
+Simulé dans les tests e2e (`forestShare()` de `mocks.mjs`).
+
+## Bilan et légende : la réponse d'abord
+
+Refonte du 14/11/2026 (mesures du 13/11 : sur téléphone, aucun pourcentage visible à l'ouverture du
+bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
+
+- **Bilan** (`spot.ts`), dans l'ordre : alerte de zone protégée s'il y en a une (en tête, que la
+  météo réponde ou non) ; terrain (Forêt, Sol, Altitude, **Statut**) ; « Champignons · chance
+  estimée » ; météo ; « Droit de cueillir : les règles », replié ; actions ; une ligne de note.
+- **Statut** : toujours visible, un fait et ce qu'il implique (« Forêt sans doute privée : il faut
+  l'accord du propriétaire », « X : forêt publique »), jamais « autorisé ». C'est le garde-fou qui
+  permet de replier les règles : ne pas le déplacer sous les champignons. Un test e2e vérifie qu'il se
+  voit sans rien déplier.
+- **Champignons** : du plus probable au moins probable (tri sur l'indice, sans exception) ; le
+  champignon recherché est signalé à son rang (liseré, « recherché ») et sa ligne dépliée, sinon la
+  première si elle atteint 50 % ; les raisons sont dans un `<details>` par champignon ; exclu par la
+  saison ou la forêt (`MushroomScore.blocker`) : une ligne avec la raison. Le bilan ouvert suit le
+  champignon recherché (`SpotPanel.refresh()`). Il est redessiné jusqu'à trois fois par clic : tout ce
+  qui se déplie garde son état dans un champ de `SpotPanel`, remis à zéro à chaque nouveau coin.
+- **« ? »** (un seul, près du titre « Champignons ») : un bouton `aria-expanded` qui déplie un encart
+  sur place, au clic, au toucher et au clavier (Échap le replie) ; pas d'infobulle au survol (rien de
+  tel sur téléphone, et le panneau la rognerait). Il dit « estimation, pas une probabilité mesurée ».
+- Sous le zoom 10 la forêt est **inconnue**, pas absente (`forestUnknown`) : le bilan le dit et ne
+  retranche rien. La phrase de pluie d'un champignon commente la pluie récente qui n'a pas encore
+  fait pousser plutôt qu'une vieille pluie « dépassée » (sinon elle contredit le bloc météo).
+- **Légende** (`legend.ts`), dans l'ordre : « Je cherche… » (seule dépliée à la première visite),
+  « Météo », « Types de forêt » (repliée, rappel « 15 / 32 » dans l'en-tête), « Nature du sol »,
+  « Droit de cueillir », « Fond de carte : … », puis « Comment ça marche ? » et les liens. À la
+  première visite le panneau tient sans défiler (test e2e). Une section à interrupteur se déplie
+  quand sa couche est allumée, au chargement aussi.
+- **Fiche d'un champignon** : résumé, lien « Photos et description : *espèce* sur MycoDB (site
+  tiers) », conditions repliées, encadré de précaution en dernier. Les entrées sont des groupes : le
+  lien nomme l'espèce visée ; adresses en dur dans `mushrooms.ts` (MycoDB répond 200 pour une fiche
+  absente). Libellé neutre : ni « identifier », ni « comestible » (la fiche tierce, elle, l'écrit).
+  **MycoDB interdit les robots d'IA dans son `robots.txt` et bloque les rafales : ne jamais
+  l'interroger par script ni l'ajouter à `surveillance.yml`** ; une fiche se vérifie à la main.
 
 Grille fine (`fineGrid.ts`, zoom ≥ `FINE_MIN_ZOOM` = 12, mode indice) : chaque case de base de 4,5 km
 (0,04° × 0,056°) est découpée en 9 × 9 carrés (id « I:J ») ; une case météo commune en contient
@@ -376,11 +440,27 @@ passe : la page privée est servie par le Worker.
 ## Avertissement, conditions et droit de cueillir
 
 - Changer `TERMS_VERSION` (`src/legal.ts`) dès que le texte de l'avertissement ou des conditions
-  (`a-propos.html`) change : la carte redemande alors l'accord. Garder les deux textes cohérents.
-- Textes vérifiés le 03/11/2026 : conseils Anses (25/09/2025) et Santé.fr (06/07/2026), numéros des
-  huit centres antipoison (centres-antipoison.net, relevés le 03/11/2026 ; listés dans « À propos »,
-  l'avertissement dit seulement « le 15 ou un centre antipoison » : pas de numéro d'une région en
-  particulier), article 547 du Code civil,
+  (`a-propos.html`) change : la carte redemande alors l'accord. Garder les deux textes cohérents, et
+  regrouper les retouches de texte dans une seule version (un seul nouvel accord demandé).
+- Accueil en deux fenêtres, jamais un carrousel. (1) L'avertissement (`disclaimer.ts`) reste une
+  porte : bloquant, 3 s, un seul bouton « J'ai compris et j'accepte », accord enregistré à ce clic,
+  ni points de progression ni « Suivant ». Moins de 100 mots, lisibles sans défiler à 1280 × 860 et
+  390 × 844 (tests e2e) : les consignes de premier rang de l'Anses (connaître parfaitement, doute →
+  pharmacien ou association, pas d'application, jamais aux jeunes enfants, qui appeler), le droit de
+  cueillir, « estimation » et la responsabilité. Le reste des conseils (champignons entiers, panier,
+  espèces séparées avec leur raison, photo, cuisson, quantités, numéros) est dans « À propos ».
+  (2) « La carte en 3 gestes » (`tour.ts`) : libre (bouton, Échap, clic à côté ; fermetures ignorées
+  une demi-seconde, contre le double appui), après un premier accord seulement (aucun accord gardé,
+  ou version antérieure à `TOUR_SINCE` ; aucune clé de stockage en plus), retirée quand on quitte la
+  carte, rejouable depuis la légende. Son texte ne fait pas partie des conditions. Un schéma dessiné,
+  pas une capture (illisible à cette taille, à refaire à chaque retouche) ; sur téléphone il n'y a ni
+  gauche ni droite : on décrit les gestes.
+- Textes vérifiés le 13/11/2026 : communiqué de l'Anses du 20/10/2026 (liste courte et bilan 2025),
+  sa liste complète (article du 04/09/2025, d'où viennent cuisson, quantités, délai des symptômes et
+  la raison de la séparation des espèces), Santé.fr ; numéro national (01 45 42 59 59) et numéros des
+  huit centres antipoison (centres-antipoison.net, relevés les 03 et 13/11/2026 ; listés dans
+  « À propos », l'avertissement dit seulement « le 15 ou un centre antipoison » : pas de numéro d'une
+  région en particulier), article 547 du Code civil,
   articles L163-11 et R163-5 du Code forestier (réponse ministérielle, JO du 25/12/2012), LCEN
   article 1-1 (II) pour l'éditeur non professionnel anonyme (loi SREN de 2024), hébergeur GitHub, Inc.
 - Wording : ne jamais écrire qu'un champignon est comestible, ni qu'un lieu est autorisé ; parler
@@ -418,7 +498,9 @@ passe : la page privée est servie par le Worker.
   `CHANCE_THRESHOLD` = 50 % : en dessous, rien n'est mis en avant (pas d'étiquette, case presque
   effacée). Vue d'ensemble (zoom < 10) : pastilles `meteo-points` sur les 12 meilleurs secteurs de la
   vue, espacés ; à partir du zoom 10, pourcentage dans chaque carré ; bilan : « ≈ 62 % · possible ».
-  Toujours écrire « estimée » ou « ≈ » : ce n'est pas une probabilité mesurée.
+  Toujours écrire « estimée » ou « ≈ » : ce n'est pas une probabilité mesurée. Sur la carte, le
+  pourcentage d'un carré vaut pour ses forêts hôtes (voir « Arbres hôtes ») ; un carré éteint n'est
+  pas « sans champignon », un carré coloré n'est ni une promesse ni un droit de cueillir.
 
 ## Conventions
 
@@ -443,7 +525,11 @@ passe : la page privée est servie par le Worker.
   Dependabot (une fois par semaine, versions d'au moins 7 jours). Nouveau compteur : l'ajouter dans
   `metricsSchema.ts` (avec son plafond par envoi), puis `track()` au bon endroit.
 - Chaque fiche champignon rappelle que l'indice ne dit pas ce qui se mange ; une espèce ajoutée
-  prend un champ `caution` si elle a un sosie dangereux.
+  prend un champ `caution` si elle a un sosie dangereux, et un champ `sheet` (fiche MycoDB de
+  l'espèce nommée, vérifiée à la main).
+- Mots à ne pas écrire dans l'interface : « comestible », « garanti », « autorisé », « probabilité »
+  (sauf « pas une probabilité mesurée »), « trouvez ». Un même mot par chose : « chance estimée »
+  pour tout pourcentage, « Droit de cueillir » des deux côtés, « carrés ».
 
 ## Limites connues
 
@@ -472,6 +558,20 @@ passe : la page privée est servie par le Worker.
   laisser l'ancienne position dans l'entrée de l'historique (seul Précédent la retrouve). Entre 641 et
   1187 px de large, l'îlot n'est pas centré. Graphiques de la vue Analytics : une série de barres
   (ni courbe ni comparaison de deux séries).
+- Arbres hôtes des carrés : BD Forêt de 2007 à 2018, seuil de 5 % choisi à l'œil ; un carré qui mêle
+  ville et forêt reste coloré, en pâle ; pour les chanterelles en tube (hôtes surtout résineux) la
+  carte se vide en plaine de feuillus. Un carré de 500 m se dessine dès qu'un de ses neuf points est
+  sous un arbre hôte : un petit bois en ville en pose encore un.
+- Accueil : tant qu'une de ses deux fenêtres est ouverte, l'îlot ne répond pas ; sans stockage du
+  navigateur, la présentation revient à chaque visite ; sur téléphone, une fois fermée, la légende
+  reste fermée et rien à l'écran ne dit de choisir un champignon. Rien n'a été essayé sur un vrai
+  téléphone ni avec un lecteur d'écran.
+- MycoDB : site tiers tenu par des bénévoles ; un renommage d'espèce casse le lien sans erreur
+  visible ; la fiche qualifie la comestibilité, ce que le site s'interdit d'écrire lui-même.
+- Mentions légales : `a-propos.html` présente l'éditeur comme un particulier non professionnel qui ne
+  publie pas son identité, alors que la vue Analytics porte un lien vers son profil LinkedIn ; et
+  Open-Meteo réserve son API gratuite aux usages non commerciaux (ses conditions rangent les
+  « promotional activities » parmi les usages commerciaux). À trancher par l'éditeur.
 
 ## Pistes pour la suite
 
@@ -493,3 +593,8 @@ passe : la page privée est servie par le Worker.
 10. Garder une copie des tuiles géologiques dans une release du dépôt (si le miroir disparaît).
 11. Vue Analytics : brancher l'entonnoir en direct (mesure et consentement à décider), puis une
     courbe ou une seconde série dans les graphiques quand une analyse en a besoin.
+12. Téléphone : ouvrir la légende à la fermeture de la présentation, et faire dire « Choisissez un
+    champignon » au bandeau du haut tant qu'aucun n'est choisi.
+13. Resserrer la grille fine (2 ou 3 points sur 9 sous un arbre hôte), liens vers les fiches des
+    sosies dangereux, et mesurer la part des visites qui ouvrent un bilan avant et après la refonte
+    (les compteurs `app.sessions` et `app.spots` existent déjà).
