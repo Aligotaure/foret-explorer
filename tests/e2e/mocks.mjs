@@ -331,14 +331,45 @@ const COMPLETION = {
   ],
 };
 
+/** Case commune et carrés particuliers du fichier simulé des parts de forêt (voir `forestShare`). */
+export const SHARE_CELL = '287:27';
+export const SHARE_BARE = 1; // carré sans aucun arbre
+export const SHARE_THIN = 2; // 3 % de hêtres : sous le seuil
+export const SHARE_OTHER = 5; // 80 % de robiniers : pas un hôte du cèpe
+
+/**
+ * Parts de forêt simulées : partout 60 % de hêtraie (hôte du cèpe), sauf trois carrés de la case
+ * `SHARE_CELL`, au centre de la vue des tests (Annecy), qui servent à vérifier que la carte s'éteint
+ * là où il n'y a pas d'arbres hôtes.
+ */
+function forestShare() {
+  const codes = ['FF1-09-09', 'FF1-14-14'];
+  const cases = {};
+  for (let i = 270; i <= 300; i++) {
+    for (let j = 15; j <= 40; j++) cases[`${i}:${j}`] = Array.from({ length: 16 }, () => [0, 60]);
+  }
+  cases[SHARE_CELL][SHARE_BARE] = [];
+  cases[SHARE_CELL][SHARE_THIN] = [0, 3];
+  cases[SHARE_CELL][SHARE_OTHER] = [1, 80];
+  return { v: 1, genere: '2026-11-13', source: 'essai', pasLat: 0.04, pasLon: 0.056, codes, cases };
+}
+
 /**
  * Intercepte les requêtes vers les services externes et les consigne dans `log`.
  * `meteoCommune: false` : fichiers météo communs injoignables ; `'ancienne'` : en retard de 6 jours
  * (dans les deux cas, la carte se rabat sur Open-Meteo) ; `'provisoire'` : le passage du jour n'a
  * pas encore eu lieu, hier n'est connu que par l'estimation de la veille.
  */
-export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0 } = {}) {
+export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0, foret = true } = {}) {
   log.meteo ??= [];
+  log.foret ??= [];
+  // Parts de forêt par carré de 4,5 km (public/foret/parts.json) : le vrai fichier pèse 900 ko et
+  // changerait les tests à chaque recalcul. `foret: false` : fichier absent.
+  await page.route('**/foret/parts.json', (route) => {
+    log.foret.push(new URL(route.request().url()).pathname);
+    if (!foret) return route.fulfill({ status: 404, body: '' });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(forestShare()) });
+  });
   log.meteoCommune ??= [];
   log.geologie ??= [];
   log.altitude ??= [];

@@ -9,7 +9,7 @@
 import { mkdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { installMocks } from './mocks.mjs';
+import { SHARE_BARE, SHARE_CELL, SHARE_OTHER, SHARE_THIN, installMocks } from './mocks.mjs';
 import { viewTests } from './views.mjs';
 
 const OUT = fileURLToPath(new URL('./shots/', import.meta.url));
@@ -539,6 +539,44 @@ async function desktopTests(browser, base) {
   check('Je cherche cèpes → forêts hôtes seulement', cepes.filter.includes('FF1-09-09') && !cepes.filter.includes('FF1-14-14'), cepes.filter.slice(0, 80));
   check('Je cherche cèpes → grille « indice » visible', cepes.mode === 'indice' && cepes.visible === 'visible' && cepes.fill.includes('l_cepe'), `${cepes.mode} ${cepes.visible}`);
   check('grille météo calculée', cepes.levels.length > 0 && cepes.levels.every((l) => l >= 0 && l <= 3), `niveaux ${cepes.levels.join(',')}`);
+
+  // Arbres hôtes : un carré n'est coloré que s'il en contient (fichier des parts de forêt, simulé ici).
+  const hosts = await page.evaluate(
+    ({ cell, squares }) => {
+      // Un carré se reconnaît à son centre (les identifiants de texte ne survivent pas aux tuiles de MapLibre).
+      const [ci, cj] = cell.split(':').map(Number);
+      const centre = (k) => `${((cj * 4 + (k % 4) + 0.5) * 0.056).toFixed(3)},${((ci * 4 + Math.floor(k / 4) + 0.5) * 0.04).toFixed(3)}`;
+      const key = (p) => `${Number(p.x).toFixed(3)},${Number(p.y).toFixed(3)}`;
+      const by = new Map(window.map.querySourceFeatures('meteo').map((f) => [key(f.properties), f.properties]));
+      const pick = (k) => {
+        const p = by.get(centre(k));
+        return p ? { c: p.c_cepe, p: p.p_cepe, l: p.l_cepe } : null;
+      };
+      const labels = new Set(window.map.queryRenderedFeatures({ layers: ['meteo-etiquettes'] }).map((f) => key(f.properties)));
+      return {
+        unlit: squares.map(pick),
+        wooded: pick(0),
+        opacity: JSON.stringify(window.map.getPaintProperty('meteo-cellules', 'fill-opacity')),
+        lines: JSON.stringify(window.map.getPaintProperty('meteo-contours', 'line-opacity')),
+        labelled: squares.filter((k) => labels.has(centre(k))),
+        labels: labels.size,
+        caveat: [...document.querySelectorAll('#legend .legend-hint--caveat')].filter((p) => !p.hidden).map((p) => p.textContent).join(' '),
+      };
+    },
+    { cell: SHARE_CELL, squares: [SHARE_BARE, SHARE_THIN, SHARE_OTHER] },
+  );
+  check(
+    'carrés : sans arbre hôte du champignon (aucun arbre, 3 % de hêtres, robiniers), ni chance ni niveau',
+    hosts.unlit.every((u) => u && u.p === 0 && u.l === 0) && hosts.unlit.map((u) => u?.c).join() === '0,0.03,0' && hosts.wooded?.c === 0.6,
+    JSON.stringify({ unlit: hosts.unlit, wooded: hosts.wooded }),
+  );
+  check(
+    'carrés : teinte et quadrillage éteints sous 5 % d’arbres hôtes, aucune étiquette sur ces carrés',
+    hosts.opacity.includes('"c_cepe"') && hosts.opacity.includes('0.05') && hosts.lines.includes('"c_cepe"') && hosts.labelled.length === 0,
+    `${hosts.labels} étiquette(s) dans la vue, ${hosts.labelled.length} sur un carré éteint`,
+  );
+  check('légende : « seuls les secteurs où poussent ses arbres hôtes sont colorés », estimation rappelée', /arbres hôtes sont colorés/.test(hosts.caveat) && /estimées, pas mesurées/.test(hosts.caveat), hosts.caveat.slice(0, 80));
+  check('parts de forêt : un seul chargement du fichier', log.foret.length === 1, `${log.foret.length} requête(s)`);
   check(
     'grille météo lue dans les fichiers communs, sans appel à Open-Meteo',
     log.meteo.length === 0 && log.meteoCommune.some((p) => p.endsWith('/meteo/index.json')) && log.meteoCommune.some((p) => /\/b\/\d+_\d+\.json$/.test(p)),
@@ -847,6 +885,25 @@ async function fallbackTests(browser, base) {
     JSON.stringify(provisional).slice(0, 200),
   );
   check('bilan : chance estimée en % pour chaque champignon', provisional.pills.length === 5 && provisional.pills.every((t) => /^≈ \d+ % · /.test(t)), provisional.pills.join(' | '));
+
+  // Fichier des parts de forêt absent : la grille se dessine comme avant, et la légende le dit.
+  const page5 = await context.newPage();
+  await installMocks(page5, { tms: [], wmts: [], geocode: [], other: [] }, { foret: false });
+  await page5.goto(`${base}#carte=10.5/45.92/6.19`);
+  await waitForMap(page5);
+  await page5.getByRole('button', { name: 'Cèpes', exact: true }).click();
+  await page5.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 0, null, { timeout: 15000 });
+  const blind = await page5.evaluate(() => ({
+    covers: [...new Set(window.map.querySourceFeatures('meteo').map((f) => f.properties.c_cepe))],
+    levels: [...new Set(window.map.querySourceFeatures('meteo').map((f) => f.properties.l_cepe))],
+    status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '',
+  }));
+  check(
+    'parts de forêt absentes : tous les carrés dessinés à la météo seule, la légende le dit',
+    blind.covers.join() === '-1' && blind.levels.length > 0 && /Arbres hôtes inconnus/.test(blind.status),
+    `c = ${blind.covers.join()} ; ${blind.status.slice(-90)}`,
+  );
+  await page5.close();
 
   // Altitude IGN lente : la météo s'affiche sans l'attendre, puis le bilan est refait.
   const page4 = await context.newPage();

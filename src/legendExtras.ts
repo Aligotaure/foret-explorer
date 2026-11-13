@@ -2,7 +2,7 @@
  * Sections ajoutées au panneau « Légendes » : « Je cherche… », nature du sol, météo.
  * Comme le reste du panneau, elles ne touchent jamais la carte : elles lisent et modifient le Store.
  */
-import { FINE_MIN_ZOOM, GEOLOGY, WEATHER_SUB_MIN_ZOOM, ZONES } from './config';
+import { FINE_MIN_ZOOM, GEOLOGY, HOST_MIN_COVER, WEATHER_SUB_MIN_ZOOM, ZONES } from './config';
 import { h } from './dom';
 import { CLASS_BY_CODE } from './forestClasses';
 import { ABOUT_URL } from './legal';
@@ -259,7 +259,11 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
   const scale = h('ul', { class: 'scale' });
   const status = h('p', { class: 'legend-hint', 'aria-live': 'polite' });
   // Toujours sous les yeux quand la grille est allumée : ce que vaut le chiffre. Le mode d'emploi, lui, se déplie.
-  const caveat = h('p', { class: 'legend-hint legend-hint--caveat' }, 'Chances estimées, pas mesurées : ni promesse d’en trouver, ni droit de cueillir, ni avis sur ce qui se mange.');
+  const caveat = h(
+    'p',
+    { class: 'legend-hint legend-hint--caveat' },
+    'Seuls les secteurs où poussent ses arbres hôtes sont colorés. Chances estimées, pas mesurées : ni promesse d’en trouver, ni droit de cueillir, ni avis sur ce qui se mange.',
+  );
   const content = h(
     'div',
     {},
@@ -275,6 +279,11 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
         'p',
         {},
         `Pluie et températures par cases d’environ ${CELL_KM} km sur toute la France, mises à jour une fois par jour. L’estimation se précise en zoomant : carrés de 4,5 km à partir du zoom ${WEATHER_SUB_MIN_ZOOM}, puis carrés de 500 m là où poussent les arbres hôtes à partir du zoom ${FINE_MIN_ZOOM}, avec le sol de chacun. Les températures sont ramenées à l’altitude de chaque carré ; la pluie reste celle de la case.`,
+      ),
+      h(
+        'p',
+        {},
+        `Un carré de 4,5 km n’est coloré que si les arbres hôtes du champignon y couvrent au moins ${Math.round(HOST_MIN_COVER * 100)} % de la surface (BD Forêt de l’IGN), et d’autant plus qu’ils en couvrent ; son pourcentage vaut pour ces forêts, sans tenir compte du sol. Le bilan d’un coin, lui, regarde la forêt et le sol du point touché : son chiffre peut être plus bas.`,
       ),
       h(
         'p',

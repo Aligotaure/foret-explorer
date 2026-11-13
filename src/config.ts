@@ -68,6 +68,16 @@ export const METEO_BASE = import.meta.env.DEV
   ? 'https://aligotaure.github.io/foret-explorer/data/meteo/'
   : new URL('data/meteo/', document.baseURI).href;
 
+/**
+ * Parts de forêt de chaque carré de 4,5 km (scripts/foret/parts.mjs ; fichier versionné, servi avec le
+ * site, en développement aussi). Un carré d'indice n'est coloré que si les arbres hôtes du champignon
+ * y couvrent au moins HOST_MIN_COVER de la surface, et d'autant plus qu'ils en couvrent (teinte
+ * pleine à HOST_FULL_COVER) : centres-villes, mer et plaines sans arbres restent éteints.
+ */
+export const FOREST_SHARE_URL = new URL('foret/parts.json', document.baseURI).href;
+export const HOST_MIN_COVER = 0.05;
+export const HOST_FULL_COVER = 0.5;
+
 /** Météo de secours : Open-Meteo en direct (gratuit, sans clé, usage non commercial). */
 export const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
 /**

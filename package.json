@@ -14,7 +14,8 @@
     "test:e2e": "node tests/e2e/run.mjs",
     "test:meteo": "node tests/meteo.mjs",
     "test:geologie": "node tests/geologie.mjs",
-    "test:donnees": "node tests/meteo.mjs && node tests/geologie.mjs"
+    "test:foret": "node tests/foret.mjs",
+    "test:donnees": "node tests/meteo.mjs && node tests/geologie.mjs && node tests/foret.mjs"
   },
   "dependencies": {
     "maplibre-gl": "^5.6.0",

@@ -3,6 +3,8 @@ import type { GeoJSONSource, Map as MapLibreMap } from 'maplibre-gl';
 import {
   FINE_MIN_ZOOM,
   FRANCE_BOUNDS,
+  HOST_FULL_COVER,
+  HOST_MIN_COVER,
   WEATHER_MAX_CELLS,
   WEATHER_MIN_ZOOM,
   WEATHER_SUB_LABEL_MIN_ZOOM,
@@ -19,9 +21,10 @@ import {
   type FineCell,
   type Sample,
 } from './fineGrid';
+import { hostCover, hostCoverOfCell, loadForestShare, type HostCover } from './forestShare';
 import { track } from './metrics';
 import { CELL_KM, subBox, subIndexAt } from './meteoGrid';
-import { CHANCE_THRESHOLD, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, chanceOf, scoreMushroom, type MushroomId } from './mushrooms';
+import { CHANCE_THRESHOLD, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, chanceOf, scoreMushroom, type Mushroom, type MushroomId } from './mushrooms';
 import { LAYERS, SOURCES, applyOpacity, setFineVisible, setMeteoVisible } from './mapStyle';
 import type { AppState, Store } from './state';
 import {
@@ -54,9 +57,9 @@ export type MeteoStatus =
   /**
    * `day` : dernier jour connu (`estimated` : d'après la prévision, en attendant la mise à jour du
    * jour) ; `shared` : fichiers communs (sinon Open-Meteo en direct) ; `sub` : indice détaillé par
-   * carrés de 4,5 km.
+   * carrés de 4,5 km ; `hosts` : les arbres hôtes de chaque carré sont connus (sinon tout est coloré).
    */
-  | { state: 'ok'; cells: number; day: string; estimated: boolean; shared: boolean; sub: boolean; best: number | null; fine: FineStatus }
+  | { state: 'ok'; cells: number; day: string; estimated: boolean; shared: boolean; sub: boolean; hosts: boolean; best: number | null; fine: FineStatus }
   | { state: 'error'; message: string };
 
 /** Pastilles de la vue d'ensemble, au plus. */
@@ -100,6 +103,10 @@ function boxPolygon(c: Box, inset = 0): Polygon {
   };
 }
 
+/** Quadrillage des cases : absent en vue d'ensemble (les cases ne font que quelques pixels). */
+const GRID_LINE_OPACITY = 0.25;
+const gridLineOpacity = (opacity: unknown): unknown[] => ['interpolate', ['linear'], ['zoom'], 6.5, 0, 8, opacity];
+
 /** Marge entre deux carrés fins : une mosaïque se lit mieux qu'un damier collé. */
 const FINE_INSET = 0.06;
 
@@ -133,8 +140,14 @@ export class MeteoLayer {
   private controller: AbortController | null = null;
   private status: MeteoStatus = { state: 'off' };
   private readonly listeners = new Set<(s: MeteoStatus) => void>();
-  /** Des carrés fins sont dessinés : la grille des cases s'efface aux zooms où ils apparaissent. */
+  /** Des carrés fins sont dessinés : les forêts s'estompent aux zooms où ils apparaissent. */
   private fineShown = false;
+  /**
+   * Le relevé fin de la vue est fait (zoom des carrés de 500 m) : la grille des cases passe en fond,
+   * sans étiquette, même s'il n'a trouvé aucun arbre hôte. Sans cela, un grand carré plein et son
+   * pourcentage revenaient sur un village ou un centre-ville dès qu'on zoomait dessus.
+   */
+  private fineDone = false;
   readonly refresh = debounce(() => void this.update(), 500);
 
   constructor(
@@ -178,6 +191,7 @@ export class MeteoLayer {
       const steps = RAIN_STEPS.flatMap((s, i) => (i === 0 ? [s.color] : [s.min, s.color]));
       this.map.setPaintProperty(LAYERS.meteoFill, 'fill-color', ['step', ['get', 'rain20'], ...steps] as never);
       this.map.setPaintProperty(LAYERS.meteoFill, 'fill-opacity', 0.38);
+      this.map.setPaintProperty(LAYERS.meteoLine, 'line-opacity', gridLineOpacity(GRID_LINE_OPACITY) as never);
       this.map.setLayoutProperty(LAYERS.meteoLabel, 'text-field', ['concat', ['to-string', ['get', 'rain20']], ' mm']);
     } else {
       this.paintIndex(indexMushroom(state));
@@ -190,19 +204,25 @@ export class MeteoLayer {
     const colors = LEVELS.flatMap((l, i) => [i, l.color]);
     // Sous le seuil, un secteur ne vaut pas le déplacement : presque effacé, sans étiquette.
     const chance = ['get', `p_${id}`];
-    const opacity = ['match', level, 0, 0.04, 1, 0.1, 2, 0.26, 3, 0.36, 0];
+    // Arbres hôtes du carré (`c_`, part de sa surface ; −1 : inconnue, on dessine comme avant) :
+    // éteint sous le seuil, puis d'autant plus soutenu qu'il est boisé.
+    const cover = ['get', `c_${id}`];
+    const unlit = ['all', ['>=', cover, 0], ['<', cover, HOST_MIN_COVER]];
+    const wooded = ['case', ['<', cover, 0], 1, unlit, 0, ['interpolate', ['linear'], cover, HOST_MIN_COVER, 0.45, HOST_FULL_COVER, 1]];
+    const opacity = ['*', ['match', level, 0, 0.04, 1, 0.1, 2, 0.26, 3, 0.36, 0], wooded];
     const text = ['case', ['>=', chance, CHANCE_THRESHOLD], ['concat', ['to-string', chance], ' %'], ''];
     // Étiquettes : celles des cases entières en vue d'ensemble, celles des carrés de 4,5 km quand ils
     // sont assez grands ; avec les carrés fins, la grille reste en fond, très pâle et sans étiquettes.
     // (En vue d'ensemble, ce sont les pastilles des meilleurs secteurs qui portent les pourcentages.)
     const textByZoom: unknown[] = ['step', ['zoom'], '', WEATHER_SUB_LABEL_MIN_ZOOM, text];
-    if (this.fineShown) textByZoom.push(FINE_MIN_ZOOM, '');
+    if (this.fineDone) textByZoom.push(FINE_MIN_ZOOM, '');
     // Vue d'ensemble (France entière) : couleurs plus soutenues, sinon les petites cases se perdent
     // sur le fond de carte ; opacité normale à partir du zoom 9.
     const fillOpacity: unknown[] = ['interpolate', ['linear'], ['zoom'], 6, ['*', 2, opacity], 9, opacity];
-    if (this.fineShown) fillOpacity.push(FINE_MIN_ZOOM - 0.01, opacity, FINE_MIN_ZOOM, ['*', 0.35, opacity]);
+    if (this.fineDone) fillOpacity.push(FINE_MIN_ZOOM - 0.01, opacity, FINE_MIN_ZOOM, ['*', 0.35, opacity]);
     this.map.setPaintProperty(LAYERS.meteoFill, 'fill-color', ['match', level, ...colors, 'rgba(0,0,0,0)'] as never);
     this.map.setPaintProperty(LAYERS.meteoFill, 'fill-opacity', fillOpacity as never);
+    this.map.setPaintProperty(LAYERS.meteoLine, 'line-opacity', gridLineOpacity(['case', unlit, 0, GRID_LINE_OPACITY]) as never);
     this.map.setLayoutProperty(LAYERS.meteoLabel, 'text-field', textByZoom as never);
 
     const coverage = ['get', `c_${id}`];
@@ -258,10 +278,12 @@ export class MeteoLayer {
     return ranked[0]?.p ?? null;
   }
 
-  private showFine(on: boolean): void {
+  /** `done` : le relevé fin de la vue est fait, qu'il ait trouvé des arbres hôtes (`on`) ou non. */
+  private showFine(on: boolean, done = on): void {
     if (!on) this.map.getSource<GeoJSONSource>(SOURCES.meteoFine)?.setData({ type: 'FeatureCollection', features: [] });
-    if (on === this.fineShown) return;
+    if (on === this.fineShown && done === this.fineDone) return;
     this.fineShown = on;
+    this.fineDone = done;
     if (this.store.state.weatherMode === 'indice') this.paintIndex(indexMushroom(this.store.state));
     applyOpacity(this.map, this.store.state.opacity, this.dimsForests);
   }
@@ -317,23 +339,33 @@ export class MeteoLayer {
       let count = 0;
       let detailed = false;
       const features: Feature[] = [];
-      const add = (id: string, w: WeatherSummary, box: Box, sub: 0 | 1): void => {
+      // Arbres hôtes de chaque carré (mode indice) : sans eux, le pourcentage ne regardait que la météo.
+      const hosts = state.weatherMode === 'indice' && (await loadForestShare());
+      if (controller.signal.aborted) return;
+      const add = (id: string, w: WeatherSummary, box: Box, sub: 0 | 1, hostsOf: (m: Mushroom) => HostCover | null, spot: Box = box): void => {
         const properties: Record<string, number> = {
           rain20: Math.round(w.rain20),
           elevation: Math.round(w.elevation),
           lastRain: w.events[0]?.daysAgo ?? -1,
           sub,
-          x: +((box.west + box.east) / 2).toFixed(4),
-          y: +((box.south + box.north) / 2).toFixed(4),
+          // Où poser la pastille de la vue d'ensemble : au centre, ou sur le carré le plus boisé d'une case.
+          x: +((spot.west + spot.east) / 2).toFixed(4),
+          y: +((spot.south + spot.north) / 2).toFixed(4),
         };
         for (const m of MUSHROOMS) {
-          const score = scoreMushroom(m, w, month);
-          properties[`l_${m.id}`] = score.level;
-          properties[`s_${m.id}`] = Math.round(score.score * 100) / 100;
-          properties[`p_${m.id}`] = score.chance;
+          const host = hosts ? hostsOf(m) : null;
+          // Arbres hôtes connus : l'indice vaut pour eux (qualité moyenne des hôtes du carré), et sous
+          // le seuil de couverture le carré est éteint pour ce champignon. Inconnus (−1) : météo seule.
+          const lit = !host || host.cover >= HOST_MIN_COVER;
+          const score = lit ? scoreMushroom(m, w, month, host ? { hostQuality: host.quality } : {}) : null;
+          properties[`l_${m.id}`] = score?.level ?? 0;
+          properties[`s_${m.id}`] = score ? Math.round(score.score * 100) / 100 : 0;
+          properties[`p_${m.id}`] = score?.chance ?? 0;
+          properties[`c_${m.id}`] = host ? Math.round(host.cover * 100) / 100 : -1;
         }
         features.push({ type: 'Feature', id, properties, geometry: boxPolygon(box) });
       };
+      const shown = MUSHROOM_BY_ID.get(indexMushroom(state));
       for (const c of cells) {
         const s = series.get(c.id);
         if (!s) continue;
@@ -346,17 +378,18 @@ export class MeteoLayer {
         if (subdivide && s.subAltitudes) {
           detailed = true;
           s.subAltitudes.forEach((z, k) => {
-            if (z !== null) add(`${c.id}/${k}`, summaryAtAltitude(w, z), subBox(c, k), 1);
+            if (z !== null) add(`${c.id}/${k}`, summaryAtAltitude(w, z), subBox(c, k), 1, (m) => hostCover(c.id, k, m));
           });
         } else {
           // Case entière : à l'altitude médiane de ses carrés plutôt qu'à celle du point de relevé.
-          add(c.id, summaryAtAltitude(w, medianAltitude(s)), c, 0);
+          const best = hosts && shown ? hostCoverOfCell(c.id, shown)?.best : undefined;
+          add(c.id, summaryAtAltitude(w, medianAltitude(s)), c, 0, (m) => hostCoverOfCell(c.id, m), best !== undefined && best >= 0 ? subBox(c, best) : c);
         }
       }
       this.map.getSource<GeoJSONSource>(SOURCES.meteo)?.setData({ type: 'FeatureCollection', features });
       const best = this.showHotspots(state.weatherMode === 'indice' ? features : [], indexMushroom(state), view.east - view.west);
       const fine: FineStatus = state.weatherMode === 'indice' ? { state: 'loading' } : { state: 'off' };
-      this.setStatus({ state: 'ok', cells: count, day, estimated, shared: weather.shared, sub: detailed, best, fine });
+      this.setStatus({ state: 'ok', cells: count, day, estimated, shared: weather.shared, sub: detailed, hosts, best, fine });
       if (state.weatherMode === 'indice') await this.updateFine(series, controller.signal);
       else this.showFine(false);
     } catch (error) {
@@ -449,7 +482,8 @@ export class MeteoLayer {
       if (any) features.push({ type: 'Feature', id: c.id, properties, geometry: boxPolygon(c, FINE_INSET) });
     }
     this.map.getSource<GeoJSONSource>(SOURCES.meteoFine)?.setData({ type: 'FeatureCollection', features });
-    this.showFine(features.length > 0);
+    // Tous les carrés boisés ont leur altitude (ou on s'en passe) : le relevé fin fait foi, même vide.
+    this.showFine(features.length > 0, features.length > 0 || fallback || cells.every((c) => altitudes.has(c.id)));
     return count;
   }
 }
@@ -500,8 +534,10 @@ export function describeStatus(s: MeteoStatus, state: AppState): string {
           ? ''
           : s.best === null
             ? ` Aucun secteur à ${CHANCE_THRESHOLD} % ou plus dans la vue.`
-            : ` Meilleure chance dans la vue : ${s.best} %.`;
-      return `${s.cells} cases de ${CELL_KM} km · ${what}${until}.${best}${source}${fineText(s.fine)}`;
+            : ` Meilleure chance estimée dans la vue : ≈ ${s.best} %.`;
+      // Sans le fichier des parts de forêt, la grille ne sait pas où sont les arbres : autant le dire.
+      const blind = state.weatherMode === 'indice' && !s.hosts ? ' Arbres hôtes inconnus pour le moment : tous les secteurs sont colorés, forêt ou non.' : '';
+      return `${s.cells} cases de ${CELL_KM} km · ${what}${until}.${best}${blind}${source}${fineText(s.fine)}`;
     }
   }
 }
