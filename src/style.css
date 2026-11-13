@@ -1708,8 +1708,8 @@ html[data-view='analytics'] .island__link[data-view='analytics'] {
   padding: 6px 12px;
   border: 0;
   border-radius: var(--radius);
-  background: var(--accent);
-  color: #fff;
+  background: #fff; /* bleu France sur blanc : contraste de 15 pour 1 */
+  color: var(--france);
   font-weight: 600;
   cursor: pointer;
 }

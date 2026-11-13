@@ -65,6 +65,7 @@ function header(data: AnalyticsData): HTMLElement {
           { class: 'analytics__contact', href: contact.url, target: '_blank', rel: 'noopener noreferrer' },
           contact.label.trim() || 'Me contacter',
           h('span', { 'aria-hidden': 'true' }, '↗'),
+          h('span', { class: 'visually-hidden' }, ' (nouvel onglet)'),
         )
       : null;
   return h(
@@ -112,7 +113,8 @@ function barChart(chart: Chart, caption: string): HTMLElement | null {
     'figure',
     { class: 'analytics-figure' },
     h('figcaption', { class: 'visually-hidden' }, `Graphique : ${caption}`),
-    h('ul', { class: 'analytics-bars' }, ...rows),
+    // `role="list"` : sans lui, Safari ne dit plus « liste » d'une liste sans puces.
+    h('ul', { class: 'analytics-bars', role: 'list' }, ...rows),
   );
 }
 
@@ -176,13 +178,13 @@ export function renderAnalytics(root: HTMLElement, data: AnalyticsData): void {
       section(
         'Analyses',
         data.analyses.length
-          ? h('ul', { class: 'analytics-analyses' }, ...data.analyses.map(analysisCard))
+          ? h('ul', { class: 'analytics-analyses', role: 'list' }, ...data.analyses.map(analysisCard))
           : empty('Aucune analyse publiée pour le moment.'),
       ),
       section(
         'Paris tranchés',
         data.settledBets.length
-          ? h('ul', { class: 'analytics-bets' }, ...data.settledBets.map(settledRow))
+          ? h('ul', { class: 'analytics-bets', role: 'list' }, ...data.settledBets.map(settledRow))
           : empty('Aucun pari tranché pour le moment.'),
       ),
     ].filter((node): node is HTMLElement => node !== null),

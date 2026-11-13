@@ -334,6 +334,13 @@ html[data-view='analytics'] {
   background: var(--lavender);
 }
 
+/* Couleurs forcées (contraste élevé de Windows) : les fonds d'auteur disparaissent, pas celui-ci. */
+@media (forced-colors: active) {
+  .analytics-bars__bar {
+    background: CanvasText;
+  }
+}
+
 .analytics-bars__value {
   color: #fff;
   font-variant-numeric: tabular-nums;

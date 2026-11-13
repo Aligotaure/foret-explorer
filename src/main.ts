@@ -29,22 +29,33 @@ function reportFailure(view: ViewId, error: unknown): void {
   box.hidden = false;
 }
 
+/** L'alerte affichée pendant l'avertissement (fenêtre modale) n'a pas été lue : on la redit après. */
+function repeatFailure(): void {
+  const box = byId('view-error');
+  if (!box.hidden) box.replaceChildren(...box.childNodes);
+}
+
 function show(view: ViewId): void {
   byId('view-error').hidden = true; // le message ne concernait que la vue qu'on quitte
   if (!loading.has(view)) {
+    // Tant que le code de la vue n'est pas arrivé, les lecteurs d'écran la savent en cours de chargement.
+    const root = byId(view === 'map' ? 'app' : 'analytics');
+    root.setAttribute('aria-busy', 'true');
     loading.set(
       view,
-      loaders[view]().catch((error: unknown) => {
-        loading.delete(view); // nouvel essai à la prochaine ouverture de la vue
-        // Le visiteur est déjà passé à l'autre vue : le message attendra son retour (et un nouvel essai).
-        if (currentView() === view) reportFailure(view, error);
-        else console.warn('[vue]', view, error);
-      }),
+      loaders[view]()
+        .catch((error: unknown) => {
+          loading.delete(view); // nouvel essai à la prochaine ouverture de la vue
+          // Le visiteur est déjà passé à l'autre vue : le message attendra son retour (et un nouvel essai).
+          if (currentView() === view) reportFailure(view, error);
+          else console.warn('[vue]', view, error);
+        })
+        .finally(() => root.removeAttribute('aria-busy')),
     );
   }
   // L'avertissement ne concerne que la carte : il s'affiche avec elle, sans attendre qu'elle soit
   // téléchargée, et se retire si le visiteur passe à la vue Analytics avant de l'avoir accepté.
-  if (view === 'map') void showDisclaimer();
+  if (view === 'map') void showDisclaimer().then(repeatFailure);
   else withdrawDisclaimer();
 }
 
