@@ -100,6 +100,8 @@ function content(): HTMLElement {
 
 /** Avertissement à l'écran, pas encore accepté : sa promesse, et de quoi le retirer. */
 let pending: { promise: Promise<void>; withdraw: () => void } | null = null;
+/** Accepté pendant cette visite : il ne revient pas à chaque retour sur la carte, même sans stockage. */
+let acceptedThisVisit = false;
 
 /**
  * Retire l'avertissement en attente sans l'accepter : le visiteur a quitté la carte pour la vue
@@ -115,7 +117,7 @@ export function withdrawDisclaimer(): void {
  */
 export function showDisclaimer(force = false): Promise<void> {
   if (pending) return pending.promise;
-  if (!force && hasAccepted()) return Promise.resolve();
+  if (!force && (acceptedThisVisit || hasAccepted())) return Promise.resolve();
 
   const accept = h('button', { class: 'disclaimer__accept', type: 'button', disabled: true }, `Lisez d’abord… ${WAIT_SECONDS}`);
   const body = content();
@@ -208,6 +210,7 @@ export function showDisclaimer(force = false): Promise<void> {
 
     accept.addEventListener('click', () => {
       if (accept.disabled) return;
+      acceptedThisVisit = true;
       remember();
       dismiss();
       resolve();

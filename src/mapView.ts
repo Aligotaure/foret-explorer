@@ -29,7 +29,7 @@ import { SpotPanel } from './spot';
 import { Store, loadInitialState, persistState } from './state';
 import { STORAGE_PREFIX } from './legal';
 import { initLegendToggle, initToolbar } from './toolbar';
-import { onViewChange, onViewLeave } from './view';
+import { currentView, onViewChange, onViewLeave } from './view';
 import { loadZonesInfo, noteZonesError, registerZonePattern } from './zones';
 
 // ── État ──────────────────────────────────────────────────────────────────────
@@ -56,6 +56,15 @@ function savedView(): { center: [number, number]; zoom: number } | null {
   return null;
 }
 const lastView = savedView();
+// Précédent ou Suivant vers une entrée « Analytics » : la carte, masquée, ne doit pas repartir à la
+// position que portait cette entrée quand on l'avait quittée (MapLibre suit `carte=` à chaque
+// changement d'adresse). Cet écouteur, posé avant la carte, passe donc avant le sien et l'arrête ;
+// l'entrée reprend alors la position réelle, que le lien « Carte » de l'îlot gardera.
+window.addEventListener('hashchange', (event) => {
+  if (currentView() !== 'analytics') return;
+  event.stopImmediatePropagation();
+  map.fire('moveend'); // MapLibre réécrit `carte=` dans l'adresse
+});
 // Tuiles servies par le site (nature du sol, zones) : archives PMTiles lues par morceaux.
 maplibregl.addProtocol('pmtiles', new Protocol().tile);
 const map = new maplibregl.Map({
@@ -89,8 +98,9 @@ registerSoilPatterns(map);
 registerZonePattern(map);
 
 // ── Vue Analytics : la carte reste chargée, masquée (position, légende et bilan intacts) ──
-// En la quittant par l'îlot, un déplacement en cours s'arrête : la position exacte est alors écrite
-// dans l'adresse de la carte, que le bouton Précédent du navigateur retrouvera.
+// En la quittant par l'îlot, un déplacement en cours s'arrête : sa position d'arrivée est alors écrite
+// dans l'adresse de la carte, que le bouton Précédent du navigateur retrouvera (sauf si MapLibre vient
+// d'écrire l'adresse : il attend 0,3 s entre deux écritures, et la suivante arrive trop tard).
 onViewLeave((view) => {
   if (view === 'map') map.stop();
 });

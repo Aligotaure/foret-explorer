@@ -311,6 +311,30 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     await context.close();
   }
 
+  // ── 2 bis. Stockage du navigateur indisponible : l'avertissement accepté ne revient pas ──────
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    await context.addInitScript(() => {
+      Storage.prototype.setItem = () => {
+        throw new DOMException('stockage refusé', 'QuotaExceededError');
+      };
+    });
+    const page = await context.newPage();
+    watch(page);
+    await installMocks(page, { tms: [], wmts: [], geocode: [], other: [] });
+    await page.goto(`${base}${ANNECY}`);
+    await page.waitForSelector('dialog.disclaimer[open]', { timeout: 10000 });
+    await page.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
+    await page.locator('.disclaimer__accept').click();
+    await island(page, 'analytics').click();
+    await page.waitForSelector('#analytics h1');
+    await island(page, 'map').click();
+    await page.waitForTimeout(400);
+    const again = await page.evaluate(() => ({ dialog: Boolean(document.querySelector('dialog.disclaimer')), stored: localStorage.getItem('foret-explorer:avertissement') }));
+    check('avertissement : accepté une fois par visite, même sans stockage du navigateur', !again.dialog && again.stored === null && (await view(page)) === 'map', JSON.stringify(again));
+    await context.close();
+  }
+
   // ── 3. Code d'une vue injoignable : un message et un bouton, l'îlot reste utilisable ─────────
   {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -324,11 +348,17 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     await page.waitForSelector('#view-error:not([hidden])', { timeout: 10000 });
     const failure = await page.evaluate(() => ({ text: document.getElementById('view-error').textContent, button: document.querySelector('#view-error button')?.textContent }));
     await island(page, 'analytics').click();
+    const gone = await page.evaluate(() => document.getElementById('view-error').hidden);
     check(
-      'vue injoignable : message et bouton « Recharger », retour possible par l’îlot',
-      /n’a pas pu se charger/.test(failure.text) && failure.button === 'Recharger' && (await view(page)) === 'analytics',
+      'vue injoignable : message et bouton « Recharger », retiré en revenant à l’autre vue par l’îlot',
+      /n’a pas pu se charger/.test(failure.text) && failure.button === 'Recharger' && (await view(page)) === 'analytics' && gone,
       failure.text,
     );
+    // Nouvel essai à la prochaine ouverture : la carte arrive cette fois.
+    await page.unroute('**/src/mapView.ts*');
+    await island(page, 'map').click();
+    await waitForMap(page);
+    check('vue injoignable : un nouvel essai réussit sans recharger la page', (await page.evaluate(() => document.getElementById('view-error').hidden)) && (await view(page)) === 'map');
     await context.close();
   }
 
@@ -443,8 +473,24 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
       back1 === `${ANNECY}&vue=analytics` && back2.hash === ANNECY && JSON.stringify(back2.view) === JSON.stringify(before.view) && back2.mark === 'la même carte',
       JSON.stringify({ back1, back2 }),
     );
-    // Clavier resté dans la carte masquée (Précédent depuis la carte) : il revient sur l'îlot.
+    // Carte déplacée, puis Précédent vers la vue Analytics : la carte masquée ne repart pas à
+    // l'ancienne position de cette entrée, et le lien « Carte » de l'îlot retrouve la position réelle.
     await island(page, 'map').click();
+    await page.evaluate(() => window.map.jumpTo({ center: [6.3, 45.8], zoom: 12 }));
+    await page.waitForFunction(() => location.hash === '#carte=12/45.8/6.3');
+    await page.goBack();
+    await page.waitForFunction(() => document.documentElement.dataset.view === 'analytics');
+    await page.waitForFunction(() => location.hash.includes('carte=12/45.8/6.3'), null, { timeout: 5000 }).catch(() => {});
+    const stale = { view: await viewOf(page), hash: await hash(page) };
+    await island(page, 'map').click();
+    await page.waitForTimeout(350);
+    const kept = { view: await viewOf(page), hash: await hash(page) };
+    check(
+      'Précédent vers Analytics après un déplacement : la carte garde sa position réelle, l’îlot la retrouve',
+      JSON.stringify(stale.view) === JSON.stringify({ lng: 6.3, lat: 45.8, zoom: 12 }) && stale.hash === '#carte=12/45.8/6.3&vue=analytics' && JSON.stringify(kept.view) === JSON.stringify(stale.view) && kept.hash === '#carte=12/45.8/6.3',
+      JSON.stringify({ analytics: stale, carte: kept }),
+    );
+    // Clavier resté dans la carte masquée (Précédent depuis la carte) : il revient sur l'îlot.
     await page.locator('.maplibregl-canvas').focus();
     await page.goBack();
     await page.waitForFunction(() => document.documentElement.dataset.view === 'analytics');
