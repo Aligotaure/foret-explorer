@@ -564,7 +564,8 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     const resumed = await viewOf(page);
     check(
       'carte quittée en plein déplacement : arrêtée, et Précédent la retrouve là où elle s’est arrêtée',
-      !stopped.moving && stopped.lng > 6.3 && stopped.lng < 6.42 && JSON.stringify(resumed) === JSON.stringify({ lng: stopped.lng, lat: stopped.lat, zoom: stopped.zoom }),
+      // (à un millième de degré près : l'adresse arrondit la position à cinq décimales)
+      !stopped.moving && stopped.lng > 6.3 && stopped.lng < 6.42 && Math.abs(resumed.lng - stopped.lng) <= 0.0011 && Math.abs(resumed.lat - stopped.lat) <= 0.0011 && resumed.zoom === stopped.zoom,
       JSON.stringify({ stopped, resumed }),
     );
     // Clavier resté dans la carte masquée (Précédent depuis la carte) : il revient sur l'îlot.

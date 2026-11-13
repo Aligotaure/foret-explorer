@@ -64,8 +64,9 @@ const analytics = analyticsFile ? eagerFiles(`assets/${analyticsFile}`) : new Se
 check(
   'vue Analytics : un fichier à part, sans MapLibre ni code de la carte',
   analytics.size > 0 && ![...analytics].some((file) => file === `assets/${mapFile}` || read(file).includes(MAPLIBRE)),
-  analyticsFile ? `${[...analytics].join(', ')} (${kilo(size(analytics))})` : 'aucun fichier analyticsView-*.js',
+  analyticsFile ? [...analytics].join(', ') : 'aucun fichier analyticsView-*.js',
 );
+check(`vue Analytics : moins de ${kilo(MAX_EAGER_BYTES)} de code`, analytics.size > 0 && size(analytics) < MAX_EAGER_BYTES, kilo(size(analytics)));
 
 // En-tête : la vue Analytics est décidée avant le premier affichage, sinon la carte est préchargée.
 // Le script est exécuté pour de bon, adresse par adresse (le lire ne prouverait rien : un simple

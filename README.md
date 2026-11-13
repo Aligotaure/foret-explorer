@@ -86,8 +86,9 @@ directe : `…/#vue=analytics` (elle se combine avec la position : `#carte=11.5/
 
 Tout ce qu'affiche la vue Analytics vient d'un seul fichier, `src/analyticsData.ts`, à modifier à la
 main : son en-tête explique comment (modèles à recopier, dates, nombres). Tant qu'un bloc est vide,
-la vue affiche un état vide. `npm run check` refuse un champ oublié ou mal écrit ; en développement
-(`npm run dev`), la vue liste en haut de page ce qui reste à corriger.
+la vue affiche un état vide. `npm run check` refuse un champ oublié ou mal écrit, et relit le contenu
+(une date qui n'existe pas, un texte laissé vide) ; en développement (`npm run dev`), la vue liste en
+haut de page ce qui reste à corriger.
 
 ## Continuer avec Claude Code
 

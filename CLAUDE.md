@@ -36,7 +36,8 @@ https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
 - `npm run typecheck` : TypeScript strict, sans émission
 - `npm run build` : build statique dans `dist/` ; `npm run check` = typecheck + build + contrôle du
   build (`tests/build.mjs`, aussi `npm run test:build` : la page d'entrée et la vue Analytics
-  n'embarquent pas MapLibre, le code de la carte est préchargé, ordre des feuilles de style)
+  n'embarquent pas MapLibre, le code de la carte est préchargé, ordre des feuilles de style, contenu
+  de `src/analyticsData.ts` relu)
 - `npm run test:e2e` : test de bout en bout (Playwright + vrai MapLibre, services simulés ; avertissement,
   À propos et zones compris ; îlot et vue Analytics dans `tests/e2e/views.mjs`). Première fois :
   `npx playwright install chromium`. Captures dans `tests/e2e/shots/`.
@@ -204,8 +205,8 @@ selon la part d'arbres hôtes ; défavorable = contour seul. Les forêts s'estom
   vide). Guillemets doubles dans ce fichier (les apostrophes du français y sont sans danger), modèles
   en commentaire dont chaque champ vaut `A_REMPLIR` (un oubli fait échouer `npm run check`). Les
   types refusent une date à la française, une adresse sans https, un champ mal nommé ;
-  `analyticsCheck.ts` relit le reste, affiché en tête de vue en développement et vérifié par les
-  tests e2e. Le rendu ne casse jamais (date impossible montrée telle quelle, graphique sans barre
+  `analyticsCheck.ts` relit le reste (date qui n'existe pas, texte vide, valeur négative), affiché
+  en tête de vue en développement et vérifié par `npm run check` et par les tests e2e. Le rendu ne casse jamais (date impossible montrée telle quelle, graphique sans barre
   omis). Graphique : barres horizontales, une série, échelle à zéro, aucune valeur calculée.
   N'y écrire que des chiffres mesurés ; « Entonnoir en direct » reste un emplacement vide tant
   qu'aucune mesure n'est branchée. Jamais de modification directe sur `main` : une erreur y
