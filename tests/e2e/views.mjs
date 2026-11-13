@@ -445,6 +445,7 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     );
 
     // État de la carte avant de la quitter : un type décoché, la légende défilée, un bilan ouvert.
+    await page.locator('#legend .layer').filter({ has: page.locator('.layer__title', { hasText: /^Types de forêt$/ }) }).locator('.layer__toggle').click();
     await page.locator('#legend .legend-item input').nth(3).uncheck();
     await page.locator('#legend .panel__body').evaluate((el) => el.scrollTo(0, 240));
     await page.mouse.click(640, 430);

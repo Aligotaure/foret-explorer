@@ -37,7 +37,18 @@ export interface Mushroom {
   trees?: string;
   /** Confusion dangereuse ou précaution propre à l'espèce (affichée en encadré dans la fiche). */
   caution?: string;
+  /**
+   * Fiche de l'espèce type sur MycoDB (photos, description). L'entrée est souvent un groupe d'espèces :
+   * le lien nomme donc l'espèce visée. Adresses écrites en dur et vérifiées à la main le 13/11/2026 :
+   * MycoDB répond 200 même pour une fiche qui n'existe pas, et interdit les robots (voir CLAUDE.md).
+   */
+  sheet: { species: string; url: string };
 }
+
+const mycodb = (genus: string, species: string): Mushroom['sheet'] => ({
+  species: `${genus} ${species}`,
+  url: `https://www.mycodb.fr/fiche.php?genre=${genus}&espece=${species}`,
+});
 
 /** Rappel affiché dans chaque fiche : l'indice ne dit rien de la comestibilité. */
 export const GENERAL_CAUTION =
@@ -65,6 +76,7 @@ export const MUSHROOMS: readonly Mushroom[] = [
       'Sous chênes, hêtres, châtaigniers, sapins et épicéas adultes, plutôt sur sol acide et drainant. ' +
       'Pousse 1 à 2 semaines après une grosse pluie, par temps doux.',
     caution: 'Ne pas confondre avec le bolet de Satan (pores et pied rouges, toxique).',
+    sheet: mycodb('Boletus', 'edulis'),
   },
   {
     id: 'girolle',
@@ -83,6 +95,7 @@ export const MUSHROOMS: readonly Mushroom[] = [
       '1 à 3 semaines après la pluie, et la pousse dure longtemps.',
     caution:
       'Ne pas confondre avec la fausse girolle ni le clitocybe de l’olivier (toxique), qui ont de vraies lames sous le chapeau.',
+    sheet: mycodb('Cantharellus', 'cibarius'),
   },
   {
     id: 'trompette',
@@ -99,6 +112,7 @@ export const MUSHROOMS: readonly Mushroom[] = [
     summary:
       'Trompettes de la mort, en troupes sous les hêtres et les chênes, sur sol calcaire ou argileux ' +
       'riche. Champignon d’arrière-saison, après des pluies répétées.',
+    sheet: mycodb('Craterellus', 'cornucopioides'),
   },
   {
     id: 'chanterelle',
@@ -117,6 +131,7 @@ export const MUSHROOMS: readonly Mushroom[] = [
       'Les plus tardives : supportent le froid et les petites gelées.',
     caution:
       'Vérifier les plis sous le chapeau : de petits champignons bruns à vraies lames poussent au même endroit, et certains sont mortels.',
+    sheet: mycodb('Craterellus', 'tubaeformis'),
   },
   {
     id: 'morille',
@@ -151,6 +166,7 @@ export const MUSHROOMS: readonly Mushroom[] = [
     caution:
       'La gyromitre, mortelle, pousse en même temps sous les conifères : chapeau plissé en cervelle, pas creusé d’alvéoles. ' +
       'Les morilles se mangent toujours cuites, au moins 20 minutes, jamais crues.',
+    sheet: mycodb('Morchella', 'esculenta'),
   },
 ];
 

@@ -18,6 +18,9 @@ mkdirSync(OUT, { recursive: true });
 // Version des conditions (src/legal.ts) : les tests qui ne portent pas sur l'avertissement le
 // considèrent comme déjà accepté.
 const TERMS_VERSION = readFileSync(new URL('../../src/legal.ts', import.meta.url), 'utf8').match(/TERMS_VERSION = '([^']+)'/)[1];
+/** Section de la légende, désignée par son titre exact (un texte cherché dans toute la section en trouverait plusieurs). */
+const legendSection = (page, title) => page.locator('#legend .layer').filter({ has: page.locator('.layer__title', { hasText: new RegExp(`^${title}$`) }) });
+
 const preAccept = (context) =>
   context.addInitScript((v) => {
     try {
@@ -235,8 +238,22 @@ async function desktopTests(browser, base) {
   check('couleur pilotée par code_tfv', fillColor.startsWith('["match",["get","code_tfv"]'));
   await page.screenshot({ path: `${OUT}01-bureau.png` });
 
-  const sections = await page.evaluate(() => [...document.querySelectorAll('#legend .layer__title')].map((t) => t.textContent));
-  check('légende : 6 sections, dont « Où cueillir »', sections.length === 6 && sections[0] === 'Je cherche…' && sections[2] === 'Où cueillir', sections.join(' | '));
+  const sections = await page.evaluate(() =>
+    [...document.querySelectorAll('#legend .layer')].map((l) => ({
+      title: l.querySelector('.layer__title')?.textContent,
+      open: l.querySelector('.layer__toggle')?.getAttribute('aria-expanded') === 'true',
+    })),
+  );
+  check(
+    'légende : 6 sections, le champignon puis la météo en tête',
+    sections.map((s) => s.title).join(' | ') === 'Je cherche… | Météo | Types de forêt | Nature du sol | Droit de cueillir | Fond de carte : Plan IGN',
+    sections.map((s) => s.title).join(' | '),
+  );
+  check(
+    'légende, première visite : seule « Je cherche… » est dépliée, le panneau tient sans défiler',
+    sections.filter((s) => s.open).map((s) => s.title).join() === 'Je cherche…' && (await page.evaluate(() => { const b = document.querySelector('#legend .panel__body'); return b.scrollHeight <= b.clientHeight + 1; })),
+    sections.filter((s) => s.open).map((s) => s.title).join(', '),
+  );
   const footer = await page.evaluate(() => [...document.querySelectorAll('#legend .legend-footer a')].map((a) => a.getAttribute('href')));
   check('légende : liens vers conseils, conditions, mentions légales, confidentialité', footer.length === 4 && footer.every((h) => h.startsWith('a-propos.html#')), footer.join(', '));
 
@@ -255,7 +272,7 @@ async function desktopTests(browser, base) {
     JSON.stringify(zones),
   );
   check('archive des zones (lue par morceaux) et info.json demandés', log.zones.some((p) => p.endsWith('/info.json')) && log.zones.some((p) => p.endsWith('/zones.pmtiles')), log.zones.slice(0, 2).join(', '));
-  await page.locator('#legend .layer', { hasText: 'Où cueillir' }).locator('.layer__toggle').click();
+  await legendSection(page, 'Droit de cueillir').locator('.layer__toggle').click();
   await page.getByRole('switch', { name: 'Afficher les forêts publiques' }).check();
   check('interrupteur « Forêts publiques »', (await page.evaluate(() => window.map.getLayoutProperty('forets-publiques', 'visibility'))) === 'visible');
   await page.screenshot({ path: `${OUT}01b-bureau-zones.png` });
@@ -361,8 +378,18 @@ async function desktopTests(browser, base) {
   check('polygone sur plusieurs tuiles compté une fois', counts['LA4'] === '1', `LA4=${counts['LA4']}`);
   check('type absent compté 0', counts['FF2-51-51'] === '0');
 
+  // Types de forêt : section repliée par défaut, que le titre déplie comme le chevron.
+  const forestSection = legendSection(page, 'Types de forêt');
+  await forestSection.locator('.layer__title').click();
+  check(
+    'légende : un clic sur le titre déplie « Types de forêt » (32 cases visibles)',
+    (await forestSection.locator('.layer__toggle').getAttribute('aria-expanded')) === 'true' && (await page.locator('.legend-all input').isVisible()),
+  );
+
   // Préréglage « Chênes »
   await page.getByRole('button', { name: 'Chênes', exact: true }).click();
+  const filterBadge = await forestSection.locator('.layer__badge').evaluate((b) => ({ hidden: b.hidden, text: b.textContent }));
+  check('légende : rappel du filtre dans l’en-tête de la section (« 2 / 32 »)', !filterBadge.hidden && filterBadge.text === '2 / 32', JSON.stringify(filterBadge));
   await idle(page);
   codes = await renderedCodes(page);
   const filter = await page.evaluate(() => JSON.stringify(window.map.getFilter('bdforet-fill')));
@@ -601,7 +628,7 @@ async function desktopTests(browser, base) {
   await idle(page);
 
   // Grille en mode pluie
-  await page.getByText('Pluie cumulée sur 20 jours', { exact: true }).click();
+  await page.getByText('Pluie des 20 derniers jours', { exact: true }).click();
   const rain = await page.evaluate(() => ({
     fill: JSON.stringify(window.map.getPaintProperty('meteo-cellules', 'fill-color')),
     text: JSON.stringify(window.map.getLayoutProperty('meteo-etiquettes', 'text-field')),
@@ -647,12 +674,24 @@ async function desktopTests(browser, base) {
     season: document.querySelector('.mushroom-card__season')?.textContent ?? '',
     facts: document.querySelector('.mushroom-card__facts')?.textContent ?? '',
     favored: [...document.querySelectorAll('.soil-item.is-favored')].map((li) => li.dataset.soil),
+    sheet: [...document.querySelectorAll('.mushroom-card a[target="_blank"]')].map((a) => ({ href: a.getAttribute('href'), rel: a.getAttribute('rel'), text: a.textContent })),
+    order: [...document.querySelectorAll('.mushroom-card > *')].map((el) => el.className.split(' ').pop()),
   }));
   const springNow = [3, 4, 5, 6].includes(new Date().getMonth() + 1);
   check('morilles : frênaies, peupleraies et coupes affichées', morel.mushroom === 'morille' && ['FF1-49-49', 'FP', 'FF0'].every((c) => morel.filter.includes(c)), morel.filter.slice(0, 90));
   check('morilles : encadré gyromitre et cuisson', /gyromitre/i.test(morel.caution) && /20 minutes/.test(morel.caution) && /pas ce qui se mange/i.test(morel.caution), morel.caution.slice(0, 60));
   check('morilles : saison de mars à juin, hors saison signalé', /mars à juin/.test(morel.facts) && (springNow || /Hors saison/.test(morel.season)), morel.season || morel.facts.slice(-30));
   check('morilles : sols calcaires et alluvions favorables', ['calcaire', 'humide', 'marne'].every((x) => morel.favored.includes(x)), morel.favored.join(','));
+  check(
+    'fiche : un seul lien externe, vers la fiche MycoDB de l’espèce nommée, libellé neutre, avant l’encadré de précaution',
+    morel.sheet.length === 1 &&
+      morel.sheet[0].href === 'https://www.mycodb.fr/fiche.php?genre=Morchella&espece=esculenta' &&
+      /noopener/.test(morel.sheet[0].rel) && /noreferrer/.test(morel.sheet[0].rel) &&
+      /Morchella esculenta sur MycoDB \(site tiers\)/.test(morel.sheet[0].text) &&
+      !/comestible|identifier|reconna/i.test(morel.sheet[0].text) &&
+      morel.order.indexOf('mushroom-card__link') >= 0 && morel.order.indexOf('mushroom-card__link') < morel.order.indexOf('mushroom-card__caution') && morel.order[morel.order.length - 1] === 'mushroom-card__caution',
+    `${morel.sheet[0]?.text} — ${morel.order.join(' > ')}`,
+  );
   await page.screenshot({ path: `${OUT}05b-bureau-morilles.png` });
   await page.getByRole('button', { name: 'Morilles', exact: true }).click();
   await page.getByRole('switch', { name: 'Afficher la grille météo' }).uncheck();

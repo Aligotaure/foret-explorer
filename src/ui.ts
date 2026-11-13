@@ -11,6 +11,8 @@ export interface Collapsible {
 /**
  * Section repliable du panneau (titre + bouton chevron), comme sur cartes.gouv.fr.
  * `extra` s'affiche dans l'en-tête, entre le titre et le chevron (ex. un interrupteur).
+ * Le chevron est le vrai bouton (clavier, lecteurs d'écran) ; un clic ou un toucher sur le titre
+ * fait la même chose, pour ne pas avoir à viser un carré de 34 px.
  */
 export function collapsible(title: HTMLElement, content: HTMLElement, expanded: boolean, extra?: HTMLElement): Collapsible {
   const id = `legend-section-${++sectionCounter}`;
@@ -25,10 +27,13 @@ export function collapsible(title: HTMLElement, content: HTMLElement, expanded: 
     toggle.setAttribute('aria-label', open ? 'Replier la section' : 'Déplier la section');
     toggle.replaceChildren(icon(open ? 'chevronUp' : 'chevronDown'));
   };
-  toggle.addEventListener('click', () => {
+  const flip = (): void => {
     open = !open;
     render();
-  });
+  };
+  toggle.addEventListener('click', flip);
+  title.classList.add('layer__title--toggle');
+  title.addEventListener('click', flip);
   render();
 
   const el = h('section', { class: 'layer' }, h('div', { class: 'layer__header' }, title, extra ?? null, toggle), content);

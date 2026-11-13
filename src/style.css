@@ -390,7 +390,7 @@ button {
   max-height: max(200px, calc(100vh - 480px));
   padding: 6px 12px 10px;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* pas de overscroll-behavior ici : arrivée en butée, la molette doit faire défiler le panneau */
   border-radius: 2px;
   background: #fff;
   color: var(--france);
@@ -872,6 +872,35 @@ li.is-off .swatch {
   flex: none;
 }
 
+/* Le titre déplie la section, comme le chevron (qui reste le bouton du clavier). */
+.layer__title--toggle {
+  cursor: pointer;
+}
+
+/* Rappel du filtre en cours dans l'en-tête d'une section repliée (« 15 / 32 »). */
+.layer__badge {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--navy-700);
+  color: var(--lavender-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Téléphone : le chevron à la taille du doigt. */
+@media (max-width: 640px) {
+  .layer__toggle {
+    width: 44px;
+    height: 44px;
+  }
+
+  .layer__header {
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+}
+
 /* Interrupteur (case à cocher en bascule) */
 .switch {
   position: relative;
@@ -947,6 +976,26 @@ li.is-off .swatch {
 .mushroom-card__facts dd {
   margin: 0;
   color: #fff;
+}
+
+/* Lien vers la fiche de l'espèce (site tiers), puis ses conditions, repliées. */
+.mushroom-card__link {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.mushroom-card__more {
+  margin: 0 0 10px;
+}
+
+.mushroom-card__more .mushroom-card__facts {
+  margin-top: 8px;
+}
+
+/* Ce que vaut le chiffre : toujours sous l'échelle, un peu plus présent qu'une note. */
+.legend-hint--caveat {
+  color: #e5e5ff;
 }
 
 .mushroom-card__season {
