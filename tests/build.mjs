@@ -5,6 +5,7 @@
 //
 //   npm run check     # typecheck, build, puis ce contrôle
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import vm from 'node:vm';
 
 const DIST = new URL('../dist/', import.meta.url);
 const read = (file) => readFileSync(new URL(file, DIST), 'utf8');
@@ -49,26 +50,45 @@ for (const file of [entry, ...linked].filter(Boolean)) eagerFiles(file, eager);
 check('page d’entrée : un script d’entrée trouvé', Boolean(entry), entry ?? 'aucun <script type="module" src>');
 check(
   'page d’entrée : ni MapLibre ni le code de la carte chargés d’office',
-  eager.size > 0 && ![...eager].some((file) => file === `assets/${mapFile}` || read(file).includes(MAPLIBRE)) && size(eager) < MAX_EAGER_BYTES,
-  `${[...eager].join(', ')} (${kilo(size(eager))})`,
+  eager.size > 0 && ![...eager].some((file) => file === `assets/${mapFile}` || read(file).includes(MAPLIBRE)),
+  [...eager].join(', '),
 );
+check(`page d’entrée : moins de ${kilo(MAX_EAGER_BYTES)} de code chargé d’office`, size(eager) < MAX_EAGER_BYTES, kilo(size(eager)));
 
 // Vue Analytics : chargée à la demande, sans rien de la carte.
 const analyticsFile = assets.find((name) => /^analyticsView-.+\.js$/.test(name));
 const analytics = analyticsFile ? eagerFiles(`assets/${analyticsFile}`) : new Set();
 check(
   'vue Analytics : un fichier à part, sans MapLibre ni code de la carte',
-  analytics.size > 0 && ![...analytics].some((file) => file === `assets/${mapFile}` || read(file).includes(MAPLIBRE)) && size(analytics) < MAX_EAGER_BYTES,
+  analytics.size > 0 && ![...analytics].some((file) => file === `assets/${mapFile}` || read(file).includes(MAPLIBRE)),
   analyticsFile ? `${[...analytics].join(', ')} (${kilo(size(analytics))})` : 'aucun fichier analyticsView-*.js',
 );
 
 // En-tête : la vue Analytics est décidée avant le premier affichage, sinon la carte est préchargée.
+// Le script est exécuté pour de bon, adresse par adresse (le lire ne prouverait rien : un simple
+// commentaire contient déjà « vue=analytics »).
 const inline = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '';
-check('en-tête : vue Analytics décidée avant le premier affichage', inline.includes('vue=analytics') && inline.includes("dataset.view = 'analytics'"));
+function head(hash) {
+  const preloaded = [];
+  const root = { dataset: {} };
+  try {
+    vm.runInNewContext(inline, {
+      location: { hash },
+      document: { documentElement: root, head: { append: (link) => preloaded.push(`${link.rel}:${link.href}`) }, createElement: () => ({}) },
+    });
+  } catch (error) {
+    return `erreur : ${error.message}`;
+  }
+  return `${root.dataset.view ?? 'carte'} ${preloaded.join(',') || 'rien'}`;
+}
+const onMap = `carte modulepreload:./assets/${mapFile}`;
+const mapHashes = ['', '#carte=11.5/45.92/6.19', '#vue=analyticsx', '#revue=analytics', '#carte=6/46/2&vue=carte'];
+const analyticsHashes = ['#vue=analytics', '#carte=11.5/45.92/6.19&vue=analytics', '#vue=analytics&carte=6/46/2'];
+const wrong = [...mapHashes.filter((hash) => head(hash) !== onMap), ...analyticsHashes.filter((hash) => head(hash) !== 'analytics rien')];
 check(
-  'en-tête : le code de la carte est préchargé quand la page s’ouvre sur la carte',
-  Boolean(mapFile) && inline.includes(`href: './assets/${mapFile}'`) && !html.includes('__MAP_CHUNK__'),
-  mapFile ? `./assets/${mapFile}` : '',
+  'en-tête : la carte est préchargée quand la page s’ouvre sur elle, jamais pour la vue Analytics',
+  Boolean(inline) && Boolean(mapFile) && wrong.length === 0 && !html.includes('__MAP_CHUNK__'),
+  wrong.length ? wrong.map((hash) => `« ${hash} » → ${head(hash)}`).join(' ; ') : `./assets/${mapFile}`,
 );
 // L'ordre des feuilles de style compte : style.css corrige des règles de MapLibre.
 const cssFile = html.match(/<link rel="stylesheet"[^>]*\shref="\.\/(assets\/[^"]+\.css)"/)?.[1];

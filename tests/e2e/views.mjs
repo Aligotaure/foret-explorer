@@ -227,11 +227,14 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
         ],
         settledBets: [{ hypothesis: 'h', kpi: 'k', threshold: 's', verdictDate: '2026-11-05', result: 'r', outcome: 'gagné', decision: '' }],
       });
-      const body = document.getElementById('analytics').textContent;
+      // La vue elle-même, sans le bandeau de relecture (qui cite les valeurs fautives).
+      const copy = document.getElementById('analytics').cloneNode(true);
+      copy.querySelector('.analytics__problems')?.remove();
+      const body = copy.textContent;
       return {
         problems: [...document.querySelectorAll('.analytics__problems li')].map((li) => li.textContent),
         rawDate: body.includes('2026-02-31') && body.includes('05-11-2026'),
-        garbage: /Invalid Date|NaN %|undefined/.test(body.replace(/analyses\[1\][^|]*NaN[^|]*/g, '')),
+        garbage: /Invalid Date|NaN|undefined|null/.test(body),
         bars: [...document.querySelectorAll('.analytics-bars__row')].map((li) => `${li.querySelector('.analytics-bars__label').textContent}=${li.querySelector('.analytics-bars__bar')?.style.width ?? 'aucune'}`),
         outcome: document.querySelector('.analytics-outcome')?.textContent,
       };
@@ -265,21 +268,52 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     await page.waitForTimeout(300);
     const withdrawn = await page.evaluate(() => ({ dialog: Boolean(document.querySelector('dialog.disclaimer')), hash: location.hash, focusable: !document.getElementById('app').inert }));
     check('avertissement : retiré quand on quitte la carte sans l’avoir accepté', !withdrawn.dialog && withdrawn.hash.includes('vue=analytics'), JSON.stringify(withdrawn));
+    const returning = await page.evaluate(() => Date.now());
     await page.goForward();
-    await page.waitForSelector('dialog.disclaimer[open]', { timeout: 10000 });
+    await page.waitForFunction(() => document.querySelector('dialog.disclaimer[open]')?.dataset.debut, null, { timeout: 10000 });
     const again = await page.evaluate(() => {
-      const button = document.querySelector('.disclaimer__accept');
-      return { count: document.querySelectorAll('dialog.disclaimer').length, disabled: button.disabled, text: button.textContent, modal: document.querySelector('dialog.disclaimer').matches(':modal') };
+      const dialog = document.querySelector('dialog.disclaimer');
+      const button = dialog.querySelector('.disclaimer__accept');
+      return { count: document.querySelectorAll('dialog.disclaimer').length, started: Number(dialog.dataset.debut), now: Date.now(), disabled: button.disabled, text: button.textContent, modal: dialog.matches(':modal') };
     });
     check(
       'avertissement : de retour avec la carte, compte à rebours repris de zéro',
-      again.count === 1 && again.disabled && /^Lisez d’abord… [23]$/.test(again.text) && again.modal,
-      JSON.stringify(again),
+      again.count === 1 && again.modal && again.started >= returning && (again.disabled || again.now - again.started >= 3000),
+      JSON.stringify({ ...again, returning }),
     );
     await page.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
     await page.locator('.disclaimer__accept').click();
     const accepted = await page.evaluate(() => ({ dialog: Boolean(document.querySelector('dialog.disclaimer')), saved: Boolean(localStorage.getItem('foret-explorer:avertissement')) }));
     check('avertissement : accepté après le retour, la carte est libre', !accepted.dialog && accepted.saved, JSON.stringify(accepted));
+    await context.close();
+  }
+
+  // ── 1 bis. Adresse partagée ouverte telle quelle : Analytics sans la carte, puis la carte à la
+  //    position que porte l'adresse (dans les deux ordres des paramètres) ────────────────────────
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    await preAccept(context);
+    const opened = [];
+    for (const shared of [`${ANNECY}&vue=analytics`, '#vue=analytics&carte=11.5/45.92/6.19']) {
+      const page = await context.newPage();
+      watch(page);
+      await installMocks(page, { tms: [], wmts: [], geocode: [], other: [] });
+      const requested = [];
+      page.on('request', (r) => requested.push(r.url()));
+      await page.goto(`${base}${shared}`);
+      await page.waitForSelector('#analytics h1');
+      await page.waitForTimeout(600);
+      const landed = { view: await view(page), hash: await hash(page), map: requested.filter((u) => MAP_REQUEST.test(u)).length };
+      await island(page, 'map').click();
+      await waitForMap(page);
+      opened.push({ ...landed, sameHash: landed.hash === shared, position: await viewOf(page), mapHash: await hash(page) });
+      await page.close();
+    }
+    check(
+      'adresse partagée (#carte=…&vue=analytics) ouverte telle quelle : Analytics sans la carte, puis la carte à cette position',
+      opened.every((o) => o.view === 'analytics' && o.sameHash && o.map === 0 && JSON.stringify(o.position) === JSON.stringify({ lng: 6.19, lat: 45.92, zoom: 11.5 }) && o.mapHash === ANNECY),
+      JSON.stringify(opened),
+    );
     await context.close();
   }
 
@@ -303,11 +337,12 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     await page.waitForSelector('dialog.disclaimer[open]');
     await page.goBack();
     await page.waitForFunction(() => document.documentElement.dataset.view === 'analytics');
+    const absent = await page.evaluate(() => typeof window.map?.loaded !== 'function'); // la carte est bien retenue
     release();
     await waitForMap(page);
     await page.waitForTimeout(300);
     const late = await page.evaluate(() => ({ view: document.documentElement.dataset.view, dialog: Boolean(document.querySelector('dialog.disclaimer')), visible: [...document.querySelectorAll('#app, #app *')].filter((el) => getComputedStyle(el).visibility !== 'hidden').length }));
-    check('carte arrivée pendant la vue Analytics : ni avertissement ni carte à l’écran', late.view === 'analytics' && !late.dialog && late.visible === 0, JSON.stringify(late));
+    check('carte arrivée pendant la vue Analytics : ni avertissement ni carte à l’écran', absent && late.view === 'analytics' && !late.dialog && late.visible === 0, JSON.stringify({ absent, ...late }));
     await context.close();
   }
 
@@ -399,6 +434,9 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     await page.mouse.click(640, 430);
     await page.waitForSelector('#spot .verdict', { timeout: 10000 });
     await idle(page);
+    await page.evaluate(() => {
+      window.map.__mark = 'la même carte'; // posée une fois : une carte reconstruite ne l'aurait pas
+    });
     const snapshot = () =>
       page.evaluate(() => {
         const style = (sel) => {
@@ -406,7 +444,7 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
           return `${s.color}|${s.backgroundColor}|${s.fontSize}|${s.outlineColor}`;
         };
         return {
-          mark: (window.map.__mark ??= 'la même carte'),
+          mark: window.map.__mark ?? 'une autre carte',
           selected: window.store.state.selected.size,
           legendOpen: window.store.state.legendOpen,
           scrollTop: document.querySelector('#legend .panel__body').scrollTop,
@@ -443,18 +481,23 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     check('vue Analytics : la carte est entièrement masquée (crédits MapLibre compris), rien ne se clique dessous', away.visible === 0 && away.credits === 'hidden' && away.hit === 0, JSON.stringify({ visibles: away.visible, crédits: away.credits, touchés: away.hit }));
     await page.screenshot({ path: `${OUT}12c-analytics-apres-la-carte-1280.png` });
 
-    // Fenêtre redimensionnée pendant la vue Analytics : la carte suit, sans attendre le retour.
+    // Fenêtre redimensionnée pendant la vue Analytics : au retour, la carte est à la nouvelle taille.
     await page.setViewportSize({ width: 1180, height: 760 });
     await page.waitForTimeout(400);
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.waitForTimeout(400);
-
     await island(page, 'map').click();
     await page.waitForTimeout(350);
+    const resized = await page.evaluate(() => {
+      const canvas = window.map.getCanvas();
+      const box = document.getElementById('map');
+      return { sizes: [canvas.clientWidth, canvas.clientHeight, box.clientWidth, box.clientHeight].join('x'), drawn: window.map.queryRenderedFeatures({ layers: ['bdforet-fill'] }).length > 0 };
+    });
+    check('retour à la carte après un changement de taille de la fenêtre : carte à la bonne taille, dessinée', resized.sizes === '1180x760x1180x760' && resized.drawn, JSON.stringify(resized));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.waitForTimeout(400);
     const after = { ...(await snapshot()), view: await viewOf(page), hash: await hash(page) };
     check(
       'retour à la carte : même carte, même position, légende et bilan intacts',
-      JSON.stringify(after) === JSON.stringify(before) && before.selected === 31 && before.scrollTop === 240 && Boolean(before.spot) && before.drawn,
+      JSON.stringify(after) === JSON.stringify(before) && before.mark === 'la même carte' && before.selected === 31 && before.scrollTop === 240 && Boolean(before.spot) && before.drawn,
       JSON.stringify({ avant: before, après: after }).slice(0, 420),
     );
     check('retour à la carte : rien n’a été rechargé (aucune tuile redemandée)', log.tms.length + log.wmts.length === tilesBefore, `${log.tms.length + log.wmts.length - tilesBefore} tuile(s) de plus`);
@@ -490,6 +533,24 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
       JSON.stringify(stale.view) === JSON.stringify({ lng: 6.3, lat: 45.8, zoom: 12 }) && stale.hash === '#carte=12/45.8/6.3&vue=analytics' && JSON.stringify(kept.view) === JSON.stringify(stale.view) && kept.hash === '#carte=12/45.8/6.3',
       JSON.stringify({ analytics: stale, carte: kept }),
     );
+    // Carte quittée en plein déplacement : elle s'arrête, et sa position d'arrêt est celle que
+    // Précédent retrouve (au-delà des 0,3 s que MapLibre laisse entre deux écritures de l'adresse).
+    await page.evaluate(() => window.map.easeTo({ center: [6.42, 45.7], duration: 4000 }));
+    await page.waitForTimeout(700);
+    await island(page, 'analytics').click();
+    const stopped = await page.evaluate(() => {
+      const c = window.map.getCenter();
+      return { moving: window.map.isMoving(), lng: +c.lng.toFixed(3), lat: +c.lat.toFixed(3), zoom: +window.map.getZoom().toFixed(1), hash: location.hash };
+    });
+    await page.goBack();
+    await page.waitForFunction(() => !document.documentElement.dataset.view);
+    await page.waitForTimeout(200);
+    const resumed = await viewOf(page);
+    check(
+      'carte quittée en plein déplacement : arrêtée, et Précédent la retrouve là où elle s’est arrêtée',
+      !stopped.moving && stopped.lng > 6.3 && stopped.lng < 6.42 && JSON.stringify(resumed) === JSON.stringify({ lng: stopped.lng, lat: stopped.lat, zoom: stopped.zoom }),
+      JSON.stringify({ stopped, resumed }),
+    );
     // Clavier resté dans la carte masquée (Précédent depuis la carte) : il revient sur l'îlot.
     await page.locator('.maplibregl-canvas').focus();
     await page.goBack();
@@ -511,15 +572,23 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
         const seconds = (list) => list.split(',').map((t) => parseFloat(t));
         const durations = seconds(s.transitionDuration);
         const delays = seconds(s.transitionDelay);
-        return { total: Math.round(Math.max(...durations.map((d, i) => d + (delays[i] ?? delays[0]))) * 1000), props: s.transitionProperty, left: s.left, right: s.right };
+        const link = getComputedStyle(document.querySelector('.island__link'));
+        return {
+          total: Math.round(Math.max(...durations.map((d, i) => d + (delays[i] ?? delays[0]))) * 1000),
+          stagger: Math.round(Math.abs((delays[0] ?? 0) - (delays[1] ?? delays[0] ?? 0)) * 1000), // un bord part avant l'autre : le fond s'étire
+          props: s.transitionProperty,
+          left: s.left,
+          right: s.right,
+          label: Math.round(Math.max(...seconds(link.transitionDuration)) * 1000),
+        };
       });
     const moving = await motion();
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const still = await motion();
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     check(
-      'îlot : le fond glisse en 300 ms au plus, sans animation si elles sont réduites',
-      moving.total > 0 && moving.total <= 300 && moving.props === 'left, right' && moving.left === '108px' && moving.right === '4px' && still.total === 0 && still.props === 'none',
+      'îlot : le fond glisse en s’étirant, 300 ms au plus, et rien ne s’anime si les animations sont réduites',
+      moving.total > 0 && moving.total <= 300 && moving.stagger > 0 && moving.label > 0 && moving.label <= 300 && moving.props === 'left, right' && moving.left === '108px' && moving.right === '4px' && still.total === 0 && still.props === 'none' && still.label === 0,
       JSON.stringify({ moving, still }),
     );
     await context.close();
@@ -558,10 +627,15 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     }
     const worst = (g) => Math.min(...Object.values(g.gaps));
     const tight = rows.filter((r) => r.width >= 320 && (worst(r.closed) < 6 || worst(r.open) < 6));
+    // Rien n'est mesuré à vide : chaque contrôle attendu à cette largeur a bien été trouvé à l'écran.
+    const expected = (r, open) => ['bouton légende', 'recherche', 'boutons du haut', 'boutons du bas', 'bandeau de zoom', ...(r.width > 640 ? ['légende'] : []), ...(open ? ['bilan'] : [])];
+    const unmeasured = rows.filter((r) => !expected(r, false).every((name) => name in r.closed.gaps) || !expected(r, true).every((name) => name in r.open.gaps));
     check(
       'îlot : aucun chevauchement avec les contrôles de la carte, de 320 à 1920 px (bilan ouvert ou fermé)',
-      tight.length === 0,
-      tight.length ? tight.map((r) => `${r.width} px : ${JSON.stringify(r.open.gaps)}`).join(' ; ') : `écart le plus faible : ${Math.min(...rows.filter((r) => r.width >= 320).map((r) => Math.min(worst(r.closed), worst(r.open))))} px`,
+      tight.length === 0 && unmeasured.length === 0,
+      tight.length || unmeasured.length
+        ? [...tight.map((r) => `${r.width} px : ${JSON.stringify(r.open.gaps)}`), ...unmeasured.map((r) => `${r.width} px : contrôle non mesuré (${Object.keys(r.open.gaps).join(', ')})`)].join(' ; ')
+        : `écart le plus faible : ${Math.min(...rows.filter((r) => r.width >= 320).map((r) => Math.min(worst(r.closed), worst(r.open))))} px`,
     );
     const masked = rows.filter((r) => r.closed.masked.length || r.open.masked.length || !r.closed.islandReachable || !r.open.islandReachable);
     check(
@@ -585,6 +659,46 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
       'îlot : en haut, centré (téléphone et grand écran), zones tactiles d’au moins 44 px',
       small.length === 0 && off.length === 0 && centred.length === 0,
       `liens ${rows[3].closed.links.map((l) => `${l.w}×${l.h}`).join(' et ')} à 390 px ; décentré de ${rows.filter((r) => r.width > 640 && r.width < 1188).map((r) => `${r.closed.island.centre - r.width / 2} px à ${r.width}`).join(', ')}`,
+    );
+
+    // Écrans bas (téléphone couché) : les tiroirs ne montent ni sur la recherche ni sur le bandeau,
+    // et l'îlot reste dégagé.
+    const low = [];
+    for (const [width, height] of [[568, 320], [640, 360], [844, 390]]) {
+      await page.setViewportSize({ width, height });
+      await page.reload();
+      await waitForMap(page);
+      const edges = () =>
+        page.evaluate(() => {
+          const shown = (el) => el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+          const edge = (sel, side) => (shown(document.querySelector(sel)) ? Math.round(document.querySelector(sel).getBoundingClientRect()[side]) : null);
+          return { search: edge('.search', 'bottom'), hint: edge('#zoom-hint', 'bottom'), spot: edge('#spot', 'top'), legend: edge('#legend', 'top') };
+        });
+      await page.mouse.click(width <= 640 ? Math.round(width / 2) : 450, 250);
+      await page.waitForFunction(() => !document.getElementById('spot').hidden);
+      await page.waitForTimeout(150);
+      const withSpot = { ...(await geometry(page)), ...(await edges()) };
+      let withLegend = null;
+      if (width <= 640) {
+        await page.evaluate(() => window.spot.close());
+        await page.locator('#legend-toggle').click();
+        await page.waitForTimeout(250);
+        withLegend = await edges();
+      }
+      low.push({ size: `${width}×${height}`, phone: width <= 640, withSpot, withLegend });
+    }
+    const lowBad = low.filter(
+      (r) =>
+        r.withSpot.masked.length ||
+        !r.withSpot.islandReachable ||
+        Math.min(...Object.values(r.withSpot.gaps)) < 6 ||
+        r.withSpot.spotClose !== true ||
+        (r.phone && (r.withSpot.hint === null || r.withSpot.spot < r.withSpot.hint || r.withSpot.spot < r.withSpot.search + 4 || r.withLegend.legend < r.withLegend.hint || r.withLegend.legend < r.withLegend.search + 4)),
+    );
+    check(
+      'écran bas (téléphone couché) : îlot dégagé, tiroirs arrêtés sous la recherche et le bandeau',
+      lowBad.length === 0,
+      low.map((r) => `${r.size} : bilan à ${r.withSpot.spot} px${r.phone ? `, légende à ${r.withLegend.legend} px, bandeau jusqu’à ${r.withSpot.hint} px` : ''}`).join(' ; '),
     );
     await context.close();
   }
