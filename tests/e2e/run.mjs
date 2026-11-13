@@ -21,6 +21,18 @@ const TERMS_VERSION = readFileSync(new URL('../../src/legal.ts', import.meta.url
 /** Section de la légende, désignée par son titre exact (un texte cherché dans toute la section en trouverait plusieurs). */
 const legendSection = (page, title) => page.locator('#legend .layer').filter({ has: page.locator('.layer__title', { hasText: new RegExp(`^${title}$`) }) });
 
+/**
+ * Ferme « La carte en 3 gestes », qui suit un premier accord donné à la main et couvre la carte : sans
+ * cela, le clic suivant attendrait sous une fenêtre modale. Un instant d'attente : la présentation
+ * ignore les fermetures de sa première demi-seconde (double appui).
+ */
+export async function closeTour(page) {
+  await page.waitForSelector('dialog.tour[open]', { timeout: 5000 });
+  await page.waitForTimeout(600);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('dialog.tour', { state: 'detached', timeout: 3000 });
+}
+
 const preAccept = (context) =>
   context.addInitScript((v) => {
     try {
@@ -86,6 +98,7 @@ async function disclaimerTests(browser, base) {
       if (!b) return;
       const state = `${b.disabled}|${b.textContent}`;
       if (window.__bouton.at(-1)?.s !== state) window.__bouton.push({ t: Date.now(), s: state });
+      window.__pret = document.querySelector('dialog.disclaimer [role="status"]')?.textContent || window.__pret;
     }).observe(document, { subtree: true, childList: true, characterData: true, attributes: true });
   });
   const page = await context.newPage();
@@ -107,6 +120,10 @@ async function disclaimerTests(browser, base) {
       button: b.textContent,
       text: d.textContent.replace(/\s+/g, ' '),
       link: d.querySelector('.disclaimer__terms a')?.getAttribute('href'),
+      links: [...d.querySelectorAll('.disclaimer__terms a')].map((a) => a.getAttribute('href')),
+      words: d.querySelector('.disclaimer__body').textContent.trim().split(/\s+/).filter((w) => /[\p{L}\d]/u.test(w)).length,
+      fits: d.querySelector('.disclaimer__body').scrollHeight <= d.querySelector('.disclaimer__body').clientHeight + 1,
+      steps: d.querySelectorAll('.tour-num, [class*="pagination"]').length,
     };
   });
   check('avertissement : fenêtre modale à l’ouverture', first.modal && first.role === 'alertdialog' && first.label === 'Avant de partir en forêt', JSON.stringify({ modal: first.modal, role: first.role }));
@@ -117,11 +134,20 @@ async function disclaimerTests(browser, base) {
     history.map((h) => h.s).join(' → '),
   );
   check(
-    'avertissement : identification, centre antipoison, propriétaire, responsabilité',
-    ['pharmacien', 'entiers', 'application', 'centre antipoison', 'le 15', 'propriétaire', 'seul responsable', 'limites permises par la loi'].every((w) => first.text.includes(w)) && !first.text.includes('Lyon'),
+    'avertissement : risque mortel, identification, enfants, centre antipoison, propriétaire, estimation, responsabilité',
+    ['mortels', 'connaissez parfaitement', 'pharmacien', 'application', 'jeunes enfants', 'centre antipoison', 'le 15', 'propriétaire', 'estimation', 'seul responsable'].every((w) => first.text.includes(w)) && !first.text.includes('Lyon'),
     first.text.slice(0, 80),
   );
-  check('avertissement : lien vers les conditions', first.link === 'a-propos.html#conditions', first.link);
+  check(
+    'avertissement : court (moins de 100 mots), lisible sans défiler, sans rien d’une étape de présentation',
+    first.words < 100 && first.fits && first.steps === 0 && !/comestible|garanti[^e]|autoris|probabilit|trouvez/i.test(first.text),
+    `${first.words} mots, tient dans la fenêtre : ${first.fits}`,
+  );
+  check(
+    'avertissement : liens vers les conditions, puis vers tous les conseils',
+    first.link === 'a-propos.html#conditions' && first.links.join() === 'a-propos.html#conditions,a-propos.html#identifier',
+    first.links.join(', '),
+  );
   await page.screenshot({ path: `${OUT}00-avertissement.png` });
 
   await page.keyboard.press('Escape');
@@ -148,7 +174,68 @@ async function disclaimerTests(browser, base) {
     saved: JSON.parse(localStorage.getItem('foret-explorer:avertissement') ?? 'null'),
   }));
   check('avertissement : accepté et mémorisé avec la version des conditions', after.gone && after.saved?.v === TERMS_VERSION && typeof after.saved?.t === 'number', JSON.stringify(after.saved));
+  const announced = await page.evaluate(() => window.__pret);
+  check('avertissement : fin du compte à rebours annoncée aux lecteurs d’écran', announced === 'Vous pouvez maintenant accepter.', String(announced));
+
+  // Premier accord : « La carte en 3 gestes », qu'on ferme comme on veut (ce n'est plus une porte).
+  await page.waitForSelector('dialog.tour[open]', { timeout: 5000 });
+  const tour = await page.evaluate(() => {
+    const d = document.querySelector('dialog.tour');
+    const body = d.querySelector('.tour__body');
+    return {
+      modal: d.matches(':modal'),
+      role: d.getAttribute('role'),
+      label: document.getElementById(d.getAttribute('aria-labelledby'))?.textContent,
+      focus: document.activeElement?.id,
+      steps: [...d.querySelectorAll('.tour__steps li strong')].map((s) => s.textContent),
+      text: d.innerText.replace(/\s+/g, ' '),
+      decorative: [...d.querySelectorAll('.tour__screen')].every((s) => s.getAttribute('aria-hidden') === 'true'),
+      screens: [...d.querySelectorAll('.tour__screen')].filter((s) => getComputedStyle(s).display !== 'none').map((s) => s.className.split('--').pop()),
+      fits: body.scrollHeight <= body.clientHeight + 1,
+      images: d.querySelectorAll('img, picture, canvas').length,
+    };
+  });
+  check(
+    'accueil : après un premier accord, « La carte en 3 gestes » (fenêtre libre, nommée, clavier sur son titre)',
+    tour.modal && tour.role === null && tour.label === 'La carte en 3 gestes' && tour.focus === 'tour-heading',
+    JSON.stringify({ modal: tour.modal, role: tour.role, focus: tour.focus }),
+  );
+  check(
+    'présentation : trois gestes, schéma dessiné et décoratif (grand écran), sans défilement ni image',
+    tour.steps.join(' | ') === 'Choisissez un champignon | Zoomez sur un secteur coloré | Touchez un coin' && tour.decorative && tour.screens.join() === 'wide' && tour.fits && tour.images === 0,
+    `${tour.steps.join(' | ')} — schéma : ${tour.screens.join()}`,
+  );
+  check(
+    'présentation : « à gauche », « à droite », vocabulaire prudent (estimée, ni promesse ni droit)',
+    /à gauche, dans la légende/.test(tour.text) && /à droite, son bilan/.test(tour.text) && /chance estimée/.test(tour.text) && /ni une promesse d’en trouver, ni un droit de cueillir/.test(tour.text) && !/comestible|garanti|autoris|probabilit|temps réel|trouvez|bas :/i.test(tour.text),
+    tour.text.slice(0, 110),
+  );
+  // Double appui : « Voir la carte » apparaît là où l'on vient d'accepter ; il est ignoré une demi-seconde.
+  await page.locator('.tour__close').click();
+  const guarded = await page.evaluate(() => Boolean(document.querySelector('dialog.tour[open]')));
+  await page.waitForTimeout(600);
+  await page.locator('.tour__close').click();
+  const closed = await page.evaluate(() => ({ tour: Boolean(document.querySelector('dialog.tour')), inert: document.getElementById('app').inert, dialogs: document.querySelectorAll('dialog').length }));
+  check('présentation : un second appui immédiat ne la ferme pas, « Voir la carte » la ferme ensuite', guarded && !closed.tour && !closed.inert && closed.dialogs === 0, JSON.stringify({ guarded, ...closed }));
   await waitForMap(page);
+  // À la demande, depuis la légende : elle se rouvre seule, se ferme par Échap ou par un clic à côté,
+  // et rend le clavier au bouton ; l'accord gardé n'est pas touché.
+  const how = page.getByRole('button', { name: 'Comment ça marche ?' });
+  await how.click();
+  await page.waitForSelector('dialog.tour[open]');
+  await page.waitForTimeout(600);
+  await page.keyboard.press('Escape');
+  const byEscape = await page.evaluate(() => ({ tour: Boolean(document.querySelector('dialog.tour')), focus: document.activeElement?.textContent }));
+  await how.click();
+  await page.waitForSelector('dialog.tour[open]');
+  await page.waitForTimeout(600);
+  await page.mouse.click(20, 400);
+  const byBackdrop = await page.evaluate((t) => ({ tour: Boolean(document.querySelector('dialog.tour')), disclaimer: Boolean(document.querySelector('dialog.disclaimer')), same: JSON.parse(localStorage.getItem('foret-explorer:avertissement')).t === t }), after.saved.t);
+  check(
+    'légende : « Comment ça marche ? » rouvre la présentation, fermée par Échap ou par un clic à côté, sans redemander l’accord',
+    !byEscape.tour && byEscape.focus === 'Comment ça marche ?' && !byBackdrop.tour && !byBackdrop.disclaimer && byBackdrop.same,
+    JSON.stringify({ byEscape, byBackdrop }),
+  );
   const firstView = await viewOf(page);
   check('première visite : la France entière', firstView.zoom < 7 && firstView.lat > 44 && firstView.lat < 49 && firstView.lng > 0 && firstView.lng < 5, JSON.stringify(firstView));
   // Vue d'ensemble : l'indice de pousse de tout le pays, lu dans les fichiers météo communs.
@@ -931,9 +1018,37 @@ async function mobileTests(browser, base) {
     return { left: Math.round(r.left), right: Math.round(r.right), bottom: Math.round(r.bottom), button: Math.round(b.bottom), height: Math.round(b.height) };
   });
   check('mobile : avertissement dans l’écran, bouton de 46 px visible', dialog.left >= 0 && dialog.right <= 390 && dialog.button <= 844 && dialog.height >= 46, JSON.stringify(dialog));
+  const fit = await page.evaluate(() => {
+    const d = document.querySelector('dialog.disclaimer');
+    const body = d.querySelector('.disclaimer__body');
+    const links = [...d.querySelectorAll('.disclaimer__links a')].map((a) => Math.round(a.getBoundingClientRect().height));
+    return { scrolls: body.scrollHeight > body.clientHeight + 1, width: Math.round(d.getBoundingClientRect().width), links };
+  });
+  check('mobile : avertissement lisible sans défiler, sur toute la largeur, liens à la taille du doigt', !fit.scrolls && fit.width >= 370 && fit.links.every((v) => v >= 24), JSON.stringify(fit));
   await page.screenshot({ path: `${OUT}06b-mobile-avertissement.png` });
   await page.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
   await page.locator('.disclaimer__accept').tap();
+  // Présentation sur téléphone : silhouette de téléphone, gestes décrits sans « à gauche » ni « à droite ».
+  await page.waitForSelector('dialog.tour[open]', { timeout: 5000 });
+  const mobileTour = await page.evaluate(() => {
+    const d = document.querySelector('dialog.tour');
+    const body = d.querySelector('.tour__body');
+    const r = d.getBoundingClientRect();
+    return {
+      screens: [...d.querySelectorAll('.tour__screen')].filter((s) => getComputedStyle(s).display !== 'none').map((s) => s.className.split('--').pop()),
+      text: d.innerText.replace(/\s+/g, ' '),
+      scrolls: body.scrollHeight > body.clientHeight + 1,
+      inside: r.left >= 0 && r.right <= 390 && r.bottom <= 844,
+      button: Math.round(d.querySelector('.tour__close').getBoundingClientRect().height),
+    };
+  });
+  check(
+    'mobile : présentation en version téléphone (bouton en haut à gauche, bilan en bas), sans défilement',
+    mobileTour.screens.join() === 'phone' && /bouton en haut à gauche/.test(mobileTour.text) && /s’ouvre en bas/.test(mobileTour.text) && !/à droite|à gauche,/.test(mobileTour.text) && !mobileTour.scrolls && mobileTour.inside && mobileTour.button >= 46,
+    mobileTour.text.slice(0, 120),
+  );
+  await page.screenshot({ path: `${OUT}06c-mobile-presentation.png` });
+  await closeTour(page);
   await waitForMap(page);
   await idle(page);
   check('mobile : légende fermée au démarrage', await page.evaluate(() => document.getElementById('legend').hidden));
@@ -970,7 +1085,7 @@ try {
   await desktopTests(browser, server.url);
   await fallbackTests(browser, server.url);
   await mobileTests(browser, server.url);
-  await viewTests({ browser, base: server.url, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf });
+  await viewTests({ browser, base: server.url, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour });
 } finally {
   await browser.close();
   await server.close();

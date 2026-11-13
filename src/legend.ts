@@ -6,6 +6,7 @@ import { ABOUT_URL } from './legal';
 import { mushroomSection, soilSection, weatherSection, zonesSection } from './legendExtras';
 import type { MeteoLayer } from './meteoLayer';
 import type { AppState, BasemapId, Store } from './state';
+import { showTour } from './tour';
 import { collapsible, sectionTitle } from './ui';
 
 interface Row {
@@ -103,6 +104,9 @@ export class LegendPanel {
     const weather = weatherSection(this.store, this.meteo);
     this.extras.push(mushrooms, zones, soils, weather);
     const link = (text: string, anchor: string): HTMLAnchorElement => h('a', { href: `${ABOUT_URL}#${anchor}` }, text);
+    // Rouvre « La carte en 3 gestes » (montrée d'office après le premier accord seulement).
+    const how = h('button', { class: 'legend-footer__btn', type: 'button' }, 'Comment ça marche ?');
+    how.addEventListener('click', () => void showTour());
     const body = h(
       'div',
       { class: 'panel__body' },
@@ -116,6 +120,7 @@ export class LegendPanel {
       h(
         'footer',
         { class: 'legend-footer' },
+        how,
         link('Avant de cueillir', 'identifier'),
         link('Conditions', 'conditions'),
         link('Mentions légales', 'mentions-legales'),

@@ -11,6 +11,7 @@ import './style.css';
 import './analytics.css';
 import { showDisclaimer, withdrawDisclaimer } from './disclaimer';
 import { byId, h } from './dom';
+import { showTour, withdrawTour } from './tour';
 import { currentView, initViewSwitch, onViewChange, type ViewId } from './view';
 
 const loaders: Readonly<Record<ViewId, () => Promise<unknown>>> = {
@@ -38,6 +39,20 @@ function repeatFailure(): void {
   if (!box.hidden) box.replaceChildren(...box.childNodes);
 }
 
+/** Présentation due : un premier accord vient d'être donné, et le visiteur ne l'a pas encore fermée (rien n'est gardé). */
+let tourDue = false;
+
+/**
+ * Accueil de la carte : l'avertissement à accepter, puis, pour un premier accord seulement, « La carte
+ * en 3 gestes ». Quittée sans avoir été fermée (passage à la vue Analytics), la présentation revient
+ * avec la carte, directement : l'accord, lui, est déjà donné.
+ */
+async function welcome(): Promise<void> {
+  if (await showDisclaimer()) tourDue = true;
+  if (tourDue && currentView() === 'map' && (await showTour())) tourDue = false;
+  repeatFailure();
+}
+
 function show(view: ViewId): void {
   byId('view-error').hidden = true; // le message ne concernait que la vue qu'on quitte
   if (!loading.has(view)) {
@@ -58,8 +73,12 @@ function show(view: ViewId): void {
   }
   // L'avertissement ne concerne que la carte : il s'affiche avec elle, sans attendre qu'elle soit
   // téléchargée, et se retire si le visiteur passe à la vue Analytics avant de l'avoir accepté.
-  if (view === 'map') void showDisclaimer().then(repeatFailure);
-  else withdrawDisclaimer();
+  if (view === 'map') void welcome();
+  else {
+    // Une fenêtre modale restée ouverte couvrirait la vue Analytics et la figerait.
+    withdrawDisclaimer();
+    withdrawTour();
+  }
 }
 
 initViewSwitch();

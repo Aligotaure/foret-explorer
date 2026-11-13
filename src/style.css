@@ -1512,8 +1512,9 @@ a.btn-square {
   text-decoration: none;
 }
 
-/* ── Avertissement à l'ouverture (fenêtre bloquante) ──────────────────────── */
-.disclaimer {
+/* ── Accueil : avertissement à accepter (fenêtre bloquante), puis présentation de la carte ── */
+.disclaimer,
+.tour {
   width: min(560px, calc(100% - 24px));
   max-height: min(780px, calc(100% - 24px));
   max-height: min(780px, calc(100dvh - 24px));
@@ -1527,17 +1528,20 @@ a.btn-square {
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
 }
 
-.disclaimer[open] {
+.disclaimer[open],
+.tour[open] {
   display: flex;
   flex-direction: column;
 }
 
-.disclaimer::backdrop {
+.disclaimer::backdrop,
+.tour::backdrop {
   background: rgba(8, 8, 26, 0.74);
   backdrop-filter: blur(2px);
 }
 
-.disclaimer__head {
+.disclaimer__head,
+.tour__head {
   display: flex;
   flex: none;
   align-items: center;
@@ -1551,17 +1555,28 @@ a.btn-square {
   color: #ffc46b;
 }
 
-.disclaimer__heading {
+.tour__icon {
+  display: inline-flex;
+  color: var(--lavender);
+}
+
+.disclaimer__heading,
+.tour__heading {
   margin: 0;
   color: var(--lavender-soft);
   font-size: 18px;
   font-weight: 600;
 }
 
-.disclaimer__body {
+.tour__heading:focus {
+  outline: none;
+}
+
+.disclaimer__body,
+.tour__body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 14px 18px 10px;
+  padding: 14px 18px 12px;
   overflow-y: auto;
   overscroll-behavior: contain;
   font-size: 14px;
@@ -1580,27 +1595,41 @@ a.btn-square {
   color: #fff;
 }
 
-.disclaimer__intro {
+/* Une phrase qui se lit pendant le compte à rebours, puis trois réflexes et ce que vaut la carte. */
+.disclaimer__lead {
+  color: var(--lavender-soft);
   font-size: 15px;
 }
 
-.disclaimer__title {
-  margin: 16px 0 6px;
-  color: var(--lavender-soft);
-  font-size: 12.5px;
+.disclaimer__key {
+  margin-top: 2px;
+  color: #fff;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  line-height: 1.35;
 }
 
-.disclaimer__list {
+.disclaimer__rules {
   display: grid;
-  gap: 6px;
-  margin: 0;
-  padding-left: 18px;
+  gap: 8px;
+  margin: 14px 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 14.5px;
 }
 
-.disclaimer__foot {
+.disclaimer__rules li {
+  padding-left: 12px;
+  border-left: 3px solid var(--accent);
+}
+
+.disclaimer__own {
+  color: #fff;
+  font-weight: 600;
+}
+
+.disclaimer__foot,
+.tour__foot {
   display: grid;
   flex: none;
   gap: 10px;
@@ -1609,18 +1638,34 @@ a.btn-square {
   background: var(--navy-800);
 }
 
-.disclaimer__terms {
+.disclaimer__terms,
+.tour__again {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.45;
 }
 
-.disclaimer__terms a {
-  color: var(--lavender-soft);
+.disclaimer__terms p {
+  margin: 0;
 }
 
-.disclaimer__accept {
+/* Deux liens à la taille du doigt, sur leur propre ligne. */
+.disclaimer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 22px;
+}
+
+.disclaimer__links a {
+  display: inline-block;
+  padding: 8px 0 4px;
+  color: var(--lavender-soft);
+  font-size: 13px;
+}
+
+.disclaimer__accept,
+.tour__close {
   min-height: var(--btn);
   padding: 0 18px;
   border: 0;
@@ -1632,7 +1677,8 @@ a.btn-square {
   cursor: pointer;
 }
 
-.disclaimer__accept:not(:disabled):hover {
+.disclaimer__accept:not(:disabled):hover,
+.tour__close:hover {
   background: #7d7df6;
 }
 
@@ -1642,22 +1688,352 @@ a.btn-square {
   cursor: wait;
 }
 
+/* Présentation : le schéma de l'écran (décoratif) et ses trois gestes, numérotés pareil. */
+.tour__screen {
+  --tour-a: #49e08a;
+  --tour-b: #63dfe0;
+  --tour-c: #f39a78;
+  --tour-map: #eeece4;
+
+  position: relative;
+  display: grid;
+  grid-template-columns: 30% 1fr 28%;
+  height: 172px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--tour-map);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.tour__screen--phone {
+  display: none;
+}
+
+.tour-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px;
+  padding-bottom: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--navy-900);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  color: var(--lavender-soft);
+}
+
+.tour-panel__head {
+  min-height: 24px;
+  padding: 5px 6px 4px 34px;
+  background: var(--navy-700);
+  font-weight: 600;
+}
+
+.tour-panel__body {
+  display: grid;
+  gap: 6px;
+  padding: 0 6px;
+}
+
+.tour-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.tour-chip {
+  width: 30px;
+  height: 9px;
+  border: 1px solid var(--accent);
+  border-radius: 99px;
+}
+
+.tour-chip--on {
+  border-color: #b45309;
+  background: #b45309;
+}
+
+.tour-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tour-line::before {
+  flex: none;
+  width: 34%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--lavender-soft);
+  content: '';
+  opacity: 0.55;
+}
+
+.tour-line::after {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--navy-600);
+  content: '';
+}
+
+.tour-line--switch::after {
+  flex: none;
+  width: 13px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+.tour-map {
+  position: relative;
+  overflow: hidden;
+}
+
+.tour-map__blob {
+  position: absolute;
+  border-radius: 46% 54% 58% 42% / 48% 44% 56% 52%;
+  opacity: 0.9;
+}
+
+.tour-map__square {
+  position: absolute;
+  border-radius: 2px;
+}
+
+.tour-map__chance,
+.tour-chance {
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: #fff;
+  color: #5b1e02;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.tour-map__chance {
+  position: absolute;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.tour-chance {
+  justify-self: start;
+  background: #e07a1f;
+  color: #1a0c02;
+}
+
+.tour-map__pin {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  background: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  transform: rotate(-45deg);
+}
+
+.tour-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 22px;
+  border-bottom: 1px solid var(--navy-600);
+}
+
+.tour-bars i {
+  flex: 1;
+  border-radius: 1px 1px 0 0;
+  background: #8fc3e0;
+}
+
+/* Repère numéroté : même pastille dans le schéma et devant chaque geste. Double anneau, pour qu'elle
+   se détache sur la carte claire comme sur un volet sombre. */
+.tour-num {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 0 4px var(--navy-900);
+  color: var(--france);
+  font-size: 13.5px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.tour__screen .tour-num {
+  position: absolute;
+  z-index: 2;
+}
+
+.tour__steps {
+  display: grid;
+  grid-template-columns: 30% 1fr 28%;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tour__steps li {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 0 10px;
+  align-content: start;
+  padding: 0 8px 0 6px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.tour__steps strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #fff;
+  font-size: 14.5px;
+  line-height: 1.3;
+}
+
+.tour__phone {
+  display: none;
+}
+
+.tour__note {
+  margin: 12px 0 0;
+  color: #e5e5ff;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
 @media (min-width: 641px) {
-  .disclaimer__foot {
+  .disclaimer__foot,
+  .tour__foot {
     grid-template-columns: 1fr auto;
     align-items: center;
   }
 }
 
+/* Téléphone : ni gauche ni droite. Le schéma devient un téléphone, les gestes passent à sa droite. */
 @media (max-width: 640px) {
-  .disclaimer {
+  .disclaimer,
+  .tour {
     width: calc(100% - 16px);
+    /* sans cela, la largeur maximale que le navigateur donne à une fenêtre modale reprend 22 px */
+    max-width: calc(100% - 16px);
     max-height: calc(100% - 16px);
     max-height: calc(100dvh - 16px - var(--safe-top));
   }
 
-  .disclaimer__body {
+  .disclaimer__body,
+  .tour__body {
     font-size: 13.5px;
+  }
+
+  .disclaimer__key {
+    font-size: 16.5px;
+  }
+
+  .tour__wide {
+    display: none;
+  }
+
+  .tour__phone {
+    display: inline;
+  }
+
+  .tour__layout {
+    display: grid;
+    grid-template-columns: 112px 1fr;
+    gap: 0 14px;
+  }
+
+  .tour__screen--wide {
+    display: none;
+  }
+
+  .tour__screen--phone {
+    display: block;
+    height: min(232px, 34dvh);
+    border: 2px solid var(--navy-600);
+    border-radius: 14px;
+  }
+
+  .tour-phone__menu {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    background: var(--accent);
+  }
+
+  .tour-phone__island {
+    position: absolute;
+    top: 7px;
+    right: 26px;
+    left: 34px;
+    height: 18px;
+    border-radius: 9px;
+    background: #000;
+  }
+
+  .tour-phone__island::before {
+    position: absolute;
+    inset: 3px 50% 3px 3px;
+    border-radius: 7px;
+    background: #fff;
+    content: '';
+  }
+
+  .tour-phone__sheet {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: grid;
+    align-content: start;
+    gap: 5px;
+    height: 40%;
+    padding: 0 7px 6px;
+    border-radius: 8px 8px 0 0;
+    background: var(--navy-900);
+    color: var(--lavender-soft);
+  }
+
+  .tour-phone__sheet .tour-panel__head {
+    margin: 0 -7px;
+    border-radius: 8px 8px 0 0;
+  }
+
+  .tour__steps {
+    grid-template-columns: 1fr;
+    align-content: space-between;
+    gap: 10px;
+    margin: 0;
+  }
+
+  .tour__steps li {
+    padding: 0;
+  }
+}
+
+/* Contraste élevé : un schéma fait de couleurs de fond s'y vide ; la liste dit tout. */
+@media (forced-colors: active) {
+  .tour__screen {
+    display: none;
+  }
+
+  .tour__layout {
+    display: block;
   }
 }
 
@@ -1732,6 +2108,20 @@ a.btn-square {
 
 .legend-footer a {
   color: var(--muted);
+}
+
+/* « Comment ça marche ? » : rouvre la présentation de la carte. */
+.legend-footer__btn {
+  flex-basis: 100%;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--lavender-soft);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .legend-footer a:hover {

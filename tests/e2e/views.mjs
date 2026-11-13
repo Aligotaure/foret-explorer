@@ -90,7 +90,7 @@ const geometry = (page) =>
     };
   });
 
-export async function viewTests({ browser, base, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf }) {
+export async function viewTests({ browser, base, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour }) {
   const errors = [];
   const watch = (page) => {
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
@@ -299,8 +299,29 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     );
     await page.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
     await page.locator('.disclaimer__accept').click();
+    // Premier accord : la présentation suit. Quittée sans être fermée, elle se retire avec la carte
+    // (elle couvrirait la vue Analytics) et revient avec elle, directement, sans redemander l'accord.
+    await page.waitForSelector('dialog.tour[open]', { timeout: 5000 });
     const accepted = await page.evaluate(() => ({ dialog: Boolean(document.querySelector('dialog.disclaimer')), saved: Boolean(localStorage.getItem('foret-explorer:avertissement')) }));
-    check('avertissement : accepté après le retour, la carte est libre', !accepted.dialog && accepted.saved, JSON.stringify(accepted));
+    await page.goBack();
+    await page.waitForFunction(() => document.documentElement.dataset.view === 'analytics');
+    await page.waitForTimeout(300);
+    const left = await page.evaluate(() => ({ dialogs: document.querySelectorAll('dialog').length, inert: document.getElementById('app').inert }));
+    await island(page, 'map').click();
+    await page.waitForSelector('dialog.tour[open]', { timeout: 5000 });
+    const back = await page.evaluate(() => ({ tour: document.querySelectorAll('dialog.tour').length, disclaimer: document.querySelectorAll('dialog.disclaimer').length }));
+    check(
+      'présentation : retirée en quittant la carte (îlot libre), de retour avec elle sans nouvel accord',
+      left.dialogs === 0 && !left.inert && back.tour === 1 && back.disclaimer === 0,
+      JSON.stringify({ left, back }),
+    );
+    await closeTour(page);
+    await island(page, 'analytics').click();
+    await page.waitForSelector('#analytics h1');
+    await island(page, 'map').click();
+    await page.waitForTimeout(400);
+    const free = await page.evaluate(() => document.querySelectorAll('dialog').length);
+    check('avertissement : accepté après le retour, la carte est libre ; la présentation fermée ne revient pas', !accepted.dialog && accepted.saved && free === 0, JSON.stringify({ ...accepted, free }));
     await context.close();
   }
 
@@ -377,11 +398,12 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     await page.waitForSelector('dialog.disclaimer[open]', { timeout: 10000 });
     await page.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
     await page.locator('.disclaimer__accept').click();
+    await closeTour(page);
     await island(page, 'analytics').click();
     await page.waitForSelector('#analytics h1');
     await island(page, 'map').click();
     await page.waitForTimeout(400);
-    const again = await page.evaluate(() => ({ dialog: Boolean(document.querySelector('dialog.disclaimer')), stored: localStorage.getItem('foret-explorer:avertissement') }));
+    const again = await page.evaluate(() => ({ dialog: Boolean(document.querySelector('dialog')), stored: localStorage.getItem('foret-explorer:avertissement') }));
     check('avertissement : accepté une fois par visite, même sans stockage du navigateur', !again.dialog && again.stored === null && (await view(page)) === 'map', JSON.stringify(again));
     await context.close();
   }
