@@ -528,6 +528,10 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     check('bilan : son bouton « Fermer » reste atteignable à toutes les largeurs de bureau', closeHidden.length === 0, closeHidden.map((r) => `${r.width} px`).join(', '));
     const hintHidden = rows.filter((r) => r.width <= 640 && r.closed.hintButton !== true);
     check('mobile : bouton « Zoomer ici » du bandeau entièrement dégagé des boutons de droite', hintHidden.length === 0, hintHidden.map((r) => `${r.width} px`).join(', '));
+    // Bureau : le bandeau reste cliquable, bilan ouvert compris (à partir de 834 px ; plus étroit, il
+    // déborde déjà de l'écran quand la légende est ouverte, comme avant l'îlot).
+    const hintUnder = rows.filter((r) => r.width >= 834 && (r.closed.hintButton !== true || r.open.hintButton !== true));
+    check('bureau : bouton « Zoomer ici » cliquable, bilan ouvert ou fermé', hintUnder.length === 0, hintUnder.map((r) => `${r.width} px`).join(', '));
     const small = rows.filter((r) => r.closed.links.some((l) => l.h < 44 || l.w < 44));
     const off = rows.filter((r) => r.closed.island.left < 0 || r.closed.island.right > r.width || r.closed.island.top !== 8 || r.closed.scroll || r.open.scroll);
     const centred = rows.filter((r) => (r.width <= 640 || r.width >= 1188) && Math.abs(r.closed.island.centre - r.width / 2) > 1);

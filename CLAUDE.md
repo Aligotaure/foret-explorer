@@ -196,8 +196,8 @@ selon la part d'arbres hôtes ; défavorable = contour seul. Les forêts s'estom
     recherche passe à la deuxième rangée (`.topbar` en `flex-wrap`, `pointer-events: none` sur le
     vide), le bandeau « Zoomez… » à la troisième, arrêté avant la colonne de boutons ;
   - de 641 à 1187 px : îlot à droite de la recherche (décentré) ; sous 760 px la recherche se
-    resserre ; de 641 à 1127 px le bilan s'ouvre une rangée plus bas (`.zoom-hint` passe sous les
-    panneaux : `z-index: 1`) ;
+    resserre ; de 641 à 1127 px le bilan s'ouvre une rangée plus bas, et le bandeau « Zoomez… »
+    aussi (il reste sous l'en-tête du bilan, par-dessus son contenu, comme avant) ;
   - à partir de 1188 px : centré, rien ne bouge.
 - **Contenu de la vue Analytics** : tout vient de `src/analyticsData.ts` ("" , `null` ou `[]` : état
   vide). Guillemets doubles dans ce fichier (les apostrophes du français y sont sans danger), modèles
