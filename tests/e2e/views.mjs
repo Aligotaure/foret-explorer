@@ -60,23 +60,31 @@ const geometry = (page) =>
       const dy = Math.max(r.top - bar.bottom, bar.top - r.bottom);
       gaps[name] = Math.round(Math.max(dx, dy));
     }
-    // Chaque bouton de la carte reste atteignable : au milieu du bouton, c'est bien lui qu'on touche.
+    // Au milieu d'un bouton, qu'est-ce qu'on touche ? (lui-même, sinon ce qui le recouvre)
+    const topAt = (el) => {
+      const r = box(el);
+      return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    };
+    const reachable = (el) => {
+      const top = topAt(el);
+      return Boolean(top) && (top === el || el.contains(top));
+    };
     const buttons = [
-      ...document.querySelectorAll('#legend-toggle, .search__input, .search__submit, #toolbar-top > *, #toolbar-bottom button, #spot .panel__close, #legend .panel__close, .island__link'),
+      ...document.querySelectorAll('#legend-toggle, .search__input, .search__submit, #toolbar-top > *, #toolbar-bottom button, #spot .panel__close, #legend .panel__close, .zoom-hint__btn'),
     ].filter(shown);
-    const covered = buttons
-      .filter((el) => {
-        const r = box(el);
-        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-        return !(top && (top === el || el.contains(top)));
-      })
-      .map((el) => el.getAttribute('aria-label') ?? el.id ?? el.className);
+    // Boutons de la carte recouverts par l'îlot.
+    const masked = buttons.filter((el) => document.getElementById('view-switch').contains(topAt(el))).map((el) => el.getAttribute('aria-label') ?? el.textContent);
+    const spotClose = document.querySelector('#spot .panel__close');
+    const hintButton = document.querySelector('.zoom-hint__btn');
     const links = [...document.querySelectorAll('.island__link')].map((a) => ({ w: Math.round(box(a).width), h: Math.round(box(a).height) }));
     return {
       island: { left: Math.round(bar.left), right: Math.round(bar.right), top: Math.round(bar.top), bottom: Math.round(bar.bottom), centre: Math.round((bar.left + bar.right) / 2) },
       width: window.innerWidth,
       gaps,
-      covered,
+      masked,
+      islandReachable: [...document.querySelectorAll('.island__link')].every(reachable),
+      spotClose: shown(spotClose) ? reachable(spotClose) : null,
+      hintButton: shown(hintButton) ? reachable(hintButton) : null,
       links,
       scroll: document.documentElement.scrollWidth > window.innerWidth,
     };
@@ -465,7 +473,7 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     check(
       'îlot : le fond glisse en 300 ms au plus, sans animation si elles sont réduites',
-      moving.total > 0 && moving.total <= 300 && moving.props === 'left, right' && moving.left === '108px' && moving.right === '4px' && still.total === 0,
+      moving.total > 0 && moving.total <= 300 && moving.props === 'left, right' && moving.left === '108px' && moving.right === '4px' && still.total === 0 && still.props === 'none',
       JSON.stringify({ moving, still }),
     );
     await context.close();
@@ -494,7 +502,8 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
         await page.evaluate(() => window.spot.close());
         await page.waitForTimeout(120);
         const closed = await geometry(page);
-        await page.mouse.click(Math.round(width / 2), 520);
+        // Un clic sur la carte ouvre le bilan : au milieu sur téléphone, à droite de la légende sinon.
+        await page.mouse.click(width <= 640 ? Math.round(width / 2) : 400, 520);
         await page.waitForFunction(() => !document.getElementById('spot').hidden);
         await page.waitForTimeout(120);
         const open = await geometry(page);
@@ -508,12 +517,17 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
       tight.length === 0,
       tight.length ? tight.map((r) => `${r.width} px : ${JSON.stringify(r.open.gaps)}`).join(' ; ') : `écart le plus faible : ${Math.min(...rows.filter((r) => r.width >= 320).map((r) => Math.min(worst(r.closed), worst(r.open))))} px`,
     );
-    const hidden = rows.filter((r) => r.closed.covered.length || r.open.covered.length);
+    const masked = rows.filter((r) => r.closed.masked.length || r.open.masked.length || !r.closed.islandReachable || !r.open.islandReachable);
     check(
-      'îlot : chaque bouton de la carte reste atteignable (aucun n’est recouvert)',
-      hidden.length === 0,
-      hidden.map((r) => `${r.width} px : ${[...r.closed.covered, ...r.open.covered].join(', ')}`).join(' ; '),
+      'îlot : il ne recouvre aucun bouton de la carte, et rien ne le recouvre',
+      masked.length === 0,
+      masked.map((r) => `${r.width} px : ${[...r.closed.masked, ...r.open.masked].join(', ') || 'îlot recouvert'}`).join(' ; '),
     );
+    // Entre 641 et 1127 px, le bilan s'ouvre une rangée plus bas, là où passe le bandeau « Zoomez… ».
+    const closeHidden = rows.filter((r) => r.width > 640 && r.open.spotClose !== true);
+    check('bilan : son bouton « Fermer » reste atteignable à toutes les largeurs de bureau', closeHidden.length === 0, closeHidden.map((r) => `${r.width} px`).join(', '));
+    const hintHidden = rows.filter((r) => r.width <= 640 && r.closed.hintButton !== true);
+    check('mobile : bouton « Zoomer ici » du bandeau entièrement dégagé des boutons de droite', hintHidden.length === 0, hintHidden.map((r) => `${r.width} px`).join(', '));
     const small = rows.filter((r) => r.closed.links.some((l) => l.h < 44 || l.w < 44));
     const off = rows.filter((r) => r.closed.island.left < 0 || r.closed.island.right > r.width || r.closed.island.top !== 8 || r.closed.scroll || r.open.scroll);
     const centred = rows.filter((r) => (r.width <= 640 || r.width >= 1188) && Math.abs(r.closed.island.centre - r.width / 2) > 1);
@@ -548,7 +562,7 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     // Zone de sécurité de l'iPhone (encoche) : simulée par la variable qui la porte.
     await page.addStyleTag({ content: ':root { --safe-top: 47px; }' });
     const notch = await geometry(page);
-    check('mobile : îlot placé sous la zone de sécurité du haut', notch.island.top === 55 && Math.min(...Object.values(notch.gaps)) >= 6 && notch.covered.length === 0, JSON.stringify({ haut: notch.island.top, écarts: notch.gaps }));
+    check('mobile : îlot placé sous la zone de sécurité du haut', notch.island.top === 55 && Math.min(...Object.values(notch.gaps)) >= 6 && notch.masked.length === 0 && notch.islandReachable, JSON.stringify({ haut: notch.island.top, écarts: notch.gaps }));
     await page.evaluate(() => document.querySelector('style:last-of-type').remove());
     // Un geste sur la carte entre le bouton légende et l'îlot atteint bien la carte.
     const through = await page.evaluate(() => document.elementFromPoint(72, 30)?.className);

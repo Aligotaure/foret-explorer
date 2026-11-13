@@ -1637,6 +1637,7 @@ html[data-view='analytics'] .island__link[data-view='analytics'] {
 
 @media (prefers-reduced-motion: reduce) {
   .island::before,
+  html[data-view='analytics'] .island::before,
   .island__link {
     transition: none;
   }

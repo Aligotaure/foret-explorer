@@ -10,6 +10,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { installMocks } from './mocks.mjs';
+import { viewTests } from './views.mjs';
 
 const OUT = fileURLToPath(new URL('./shots/', import.meta.url));
 mkdirSync(OUT, { recursive: true });
@@ -787,6 +788,7 @@ try {
   await desktopTests(browser, server.url);
   await fallbackTests(browser, server.url);
   await mobileTests(browser, server.url);
+  await viewTests({ browser, base: server.url, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf });
 } finally {
   await browser.close();
   await server.close();
