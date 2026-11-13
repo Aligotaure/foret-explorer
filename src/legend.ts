@@ -22,7 +22,7 @@ const BASEMAPS: readonly { id: BasemapId; label: string }[] = [
 /**
  * Panneau « Légendes » inspiré de cartes.gouv.fr : chaque type de forêt a sa case à
  * cocher. Le panneau ne touche jamais la carte : il lit et modifie le Store, et
- * main.ts répercute les changements sur MapLibre.
+ * mapView.ts répercute les changements sur MapLibre.
  */
 export class LegendPanel {
   private readonly rows = new Map<string, Row>();

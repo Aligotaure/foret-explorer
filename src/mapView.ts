@@ -1,10 +1,13 @@
-import 'maplibre-gl/dist/maplibre-gl.css';
-import './style.css';
+/**
+ * La vue « Carte » : état, carte MapLibre, panneaux, liaison état → carte.
+ *
+ * Module chargé par main.ts à la première ouverture de la vue (jamais pour la seule vue Analytics).
+ * Les feuilles de style et l'avertissement d'ouverture sont du ressort de main.ts.
+ */
 import maplibregl from 'maplibre-gl';
 import { Protocol } from 'pmtiles';
 import { BDFORET, FRANCE_BOUNDS, MAP_MAX_ZOOM, MAP_MIN_ZOOM } from './config';
 import { countClasses } from './counts';
-import { showDisclaimer } from './disclaimer';
 import { byId, debounce, h, toast } from './dom';
 import { registerSoilPatterns } from './geology';
 import { LegendPanel } from './legend';
@@ -26,10 +29,8 @@ import { SpotPanel } from './spot';
 import { Store, loadInitialState, persistState } from './state';
 import { STORAGE_PREFIX } from './legal';
 import { initLegendToggle, initToolbar } from './toolbar';
+import { onViewChange, onViewLeave } from './view';
 import { loadZonesInfo, noteZonesError, registerZonePattern } from './zones';
-
-// ── Avertissement : bloque la carte au moins 3 s tant qu'il n'est pas accepté ──
-void showDisclaimer();
 
 // ── État ──────────────────────────────────────────────────────────────────────
 const wideScreen = window.matchMedia('(min-width: 641px)').matches;
@@ -86,6 +87,16 @@ if (!wideScreen) {
 }
 registerSoilPatterns(map);
 registerZonePattern(map);
+
+// ── Vue Analytics : la carte reste chargée, masquée (position, légende et bilan intacts) ──
+// En la quittant par l'îlot, un déplacement en cours s'arrête : la position exacte est alors écrite
+// dans l'adresse de la carte, que le bouton Précédent du navigateur retrouvera.
+onViewLeave((view) => {
+  if (view === 'map') map.stop();
+});
+onViewChange((view) => {
+  if (view === 'map') map.triggerRepaint(); // image fraîche au retour, quel que soit le navigateur
+});
 
 // ── Interface ─────────────────────────────────────────────────────────────────
 const app = byId('app');

@@ -47,8 +47,10 @@ const renderedCodes = (page) =>
   page.evaluate(() =>
     [...new Set(window.map.queryRenderedFeatures({ layers: ['bdforet-fill'] }).map((f) => f.properties.code_tfv))].sort(),
   );
+// Tant que le code de la carte (chargé à la demande) n'est pas arrivé, `window.map` désigne la
+// balise <div id="map"> : on attend l'objet MapLibre lui-même.
 const waitForMap = (page) =>
-  page.waitForFunction(() => window.map && window.map.loaded(), null, { timeout: 30000 });
+  page.waitForFunction(() => typeof window.map?.loaded === 'function' && window.map.loaded(), null, { timeout: 30000 });
 /** Vue des tests de la carte : au-dessus d'Annecy et du Parmelan (#carte=zoom/lat/lon). */
 const ANNECY = '#carte=11.5/45.92/6.19';
 const viewOf = (page) =>

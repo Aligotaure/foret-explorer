@@ -136,7 +136,7 @@ export const FRANCE_BOUNDS: [number, number, number, number] = [-5.3, 41.3, 9.7,
 /**
  * Adresse de tuiles MapLibre pour une archive PMTiles : toutes les tuiles d'une couche dans un seul
  * fichier, lu par morceaux (requêtes HTTP partielles) grâce au protocole `pmtiles://` enregistré
- * dans main.ts. GitHub Pages ne sait pas publier des dizaines de milliers de petits fichiers.
+ * dans mapView.ts. GitHub Pages ne sait pas publier des dizaines de milliers de petits fichiers.
  */
 export const archiveTiles = (url: string): string => `pmtiles://${url}/{z}/{x}/{y}`;
 

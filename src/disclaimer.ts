@@ -98,11 +98,23 @@ function content(): HTMLElement {
   );
 }
 
+/** Avertissement à l'écran, pas encore accepté : sa promesse, et de quoi le retirer. */
+let pending: { promise: Promise<void>; withdraw: () => void } | null = null;
+
+/**
+ * Retire l'avertissement en attente sans l'accepter : le visiteur a quitté la carte pour la vue
+ * Analytics. Le prochain `showDisclaimer()` le remontre, compte à rebours repris de zéro.
+ */
+export function withdrawDisclaimer(): void {
+  pending?.withdraw();
+}
+
 /**
  * Affiche l'avertissement s'il n'a pas encore été accepté (ou toujours, avec `force`) ; la promesse
- * se résout quand le visiteur l'accepte.
+ * se résout quand le visiteur l'accepte (jamais s'il est retiré avant). Déjà à l'écran : rien de plus.
  */
 export function showDisclaimer(force = false): Promise<void> {
+  if (pending) return pending.promise;
   if (!force && hasAccepted()) return Promise.resolve();
 
   const accept = h('button', { class: 'disclaimer__accept', type: 'button', disabled: true }, `Lisez d’abord… ${WAIT_SECONDS}`);
@@ -137,8 +149,9 @@ export function showDisclaimer(force = false): Promise<void> {
     ),
   );
 
-  return new Promise((resolve) => {
-    let accepted = false;
+  let withdraw = (): void => {};
+  const promise = new Promise<void>((resolve) => {
+    let done = false; // accepté ou retiré : ne plus le rouvrir
     const app = document.getElementById('app');
     const open = (): void => {
       if (dialog.open) return;
@@ -149,11 +162,19 @@ export function showDisclaimer(force = false): Promise<void> {
         if (app) app.inert = true;
       }
     };
+    // `done` d'abord : l'événement « close » arrive après coup, et ne doit pas rouvrir la fenêtre.
+    const dismiss = (): void => {
+      done = true;
+      pending = null;
+      dialog.close();
+      dialog.remove();
+      if (app) app.inert = false;
+    };
     // Rien d'autre que le bouton ne ferme l'avertissement : Échap est ignoré, et s'il se ferme
     // quand même (double Échap sur certains navigateurs), il se rouvre aussitôt.
     dialog.addEventListener('cancel', (event) => event.preventDefault());
     dialog.addEventListener('close', () => {
-      if (!accepted) open();
+      if (!done) open();
     });
     document.body.append(dialog);
     open();
@@ -166,6 +187,7 @@ export function showDisclaimer(force = false): Promise<void> {
     // l'onglet est visible.
     let started = 0;
     const tick = (): void => {
+      if (done) return;
       const left = Math.ceil((WAIT_SECONDS * 1000 - (Date.now() - started)) / 1000);
       if (left > 0) {
         accept.textContent = `Lisez d’abord… ${left}`;
@@ -186,12 +208,12 @@ export function showDisclaimer(force = false): Promise<void> {
 
     accept.addEventListener('click', () => {
       if (accept.disabled) return;
-      accepted = true;
       remember();
-      dialog.close();
-      dialog.remove();
-      if (app) app.inert = false;
+      dismiss();
       resolve();
     });
+    withdraw = dismiss;
   });
+  pending = { promise, withdraw };
+  return promise;
 }

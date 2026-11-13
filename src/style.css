@@ -19,6 +19,8 @@
   --btn: 46px;
   --gap: 8px;
   --panel-width: 360px;
+  --search-width: 420px;
+  --island-width: 208px; /* îlot « Carte / Analytics » */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
@@ -135,7 +137,8 @@ button {
 .search {
   position: relative;
   display: flex;
-  width: 420px;
+  /* Sous 760 px de large, la recherche se resserre : l'îlot se loge entre elle et les boutons de droite. */
+  width: min(var(--search-width), calc(100vw - 5 * var(--gap) - 2 * var(--btn) - var(--island-width)));
   min-width: 0;
   height: var(--btn);
   border-radius: var(--radius);
@@ -660,7 +663,7 @@ li.is-off .swatch {
 /* ── Bandeau de zoom, message temporaire ──────────────────────────────────── */
 .zoom-hint {
   position: absolute;
-  z-index: 2;
+  z-index: 1; /* sous les panneaux : le bilan, quand il s'ouvre sur cette rangée, garde son en-tête */
   top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
   left: 50%;
   display: flex;
@@ -787,14 +790,22 @@ li.is-off .swatch {
   }
 }
 
-/* ── Mobile : recherche pleine largeur, légende en tiroir bas ────────────── */
+/* ── Mobile : recherche pleine largeur sous l'îlot, légende en tiroir bas ── */
 @media (max-width: 640px) {
+  /* Première rangée : bouton légende, îlot (centré), boutons de droite. La recherche passe à la
+     rangée suivante ; le vide de la première rangée laisse passer les gestes vers la carte. */
   .topbar {
     right: calc(var(--btn) + 2 * var(--gap));
+    flex-wrap: wrap;
+    pointer-events: none;
+  }
+
+  .topbar > * {
+    pointer-events: auto;
   }
 
   .search {
-    flex: 1;
+    flex: 1 0 100%;
     width: auto;
   }
 
@@ -823,12 +834,19 @@ li.is-off .swatch {
     display: none;
   }
 
+  /* Sous la recherche, et arrêté avant la colonne de boutons (qui cachait « Zoomer ici »). */
   .zoom-hint {
-    right: var(--gap);
+    top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
+    right: calc(var(--btn) + 2 * var(--gap));
     left: var(--gap);
     justify-content: space-between;
     white-space: normal;
     transform: none;
+  }
+
+  .zoom-hint__btn {
+    flex: none;
+    white-space: nowrap;
   }
 }
 
@@ -1024,6 +1042,15 @@ li.is-off .swatch {
   max-height: calc(100% - 2 * var(--gap) - 40px - var(--safe-top));
 }
 
+/* Entre 641 et 1127 px, la première rangée ne peut pas porter la recherche, l'îlot et le bilan :
+   le bilan s'ouvre une rangée plus bas, comme la légende. */
+@media (min-width: 641px) and (max-width: 1127px) {
+  .panel--spot {
+    top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
+    max-height: calc(100% - var(--btn) - 3 * var(--gap) - 40px - var(--safe-top));
+  }
+}
+
 .spot__heading {
   flex: 1;
   min-width: 0;
@@ -1205,7 +1232,8 @@ li.is-off .swatch {
     top: auto;
     right: 0;
     left: 0;
-    max-height: 70%;
+    /* 70 % de l'écran, sans jamais monter sur la recherche (téléphone couché) */
+    max-height: min(70%, calc(100% - 2 * var(--btn) - 4 * var(--gap) - var(--safe-top)));
   }
 }
 
@@ -1502,4 +1530,170 @@ a.btn-square {
   color: #ffcdd2;
   font-size: 12.5px;
   line-height: 1.4;
+}
+
+/* ── Deux vues dans la page : la carte et « Analytics » (src/view.ts) ─────── */
+/* Vue Analytics : la carte reste chargée, mais disparaît entièrement. `#app *` est nécessaire :
+   MapLibre force `visibility: visible` sur ses crédits dépliés. Pas de `display: none` : la carte
+   garde sa taille, donc sa position, et n'a rien à recalculer au retour. */
+html[data-view='analytics'] #app,
+html[data-view='analytics'] #app * {
+  visibility: hidden;
+}
+
+/* Masquée, la carte ne suit ni la barre de défilement de la vue Analytics ni la barre d'adresse du
+   téléphone qui se replie : elle n'est pas redessinée pour rien. */
+html[data-view='analytics'] #app {
+  right: auto;
+  width: 100vw;
+}
+
+@supports (height: 100svh) {
+  html[data-view='analytics'] #app {
+    bottom: auto;
+    height: 100svh;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── Îlot « Carte / Analytics » ───────────────────────────────────────────── */
+.island {
+  position: fixed;
+  z-index: 6;
+  top: calc(var(--gap) + var(--safe-top));
+  /* Centré, sauf si la recherche (à gauche) ou les boutons (à droite) occupent la place. En vw et
+     sans `transform` : l'îlot ne bouge pas quand la vue Analytics fait apparaître une barre de
+     défilement, et reste net aux largeurs impaires. */
+  left: min(
+    max(50vw - var(--island-width) / 2, 3 * var(--gap) + var(--btn) + var(--search-width)),
+    100vw - 2 * var(--gap) - var(--btn) - var(--island-width)
+  );
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: var(--island-width);
+  height: var(--btn);
+  border-radius: 999px;
+  background: #000;
+  /* Liseré clair : la pilule reste dessinée sur fond sombre (vue Analytics, photos aériennes). */
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.36),
+    var(--shadow);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Fond clair du segment actif. Le bord qui mène part le premier, l'autre le suit 40 ms plus tard :
+   le fond s'étire un peu en glissant (300 ms en tout). */
+.island::before {
+  position: absolute;
+  z-index: -1;
+  top: 4px;
+  right: calc(50% + 4px);
+  bottom: 4px;
+  left: 4px;
+  border-radius: 999px;
+  background: #fff;
+  content: '';
+  transition:
+    left 0.26s cubic-bezier(0.4, 0, 0.2, 1),
+    right 0.26s cubic-bezier(0.4, 0, 0.2, 1) 0.04s;
+}
+
+html[data-view='analytics'] .island::before {
+  right: 4px;
+  left: calc(50% + 4px);
+  transition-delay: 0.04s, 0s;
+}
+
+/* Les liens remplissent la pilule : 46 px de haut, 76 px de large au moins. */
+.island__link {
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html:not([data-view='analytics']) .island__link[data-view='map'],
+html[data-view='analytics'] .island__link[data-view='analytics'] {
+  color: #000;
+}
+
+/* Anneau de focus dans la bande noire de la pilule : visible aussi par-dessus une carte claire. */
+.island__link:focus-visible {
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .island::before,
+  .island__link {
+    transition: none;
+  }
+}
+
+/* Couleurs forcées (contraste élevé de Windows) : le fond clair disparaît, un soulignement le remplace. */
+@media (forced-colors: active) {
+  .island {
+    border: 1px solid CanvasText;
+  }
+
+  .island__link[aria-current] {
+    text-decoration: underline;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Entre le bouton légende et les boutons de droite, 8 px de marge de chaque côté jusqu'à 276 px. */
+  :root {
+    --island-width: clamp(152px, 100vw - 2 * var(--btn) - 4 * var(--gap), 208px);
+  }
+
+  .island {
+    left: calc(50vw - var(--island-width) / 2);
+    font-size: clamp(13px, 4.6vw, 15px);
+  }
+}
+
+/* Une vue n'a pas pu être téléchargée (src/main.ts). */
+.view-error {
+  position: fixed;
+  z-index: 7;
+  top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
+  right: var(--gap);
+  left: var(--gap);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 8px 8px 8px 14px;
+  border-radius: var(--radius);
+  background: var(--navy-800);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.view-error__btn {
+  flex: none;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
 }
