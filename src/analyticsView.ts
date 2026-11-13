@@ -88,7 +88,7 @@ function currentBet(bet: Bet | null): HTMLElement {
 }
 
 /**
- * Barres horizontales, écrites comme un tableau (libellé, barre, valeur) : chaque valeur se lit sans
+ * Barres horizontales, écrites comme une liste (libellé, barre, valeur) : chaque valeur se lit sans
  * survol, et un lecteur d'écran parcourt les mêmes chiffres. Une seule échelle, qui part de zéro ;
  * rien n'est affiché qui ne soit dans le fichier (ni total, ni taux calculé).
  */
@@ -97,17 +97,23 @@ function barChart(chart: Chart, caption: string): HTMLElement | null {
   if (!points.length) return null;
   const max = Math.max(0, ...points.map((p) => p.value));
   const rows = points.map((p) => {
-    const bar = h('span', { class: 'analytics-bars__bar' });
-    bar.style.width = `${max > 0 ? (Math.max(0, p.value) / max) * 100 : 0}%`;
+    const share = max > 0 ? Math.max(0, p.value) / max : 0;
+    const bar = share > 0 ? h('span', { class: 'analytics-bars__bar' }) : null; // zéro : pas de barre
+    if (bar) bar.style.width = `${share * 100}%`;
     return h(
-      'tr',
-      {},
-      h('th', { scope: 'row' }, p.label),
-      h('td', { class: 'analytics-bars__track', 'aria-hidden': 'true' }, bar),
-      h('td', { class: 'analytics-bars__value' }, valueLabel(p.value, chart.unit)),
+      'li',
+      { class: 'analytics-bars__row' },
+      h('span', { class: 'analytics-bars__label' }, p.label),
+      h('span', { class: 'analytics-bars__track', 'aria-hidden': 'true' }, bar),
+      h('span', { class: 'analytics-bars__value' }, valueLabel(p.value, chart.unit)),
     );
   });
-  return h('table', { class: 'analytics-bars' }, h('caption', { class: 'visually-hidden' }, caption), h('tbody', {}, ...rows));
+  return h(
+    'figure',
+    { class: 'analytics-figure' },
+    h('figcaption', { class: 'visually-hidden' }, `Graphique : ${caption}`),
+    h('ul', { class: 'analytics-bars' }, ...rows),
+  );
 }
 
 function analysisCard(analysis: Analysis): HTMLElement {

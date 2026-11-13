@@ -183,7 +183,7 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
         bet: text('#analytics .analytics-card'),
         empties: [...document.querySelectorAll('#analytics .analytics__empty')].map((p) => p.textContent),
         cards: cards.map((c) => c.textContent),
-        bars: [...(cards[0]?.querySelectorAll('.analytics-bars tr') ?? [])].map((tr) => `${tr.querySelector('th').textContent}=${tr.querySelector('.analytics-bars__bar').style.width}=${tr.querySelector('.analytics-bars__value').textContent}`),
+        bars: [...(cards[0]?.querySelectorAll('.analytics-bars__row') ?? [])].map((li) => `${li.querySelector('.analytics-bars__label').textContent}=${li.querySelector('.analytics-bars__bar').style.width}=${li.querySelector('.analytics-bars__value').textContent}`),
         chartB: Boolean(cards[1]?.querySelector('.analytics-bars')),
         rows: [...document.querySelectorAll('#analytics .analytics-bets__row')].map((li) => li.textContent),
         problems: Boolean(document.querySelector('.analytics__problems')),
@@ -232,7 +232,7 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
         problems: [...document.querySelectorAll('.analytics__problems li')].map((li) => li.textContent),
         rawDate: body.includes('2026-02-31') && body.includes('05-11-2026'),
         garbage: /Invalid Date|NaN %|undefined/.test(body.replace(/analyses\[1\][^|]*NaN[^|]*/g, '')),
-        bars: [...document.querySelectorAll('.analytics-bars tr')].map((tr) => `${tr.querySelector('th').textContent}=${tr.querySelector('.analytics-bars__bar').style.width}`),
+        bars: [...document.querySelectorAll('.analytics-bars__row')].map((li) => `${li.querySelector('.analytics-bars__label').textContent}=${li.querySelector('.analytics-bars__bar')?.style.width ?? 'aucune'}`),
         outcome: document.querySelector('.analytics-outcome')?.textContent,
       };
     });
@@ -240,7 +240,7 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
       'Analytics : un contenu mal écrit s’affiche quand même, et la relecture dit quoi corriger',
       edge.rawDate &&
         !edge.garbage &&
-        edge.bars.join('|') === 'b=0%|c=100%' &&
+        edge.bars.join('|') === 'b=aucune|c=100%' &&
         edge.outcome.includes('Non concluant') &&
         ['contact.label', 'contact.url', 'currentBet.hypothesis', 'currentBet.verdictDate', 'analyses[0].chart.points', 'analyses[0].date', 'analyses[1].chart.points[0].value', 'analyses[1].chart.points[1].value', 'settledBets[0].decision'].every((f) =>
           edge.problems.some((p) => p.startsWith(`${f} :`)),

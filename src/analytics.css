@@ -187,7 +187,8 @@ html[data-view='analytics'] {
 
 .analytics-bets__row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* Première colonne de largeur fixe : les hypothèses s'alignent d'une ligne à l'autre. */
+  grid-template-columns: 9.2em minmax(0, 1fr) auto;
   align-items: baseline;
   gap: 4px 14px;
   padding: 14px 18px;
@@ -226,6 +227,11 @@ html[data-view='analytics'] {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
+  .analytics-bets__date {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
   .analytics-bets__hypothesis,
   .analytics-bets__row .analytics__meta,
   .analytics-bets__decision {
@@ -237,6 +243,7 @@ html[data-view='analytics'] {
 .analytics-outcome {
   display: inline-flex;
   align-items: center;
+  justify-self: start;
   gap: 6px;
   padding: 2px 10px 2px 8px;
   border: 1px solid currentColor;
@@ -256,6 +263,101 @@ html[data-view='analytics'] {
 
 .analytics-outcome--inconclusive {
   color: var(--muted);
+}
+
+/* ── En développement : ce qu'il reste à corriger dans src/analyticsData.ts ── */
+.analytics__problems {
+  margin-bottom: 28px;
+  padding: 14px 18px;
+  border-left: 4px solid #ffc46b;
+  border-radius: var(--radius);
+  background: rgba(255, 196, 107, 0.12);
+  color: #ffe2b0;
+  font-size: 14px;
+}
+
+.analytics__problems ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+/* ── Graphique d'une analyse : barres horizontales, écrites comme une liste ── */
+.analytics-figure {
+  margin: 0;
+}
+
+/* Trois colonnes alignées d'une ligne à l'autre : libellé, barre, valeur. */
+.analytics-bars {
+  display: grid;
+  grid-template-columns: fit-content(42%) minmax(60px, 1fr) max-content;
+  column-gap: 14px;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  list-style: none;
+}
+
+.analytics-bars__row {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+}
+
+/* Navigateur sans sous-grille : colonnes fixes, toujours alignées. */
+@supports not (grid-template-columns: subgrid) {
+  .analytics-bars__row {
+    grid-template-columns: 40% minmax(60px, 1fr) 5.5em;
+    column-gap: 14px;
+  }
+}
+
+.analytics-bars__label {
+  padding: 5px 0;
+  color: #e5e5ff;
+}
+
+/* La ligne de base, commune à toutes les barres, court d'une ligne à l'autre. */
+.analytics-bars__track {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 5px 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Barre fine, bout arrondi du côté de la valeur, carré sur la ligne de base. */
+.analytics-bars__bar {
+  min-width: 2px;
+  height: 14px;
+  border-radius: 0 4px 4px 0;
+  background: var(--lavender);
+}
+
+.analytics-bars__value {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  /* Téléphone : le libellé sur sa ligne, la barre et sa valeur dessous. */
+  .analytics-bars {
+    grid-template-columns: minmax(60px, 1fr) max-content;
+  }
+
+  .analytics-bars__label {
+    grid-column: 1 / -1;
+    padding: 6px 0 0;
+  }
+
+  @supports not (grid-template-columns: subgrid) {
+    .analytics-bars__row {
+      grid-template-columns: minmax(60px, 1fr) 5.5em;
+    }
+  }
 }
 
 /* ── En développement : ce qu'il reste à corriger dans src/analyticsData.ts ── */
