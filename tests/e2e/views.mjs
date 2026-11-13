@@ -245,10 +245,26 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
         !edge.garbage &&
         edge.bars.join('|') === 'b=aucune|c=100%' &&
         edge.outcome.includes('Non concluant') &&
-        ['contact.label', 'contact.url', 'currentBet.hypothesis', 'currentBet.verdictDate', 'analyses[0].chart.points', 'analyses[0].date', 'analyses[1].chart.points[0].value', 'analyses[1].chart.points[1].value', 'settledBets[0].decision'].every((f) =>
+        ['contact.label', 'contact.url', 'currentBet.hypothesis', 'currentBet.verdictDate', 'analyses[0].chart.points', 'analyses[0].date', 'analyses[1].chart.points[0].value', 'analyses[1].chart.points[1].value', 'settledBets[0].decision', 'settledBets[0].outcome'].every((f) =>
           edge.problems.some((p) => p.startsWith(`${f} :`)),
         ),
       `${edge.problems.length} problèmes signalés · barres ${edge.bars.join(' ')}`,
+    );
+    // Contenu que les types refuseraient (un nombre pour un texte, un champ oublié) : en développement,
+    // où ils ne sont pas vérifiés, la relecture le dit au lieu de tomber en panne.
+    const untyped = await page.evaluate(() =>
+      window.analytics.check({
+        headline: '',
+        contact: null,
+        currentBet: { hypothesis: 'h', kpi: 'k', threshold: 12, verdictDate: 20261105 },
+        analyses: [{ question: 'Q', chart: { type: 'bars', points: [{ label: 'a', value: '3' }] }, reading: 'l', decision: 'd', sampleSize: 1240, date: '2026-11-05' }],
+        settledBets: [],
+      }),
+    );
+    check(
+      'Analytics : la relecture dit quel champ est du mauvais type, sans tomber en panne',
+      ['currentBet.threshold : texte attendu', 'currentBet.verdictDate :', 'analyses[0].sampleSize : texte attendu', 'analyses[0].chart.points[0].value :'].every((f) => untyped.some((p) => p.startsWith(f))) && untyped.length === 4,
+      untyped.join(' | '),
     );
     await page.evaluate(() => window.analytics.render(window.analytics.data));
 

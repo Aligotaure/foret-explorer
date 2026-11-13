@@ -25,7 +25,10 @@ function reportFailure(view: ViewId, error: unknown): void {
   const reload = h('button', { class: 'view-error__btn', type: 'button' }, 'Recharger');
   reload.addEventListener('click', () => location.reload());
   const box = byId('view-error');
-  box.replaceChildren(h('span', {}, 'Cette vue n’a pas pu se charger. Vérifiez la connexion, puis rechargez la page.'), reload);
+  const message = import.meta.env.DEV
+    ? `Cette vue n’a pas pu se charger : ${String(error)}. Si le contenu de la vue Analytics vient d’être modifié, « npm run check » dit où est l’erreur.`
+    : 'Cette vue n’a pas pu se charger. Vérifiez la connexion, puis rechargez la page.';
+  box.replaceChildren(h('span', {}, message), reload);
   box.hidden = false;
 }
 

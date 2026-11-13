@@ -2,10 +2,13 @@
 // tournent sur le serveur de développement) :
 //  - la page d'entrée et la vue Analytics n'embarquent pas le code de la carte (MapLibre) ;
 //  - l'en-tête de la page précharge bien le fichier de la carte quand elle s'ouvre sur la carte.
+// Il relit aussi le contenu de la vue Analytics (src/analyticsData.ts) : c'est `npm run check` que la
+// publication lance, pas les tests de bout en bout.
 //
 //   npm run check     # typecheck, build, puis ce contrôle
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import vm from 'node:vm';
+import ts from 'typescript';
 
 const DIST = new URL('../dist/', import.meta.url);
 const read = (file) => readFileSync(new URL(file, DIST), 'utf8');
@@ -98,6 +101,18 @@ check(
   css.indexOf('.maplibregl-map') >= 0 && css.indexOf('.maplibregl-map') < css.indexOf('.topbar') && css.indexOf('.topbar') < css.indexOf('.analytics__'),
   cssFile ?? 'aucune feuille de style',
 );
+
+// Contenu de la vue Analytics : ce que les types laissent passer (date qui n'existe pas, texte laissé
+// vide, valeur négative). Les deux fichiers n'importent que des types : TypeScript les traduit seuls.
+const load = (file) => {
+  const source = readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8');
+  const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, verbatimModuleSyntax: true } });
+  return import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
+};
+const { ANALYTICS } = await load('analyticsData.ts');
+const { checkAnalytics } = await load('analyticsCheck.ts');
+const problems = checkAnalytics(ANALYTICS);
+check('contenu de la vue Analytics (src/analyticsData.ts) : rien à corriger', problems.length === 0, problems.join(' | '));
 
 const failed = results.filter((ok) => !ok).length;
 console.log(`\n${results.length - failed}/${results.length} vérifications du build OK`);

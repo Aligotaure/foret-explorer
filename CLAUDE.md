@@ -171,7 +171,8 @@ selon la part d'arbres hôtes ; défavorable = contour seul. Les forêts s'estom
   sont dans l'entrée, MapLibre d'abord (`style.css` corrige `.maplibregl-ctrl-bottom-right` et
   `.maplibregl-ctrl-scale`, de même poids), `analytics.css` compris : pas d'éclair au premier
   affichage, et un module chargé à la demande ne porte aucune feuille de style. Ses sélecteurs
-  commencent tous par `.analytics` ou `html[data-view='analytics']` : la carte n'en est pas changée.
+  commencent tous par `#analytics`, `.analytics` ou `html[data-view='analytics']` : la carte n'en
+  est pas changée.
 - **En-tête d'`index.html`** : un script pose `data-view="analytics"` sur `<html>` avant le premier
   affichage (même règle que `view.ts`) ; sinon il précharge le code de la carte, dont
   `vite.config.ts` écrit le nom au build à la place de `__MAP_CHUNK__`. Mesuré le 13/11/2026 (build

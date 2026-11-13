@@ -5,13 +5,15 @@
 //   affiche alors un état vide.
 // - Textes entre guillemets doubles "comme ceci" : l'apostrophe de « l'entonnoir » y est sans danger.
 //   Pour citer dans un texte : « ainsi », jamais de guillemet double à l'intérieur.
-// - Dates : "AAAA-MM-JJ" (le 5 novembre 2026 s'écrit "2026-11-05").
+// - Dates : "AAAA-MM-JJ" (le 5 novembre 2026 s'écrit "2026-11-05"). Une date refusée se récrit dans
+//   cet ordre ; si le message d'erreur en propose une autre, ne pas la recopier.
 // - Nombres : sans guillemets, un point pour les décimales, ni espace ni point pour les milliers
 //   (12.5 et 1240). La vue les affiche à la française (12,5 et 1 240).
 // - Pour remplir un bloc : copier son modèle, enlever les « // » du début de chaque ligne, puis
 //   remplacer chaque A_REMPLIR. Un A_REMPLIR oublié fait échouer « npm run check ».
-// - Avant d'envoyer : « npm run check », puis une branche et une pull request. Jamais directement sur
-//   main : une erreur ici y bloquerait la publication du site, météo du jour comprise.
+// - Avant d'envoyer : « npm run check » (il relit aussi ce fichier : date qui n'existe pas, texte
+//   laissé vide), puis une branche et une pull request. Jamais directement sur main : une erreur ici
+//   y bloquerait la publication du site, météo du jour comprise.
 // - En développement (« npm run dev »), la vue liste en haut de page ce qui reste à corriger.
 //
 // Modèle d'un pari en cours (à la place de « currentBet: null, »)
@@ -28,15 +30,16 @@
 //       chart: null,            // ou un graphique (modèle suivant)
 //       reading: A_REMPLIR,     // la lecture : ce que disent les chiffres
 //       decision: A_REMPLIR,    // la décision prise
-//       sampleSize: A_REMPLIR,  // la taille de l'échantillon, avec son unité et sa période
+//       sampleSize: A_REMPLIR,  // un texte, entre guillemets : la taille de l'échantillon, son unité, sa période
 //       date: A_REMPLIR,        // la date de l'analyse
 //     },
 //
-// Modèle d'un graphique (à la place de « chart: null, ») : des barres horizontales, pour les étapes
-// d'un entonnoir, une comparaison ou une courte série dans le temps
+// Modèle d'un graphique (à la place de « chart: null, ») : des barres horizontales
+// (étapes d'un entonnoir, comparaison, courte série dans le temps).
+//
 //       chart: {
 //         type: "bars",
-//         unit: A_REMPLIR,      // facultatif : l'unité écrite après chaque valeur, "%" par exemple
+//         unit: A_REMPLIR,      // l'unité écrite après chaque valeur, "%" par exemple (sans unité : supprimer cette ligne)
 //         points: [
 //           { label: A_REMPLIR, value: A_REMPLIR },  // une ligne par barre, dans l'ordre d'affichage
 //         ],

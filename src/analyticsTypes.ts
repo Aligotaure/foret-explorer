@@ -10,10 +10,12 @@ type Month = `0${Exclude<Digit, '0'>}` | '10' | '11' | '12';
 type Day = `0${Exclude<Digit, '0'>}` | `${'1' | '2'}${Digit}` | '30' | '31';
 
 /**
- * Date au format AAAA-MM-JJ (de 2000 à 2099) : le 5 novembre 2026 s'écrit "2026-11-05".
- * L'ordre français ("05-11-2026") est refusé : il publierait une autre date.
+ * Date au format AAAA-MM-JJ (années 2000) : le 5 novembre 2026 s'écrit "2026-11-05".
+ * L'ordre français ("05-11-2026") est refusé : il publierait une autre date. Le `${number}` évite que
+ * le compilateur, devant une date refusée, n'en propose une autre (« Did you mean "2005-11-02" ? ») :
+ * avec une liste fermée de dates, il le faisait.
  */
-export type IsoDate = `20${Digit}${Digit}-${Month}-${Day}`;
+export type IsoDate = `20${Digit}${number}-${Month}-${Day}`;
 
 /** Lien de contact : le texte du lien et son adresse, toujours en https. */
 export interface Contact {

@@ -2,8 +2,9 @@
  * Vue « Analytics » : comment le produit est piloté. Structure seulement : rien n'est mesuré ici.
  *
  * Tout le contenu vient de src/analyticsData.ts, modifié à la main (format : src/analyticsTypes.ts).
- * Un bloc vide affiche un état vide ; un contenu mal écrit n'empêche jamais l'affichage (une date
- * impossible est montrée telle quelle, un graphique sans barre est omis).
+ * Un bloc vide affiche un état vide ; un contenu mal écrit n'empêche pas l'affichage (une date
+ * impossible est montrée telle quelle, un graphique sans barre est omis). Seul un contenu que les
+ * types refusent peut l'empêcher : il n'existe qu'en développement, et un message le dit alors.
  *
  * Module chargé par main.ts à la première ouverture de la vue. Il n'importe rien de la carte : ni
  * MapLibre ni un module qui en dépend. Sa feuille de style (analytics.css) arrive avec la page.
@@ -33,9 +34,12 @@ function dateLabel(date: string): HTMLElement {
   return h('time', { datetime: date }, text);
 }
 
-/** « 12,5 % », « 1 240 visites » : nombre à la française, espace fine insécable avant l'unité. */
+/**
+ * « 12,5 % », « 1 240 visites » : nombre à la française, espace fine insécable avant l'unité. Toutes
+ * les décimales du fichier sont gardées : la vue n'arrondit pas un chiffre mesuré.
+ */
 function valueLabel(value: number, unit?: string): string {
-  const text = value.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+  const text = value.toLocaleString('fr-FR', { maximumFractionDigits: 20 });
   return unit?.trim() ? `${text} ${unit.trim()}` : text;
 }
 
@@ -192,7 +196,22 @@ export function renderAnalytics(root: HTMLElement, data: AnalyticsData): void {
 }
 
 const root = byId('analytics');
-renderAnalytics(root, ANALYTICS);
+try {
+  renderAnalytics(root, ANALYTICS);
+} catch (error) {
+  // Contenu que les types auraient refusé (le serveur de développement ne les vérifie pas).
+  console.error('[analytics]', error);
+  const problems = import.meta.env.DEV ? checkAnalytics(ANALYTICS) : [];
+  root.replaceChildren(
+    h(
+      'div',
+      { class: 'analytics__problems', role: 'alert' },
+      h('strong', {}, `Le contenu de src/analyticsData.ts n’a pas pu être affiché (${String(error)}).`),
+      ' « npm run check » dit où est l’erreur.',
+      problems.length ? h('ul', {}, ...problems.map((problem) => h('li', {}, problem))) : null,
+    ),
+  );
+}
 
 // En développement, `analytics` est accessible depuis la console et les tests e2e : le contenu du
 // fichier (`data`), sa relecture (`check`) et de quoi redessiner la vue avec un autre contenu (`render`).

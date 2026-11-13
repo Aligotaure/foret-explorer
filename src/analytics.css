@@ -31,6 +31,7 @@ html[data-view='analytics'] {
   color: #e5e5ff;
   font-size: 15px;
   line-height: 1.55;
+  overflow-wrap: anywhere; /* une adresse ou un mot très long ne fait pas défiler la page en largeur */
 }
 
 .analytics a {
