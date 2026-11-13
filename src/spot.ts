@@ -1,10 +1,11 @@
 import maplibregl, { type LngLat, type Map as MapLibreMap, type PointLike } from 'maplibre-gl';
-import { DIRECT_PAST_DAYS, GEOLOGY, SPOT_ALTITUDE_TIMEOUT_MS, SPOT_ALTITUDE_WAIT_MS } from './config';
+import { BDFORET, DIRECT_PAST_DAYS, GEOLOGY, SPOT_ALTITUDE_TIMEOUT_MS, SPOT_ALTITUDE_WAIT_MS } from './config';
 import { h, toast } from './dom';
 import { forestAt, soilAt, type ForestAtPoint, type SoilAtPoint } from './geology';
 import { icon } from './icons';
+import { ABOUT_URL } from './legal';
 import { track } from './metrics';
-import { LEVELS, MUSHROOMS, scoreMushroom, type MushroomScore } from './mushrooms';
+import { CHANCE_THRESHOLD, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, scoreMushroom, type MushroomId, type MushroomScore, type SpotContext } from './mushrooms';
 import { setHighlight } from './mapStyle';
 import { CELL_KM, KEPT_DAYS } from './meteoGrid';
 import { patternImageId, drawPattern } from './soils';
@@ -80,84 +81,108 @@ function row(label: string, ...value: (Node | string)[]): HTMLElement {
 const huntingSeason = (month = new Date().getMonth() + 1): boolean => month >= 9 || month <= 2;
 
 /**
- * Droit de cueillir ici : zones protégées, forêt publique ou sans doute privée, et rappel des
- * règles. Les données sont indicatives : on ne parle du statut que si elles sont bien chargées.
+ * Statut du terrain en une ligne, toujours visible : un fait et ce qu'il implique, jamais « autorisé ».
+ * Les données sont indicatives : on ne parle du statut que si elles sont bien chargées.
  */
-function rulesSection(zones: ZonesAtPoint, forest: ForestAtPoint | null): HTMLElement {
-  const items: Node[] = [];
-  if (!zones.known) {
-    items.push(h('p', { class: 'spot__rule' }, `Statut du terrain inconnu : ${zones.reason ?? 'données absentes'}.`));
-  } else {
-    for (const zone of zones.protections) {
-      items.push(
+function statusValue(zones: ZonesAtPoint, forest: ForestAtPoint | null): HTMLElement {
+  const value = (...parts: (Node | string)[]): HTMLElement => h('span', { class: 'spot__value spot__status-value' }, ...parts);
+  if (!zones.known) return value(`inconnu ici (${zones.reason ?? 'données absentes'})`);
+  if (zones.publicForest) {
+    return value(h('strong', {}, zones.publicForest.name), ` : forêt publique${zones.publicForest.domaniale ? ' (domaniale)' : ''}`);
+  }
+  if (zones.protections.some((z) => z.type === 'cdl')) return value(h('strong', {}, 'Propriété publique'), ' (Conservatoire du littoral)');
+  // Dans une zone protégée, le propriétaire peut être public ou privé : on ne devine pas.
+  if (zones.protections.length) return value(h('strong', {}, 'Propriétaire non identifié'), ' : accord à demander');
+  if (forest) return value(h('strong', {}, 'Forêt sans doute privée'), ' : il faut l’accord du propriétaire');
+  return value(h('strong', {}, 'Hors forêt cartographiée'), ' : il faut l’accord du propriétaire');
+}
+
+/** Zones protégées sous le point : un encadré chacune, toujours visible, que la météo réponde ou non. */
+function zoneAlerts(zones: ZonesAtPoint): HTMLElement | null {
+  if (!zones.known || !zones.protections.length) return null;
+  return h(
+    'div',
+    { class: 'spot__alerts' },
+    ...zones.protections.map((zone) =>
+      h(
+        'div',
+        { class: 'spot__alert', role: 'note' },
+        h('span', { class: 'spot__alert-icon' }, icon('alert')),
         h(
           'div',
-          { class: 'spot__alert', role: 'note' },
-          h('span', { class: 'spot__alert-icon' }, icon('alert')),
-          h(
-            'div',
-            {},
-            h('strong', {}, zone.label),
-            zone.name ? ` « ${zone.name} »` : '',
-            h('p', {}, 'Son règlement peut interdire ou limiter la cueillette : consultez-le avant de cueillir.'),
-            zone.url ? h('a', { href: zone.url, target: '_blank', rel: 'noopener' }, 'Fiche officielle de la zone (INPN) ↗') : null,
-          ),
+          {},
+          h('strong', {}, zone.label),
+          zone.name ? ` « ${zone.name} »` : '',
+          h('p', {}, 'Son règlement peut interdire ou limiter la cueillette : consultez-le avant de cueillir.'),
+          zone.url ? h('a', { href: zone.url, target: '_blank', rel: 'noopener' }, 'Fiche officielle de la zone (INPN) ↗') : null,
         ),
-      );
-    }
-    if (zones.publicForest) {
-      items.push(
-        h(
-          'p',
-          { class: 'spot__rule' },
-          h('strong', {}, zones.publicForest.name),
-          ` : forêt publique${zones.publicForest.domaniale ? ' (domaniale)' : ''}, gérée par l’ONF. Une cueillette familiale y est en général tolérée, sauf interdiction (arrêté, panneau).`,
-        ),
-      );
-    } else if (zones.protections.some((z) => z.type === 'cdl')) {
-      items.push(
-        h('p', { class: 'spot__rule' }, h('strong', {}, 'Propriété publique'), ' (Conservatoire du littoral) : suivez le règlement affiché sur place.'),
-      );
-    } else if (zones.protections.length) {
-      // Dans une zone protégée, le propriétaire peut être public ou privé : on ne devine pas.
-      items.push(
-        h('p', { class: 'spot__rule' }, h('strong', {}, 'Propriétaire non identifié'), ' : demandez l’accord du propriétaire ou du gestionnaire de la zone.'),
-      );
-    } else if (forest) {
-      items.push(
-        h(
-          'p',
-          { class: 'spot__rule' },
-          h('strong', {}, 'Forêt sans doute privée'),
-          ' : elle ne figure pas parmi les forêts publiques de l’IGN. Il faut l’accord du propriétaire pour cueillir.',
-        ),
-      );
-    } else {
-      items.push(
-        h('p', { class: 'spot__rule' }, h('strong', {}, 'Hors forêt cartographiée'), ' : la cueillette demande l’accord du propriétaire du terrain.'),
-      );
-    }
-  }
-  items.push(
-    h(
-      'p',
-      { class: 'spot__rule spot__rule--muted' },
-      'Sans autorisation, cueillir est une contravention, et un délit au-delà de 10 litres. Des arrêtés limitent souvent les quantités : renseignez-vous en mairie.',
-      huntingSeason() ? ' Saison de chasse : portez une couleur vive.' : '',
+      ),
     ),
   );
-  return h('section', { class: 'spot__section' }, h('h3', { class: 'spot__title' }, 'Droit de cueillir'), ...items);
+}
+
+/** Ce que le statut du terrain implique, en clair : détail replié sous « Droit de cueillir : les règles ». */
+function rulesText(zones: ZonesAtPoint, forest: ForestAtPoint | null): HTMLElement {
+  if (!zones.known) {
+    return h('p', { class: 'spot__rule' }, `Statut du terrain inconnu : ${zones.reason ?? 'données absentes'}. Dans le doute, il faut l’accord du propriétaire.`);
+  }
+  if (zones.publicForest) {
+    return h(
+      'p',
+      { class: 'spot__rule' },
+      h('strong', {}, zones.publicForest.name),
+      ` : forêt publique${zones.publicForest.domaniale ? ' (domaniale)' : ''}, gérée par l’ONF. Une cueillette familiale y est en général tolérée, sauf interdiction (arrêté, panneau).`,
+    );
+  }
+  if (zones.protections.some((z) => z.type === 'cdl')) {
+    return h('p', { class: 'spot__rule' }, h('strong', {}, 'Propriété publique'), ' (Conservatoire du littoral) : suivez le règlement affiché sur place.');
+  }
+  if (zones.protections.length) {
+    return h('p', { class: 'spot__rule' }, h('strong', {}, 'Propriétaire non identifié'), ' : demandez l’accord du propriétaire ou du gestionnaire de la zone.');
+  }
+  if (forest) {
+    return h(
+      'p',
+      { class: 'spot__rule' },
+      h('strong', {}, 'Forêt sans doute privée'),
+      ' : elle ne figure pas parmi les forêts publiques de l’IGN. Il faut l’accord du propriétaire pour cueillir.',
+    );
+  }
+  return h('p', { class: 'spot__rule' }, h('strong', {}, 'Hors forêt cartographiée'), ' : la cueillette demande l’accord du propriétaire du terrain.');
+}
+
+/** Ce qu'il faut pour dessiner le bilan ; gardé pour le redessiner sans rien redemander. */
+interface View {
+  forest: ForestAtPoint | null;
+  /** Forêt non chargée à ce zoom : inconnue, pas absente. */
+  forestUnknown: boolean;
+  soil: SoilAtPoint | null;
+  zones: ZonesAtPoint;
+  altitude: number | null;
+  weather: WeatherSummary | null;
+  status: 'loading' | 'ok' | 'error';
+  /** Météo lue dans les fichiers communs (sinon Open-Meteo en direct). */
+  shared: boolean;
+  /** L'altitude exacte n'est pas encore arrivée : le bilan sera refait. */
+  altitudePending: boolean;
 }
 
 /**
- * Bilan d'un coin : forêt, sol, altitude, pluie des 30 derniers jours et, pour chaque
- * champignon, un verdict expliqué. Panneau à droite sur grand écran, tiroir bas sur mobile.
+ * Bilan d'un coin, la réponse d'abord : zone protégée s'il y en a une, terrain (forêt, sol, altitude,
+ * statut), puis une ligne par champignon du plus probable au moins probable, la pluie des 30 derniers
+ * jours, et les règles de cueillette repliées. Panneau à droite sur grand écran, tiroir bas sur mobile.
  */
 export class SpotPanel {
   private controller: AbortController | null = null;
   private marker: maplibregl.Marker | null = null;
   private readonly body = h('div', { class: 'spot__body' });
   private readonly coords = h('p', { class: 'spot__coords' });
+  private view: View | null = null;
+  // Ce que le visiteur a déplié : gardé d'un dessin à l'autre (le bilan est redessiné jusqu'à trois
+  // fois par clic, à mesure que l'altitude et la météo arrivent), remis à zéro à chaque nouveau coin.
+  private readonly cards = new Map<MushroomId, boolean>();
+  private rulesOpen = false;
+  private helpOpen = false;
 
   constructor(
     private readonly root: HTMLElement,
@@ -190,6 +215,11 @@ export class SpotPanel {
     setHighlight(this.map, null);
   }
 
+  /** Redessine le bilan ouvert (le champignon recherché a changé dans la légende). */
+  refresh(): void {
+    if (this.isOpen && this.view) this.draw();
+  }
+
   /** Ouvre le bilan du point cliqué. */
   async open(lngLat: LngLat, point: PointLike): Promise<void> {
     track('app.spots');
@@ -208,7 +238,27 @@ export class SpotPanel {
     const lng = lngLat.lng.toFixed(5);
     this.coords.textContent = `${lat}, ${lng}`;
     this.root.hidden = false;
-    this.render(forest, soil, zones, null, null, 'loading');
+    this.cards.clear();
+    this.rulesOpen = false;
+    this.helpOpen = false;
+    const view: View = {
+      forest,
+      // Sous le zoom des tuiles de forêt, rien n'est chargé sous le point : la forêt est inconnue.
+      forestUnknown: !forest && this.map.getZoom() < BDFORET.minZoom,
+      soil,
+      zones,
+      altitude: null,
+      weather: null,
+      status: 'loading',
+      shared: true,
+      altitudePending: false,
+    };
+    const show = (changes: Partial<View>): void => {
+      this.view = { ...view, ...changes };
+      this.draw();
+    };
+    show({});
+    this.body.scrollTop = 0;
 
     try {
       // Altitude exacte (IGN) : la demande s'arrête d'elle-même si le service ne répond pas.
@@ -226,7 +276,7 @@ export class SpotPanel {
       if (first === late) {
         const early = await weatherAt(lngLat.lat, lngLat.lng, null, controller.signal, true);
         if (controller.signal.aborted) return;
-        if (early) this.render(forest, soil, zones, null, summarize(early.series), 'ok', true, true);
+        if (early) show({ weather: summarize(early.series), status: 'ok', shared: true, altitudePending: true });
       }
       const altitude = await exact;
       if (controller.signal.aborted) return;
@@ -234,25 +284,125 @@ export class SpotPanel {
       // que hors de France ou si les fichiers communs sont injoignables.
       const weather = await weatherAt(lngLat.lat, lngLat.lng, altitude, controller.signal);
       if (controller.signal.aborted) return;
-      this.render(forest, soil, zones, altitude, weather ? summarize(weather.series) : null, 'ok', weather?.shared ?? false);
+      show({ altitude, weather: weather ? summarize(weather.series) : null, status: 'ok', shared: weather?.shared ?? false });
     } catch (error) {
       if (controller.signal.aborted) return;
       console.warn('[bilan]', error);
-      this.render(forest, soil, zones, null, null, 'error');
+      show({ status: 'error' });
     }
   }
 
-  private render(
-    forest: ForestAtPoint | null,
-    soil: SoilAtPoint | null,
-    zones: ZonesAtPoint,
-    altitude: number | null,
-    weather: WeatherSummary | null,
-    status: 'loading' | 'ok' | 'error',
-    shared = true,
-    /** L'altitude exacte n'est pas encore arrivée : le bilan sera refait. */
-    altitudePending = false,
-  ): void {
+  /** Règles de cueillette, repliées : le statut du terrain, lui, est déjà dit dans le tableau du haut. */
+  private rulesSection(zones: ZonesAtPoint, forest: ForestAtPoint | null): HTMLElement {
+    const details = h(
+      'details',
+      { class: 'spot__section spot__rules', open: this.rulesOpen },
+      h('summary', { class: 'spot__title spot__fold' }, 'Droit de cueillir : les règles'),
+      rulesText(zones, forest),
+      h(
+        'p',
+        { class: 'spot__rule spot__rule--muted' },
+        'Sans autorisation, cueillir est une contravention, et un délit au-delà de 10 litres. Des arrêtés limitent souvent les quantités : renseignez-vous en mairie.',
+        huntingSeason() ? ' Saison de chasse : portez une couleur vive.' : '',
+      ),
+      h('p', { class: 'spot__rule' }, h('a', { class: 'legend-link', href: `${ABOUT_URL}#regles` }, 'Règles de cueillette et quantités')),
+    );
+    details.addEventListener('toggle', () => {
+      this.rulesOpen = details.open;
+    });
+    return details;
+  }
+
+  /**
+   * Une ligne par champignon, du plus probable au moins probable. Les raisons sont repliées, sauf
+   * pour le champignon recherché (ou, sans recherche, pour le premier s'il vaut le déplacement) ;
+   * celui que la saison ou la forêt exclut tient sur une ligne, avec ce qui l'exclut.
+   */
+  private mushroomSection(scores: readonly MushroomScore[]): HTMLElement {
+    const chosen = this.store.state.mushroom;
+    const ranked = [...scores].sort((a, b) => b.score - a.score);
+    const lead = ranked[0];
+    const opened = ranked.some((s) => s.id === chosen && !s.blocker) ? chosen : lead && !lead.blocker && lead.chance >= CHANCE_THRESHOLD ? lead.id : null;
+
+    const list = h('ul', { class: 'verdicts' });
+    for (const s of ranked) {
+      const m = MUSHROOM_BY_ID.get(s.id);
+      const level = LEVELS[s.level];
+      const name = h('strong', {}, m?.label ?? s.id);
+      const pill = h('span', { class: 'level-pill', style: `--level: ${level?.color ?? '#999'}` }, `≈ ${s.chance} % · ${(level?.label ?? '').toLowerCase()}`);
+      const tag = s.id === chosen ? h('span', { class: 'verdict__tag' }, 'recherché') : null;
+      const classes = `verdict verdict--${s.level}${s.id === chosen ? ' verdict--chosen' : ''}`;
+      if (s.blocker) {
+        list.append(
+          h(
+            'li',
+            { class: `${classes} verdict--off` },
+            h('div', { class: 'verdict__head' }, h('span', { class: 'verdict__name' }, name, tag, h('span', { class: 'verdict__why' }, s.blocker)), pill),
+          ),
+        );
+        continue;
+      }
+      const card = h(
+        'details',
+        { class: 'verdict__card', open: this.cards.get(s.id) ?? s.id === opened },
+        h('summary', { class: 'verdict__head' }, h('span', { class: 'verdict__name' }, name, tag), pill),
+        h('ul', { class: 'verdict__reasons' }, ...s.reasons.map((r) => h('li', {}, r))),
+      );
+      card.addEventListener('toggle', () => this.cards.set(s.id, card.open));
+      list.append(h('li', { class: classes }, card));
+    }
+
+    // Le « ? » : une explication dépliée sur place, au clic comme au clavier (pas de survol sur téléphone).
+    const helpId = 'spot-chance-help';
+    const help = h(
+      'button',
+      { class: 'help-btn', type: 'button', 'aria-expanded': String(this.helpOpen), 'aria-controls': helpId, 'aria-label': 'Comment la chance estimée est calculée' },
+      '?',
+    );
+    const note = h(
+      'div',
+      { id: helpId, class: 'help-note', hidden: !this.helpOpen },
+      h(
+        'p',
+        {},
+        h('strong', {}, 'Comment c’est estimé. '),
+        'Indice = saison × pluie × température × arbre hôte × sol, chacun noté de 0 à 1 selon des règles de cueilleur : un seul à zéro (hors saison, pas d’arbre hôte) et l’estimation tombe à 0 %.',
+      ),
+      h(
+        'p',
+        {},
+        'Le pourcentage place cet indice sur une échelle fixée à la main, jamais au-dessus de 95 %. Ce n’est pas une probabilité mesurée : un coin « favorable » peut être vide. ',
+        h('a', { class: 'legend-link', href: `${ABOUT_URL}#fiabilite` }, 'Méthode et limites'),
+      ),
+    );
+    const toggleHelp = (open: boolean): void => {
+      this.helpOpen = open;
+      note.hidden = !open;
+      help.setAttribute('aria-expanded', String(open));
+    };
+    help.addEventListener('click', () => toggleHelp(!this.helpOpen));
+    const onEscape = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || !this.helpOpen) return;
+      event.stopPropagation();
+      toggleHelp(false);
+      help.focus();
+    };
+    help.addEventListener('keydown', onEscape);
+    note.addEventListener('keydown', onEscape);
+
+    return h(
+      'section',
+      { class: 'spot__section' },
+      h('div', { class: 'spot__title-row' }, h('h3', { class: 'spot__title' }, 'Champignons · chance estimée'), help),
+      note,
+      list,
+    );
+  }
+
+  private draw(): void {
+    const v = this.view;
+    if (!v) return;
+    const { forest, soil, zones, altitude, weather, status, shared } = v;
     // Sans altitude exacte, celle que la grille météo donne au carré de 4,5 km (fichiers communs).
     const approximate = altitude === null && weather && shared ? `≈ ${Math.round(weather.elevation)} m (d’après la grille météo)` : null;
     const terrain = h('dl', { class: 'spot__facts' });
@@ -261,7 +411,7 @@ export class SpotPanel {
         'Forêt',
         ...(forest
           ? [h('span', { class: 'swatch', style: `--swatch: ${forest.cls?.color ?? '#999'}` }), h('span', { class: 'spot__value' }, forest.label)]
-          : [this.map.getZoom() < 10 ? 'zoomez pour la connaître' : 'pas de forêt cartographiée']),
+          : [v.forestUnknown ? 'zoomez pour la connaître' : 'pas de forêt cartographiée']),
       ),
       row(
         'Sol',
@@ -276,18 +426,26 @@ export class SpotPanel {
           : altitude !== null
             ? `${altitude} m`
             : approximate
-              ? `${approximate}${altitudePending ? ' · altitude exacte en cours…' : ''}`
+              ? `${approximate}${v.altitudePending ? ' · altitude exacte en cours…' : ''}`
               : 'inconnue',
       ),
+      row('Statut', statusValue(zones, forest)),
     );
 
-    const parts: Node[] = [h('section', { class: 'spot__section' }, terrain), rulesSection(zones, forest)];
+    const parts: (Node | null)[] = [zoneAlerts(zones), h('section', { class: 'spot__section' }, terrain)];
 
     if (status === 'loading') {
       parts.push(h('p', { class: 'spot__status' }, 'Lecture de la météo des derniers jours…'));
     } else if (!weather) {
       parts.push(h('p', { class: 'spot__status' }, 'Météo indisponible pour le moment (réseau ?).'));
     } else {
+      const month = new Date().getMonth() + 1;
+      const context: SpotContext = {
+        ...(forest ? { forestCode: forest.code } : v.forestUnknown ? { forestUnknown: true } : { forestCode: null }),
+        soil: soil?.soil.id ?? null,
+      };
+      parts.push(this.mushroomSection(MUSHROOMS.map((m) => scoreMushroom(m, weather, month, context))));
+
       const last = weather.events[0];
       const yesterday = weather.days[weather.days.length - 1]?.date ?? '';
       const late = weather.lastDate && weather.lastDate < yesterday;
@@ -317,43 +475,9 @@ export class SpotPanel {
           ),
         ),
       );
-
-      const month = new Date().getMonth() + 1;
-      const chosen = this.store.state.mushroom;
-      const scores: MushroomScore[] = MUSHROOMS.map((m) =>
-        scoreMushroom(m, weather, month, { forestCode: forest ? forest.code : null, soil: soil?.soil.id ?? null }),
-      ).sort((a, b) => (a.id === chosen ? -1 : b.id === chosen ? 1 : b.score - a.score));
-
-      const list = h('ul', { class: 'verdicts' });
-      for (const s of scores) {
-        const m = MUSHROOMS.find((x) => x.id === s.id);
-        const level = LEVELS[s.level];
-        list.append(
-          h(
-            'li',
-            { class: `verdict verdict--${s.level}` },
-            h(
-              'div',
-              { class: 'verdict__head' },
-              h('strong', {}, m?.label ?? s.id),
-              h('span', { class: 'level-pill', style: `--level: ${level?.color ?? '#999'}` }, `≈ ${s.chance} % · ${(level?.label ?? '').toLowerCase()}`),
-            ),
-            h('ul', { class: 'verdict__reasons' }, ...s.reasons.map((r) => h('li', {}, r))),
-          ),
-        );
-      }
-      parts.push(
-        h(
-          'section',
-          { class: 'spot__section' },
-          h('h3', { class: 'spot__title' }, 'Champignons'),
-          zones.protections.length
-            ? h('p', { class: 'spot__warning' }, 'Zone protégée : même avec un indice favorable, la cueillette peut y être interdite.')
-            : null,
-          list,
-        ),
-      );
     }
+
+    parts.push(this.rulesSection(zones, forest));
 
     const lat = this.coords.textContent?.split(', ')[0] ?? '';
     const lng = this.coords.textContent?.split(', ')[1] ?? '';
@@ -378,9 +502,12 @@ export class SpotPanel {
       h(
         'p',
         { class: 'spot__note' },
-        `Indice expérimental, fondé sur des règles de cueilleur : délai après la pluie, températures à cette altitude, arbres hôtes et sol. Il dit où chercher, pas ce qui se mange ni si l’on peut cueillir. Météo : Open-Meteo, ${shared ? `case de ${CELL_KM} km qui contient ce point, mise à jour une fois par jour` : 'interrogé directement pour ce point'}.`,
+        `Estimation : elle dit où chercher, pas ce qui se mange ni si l’on peut cueillir. Météo : Open-Meteo, ${shared ? `case de ${CELL_KM} km mise à jour une fois par jour` : 'interrogé directement pour ce point'}.`,
       ),
     );
-    this.body.replaceChildren(...parts);
+    // Le clavier ne doit pas perdre sa place quand le bilan est redessiné sous lui (bouton « ? »).
+    const helpFocused = document.activeElement instanceof HTMLElement && document.activeElement.classList.contains('help-btn') && this.body.contains(document.activeElement);
+    this.body.replaceChildren(...parts.filter((p): p is Node => p !== null));
+    if (helpFocused) this.body.querySelector<HTMLElement>('.help-btn')?.focus();
   }
 }

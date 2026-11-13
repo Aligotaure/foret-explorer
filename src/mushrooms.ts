@@ -156,6 +156,19 @@ export const MUSHROOMS: readonly Mushroom[] = [
 
 export const MUSHROOM_BY_ID: ReadonlyMap<MushroomId, Mushroom> = new Map(MUSHROOMS.map((m) => [m.id, m]));
 
+const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+/** Saison en clair (« juin à novembre ») : les mois où le poids de saison atteint 0,5. */
+export function seasonText(m: Mushroom): string {
+  const months = Object.entries(m.season)
+    .filter(([, w]) => (w ?? 0) >= 0.5)
+    .map(([k]) => Number(k))
+    .sort((a, b) => a - b);
+  const first = months[0];
+  const last = months[months.length - 1];
+  return first && last ? `${MONTHS[first - 1]} à ${MONTHS[last - 1]}` : '—';
+}
+
 /** Types BD Forêt à afficher pour un champignon (hôtes assez typiques). */
 export function hostCodes(m: Mushroom, minWeight = 0.5): string[] {
   return Object.entries(m.hosts)
@@ -208,11 +221,18 @@ export interface MushroomScore {
   chance: number;
   level: Level;
   reasons: string[];
+  /**
+   * Ce qui ramène l'indice à zéro quoi que dise la météo (« hors saison (mars à juin) », « pas un
+   * arbre hôte ici ») : le bilan le dit en une ligne au lieu de dérouler des raisons sans effet.
+   */
+  blocker?: string;
 }
 
 export interface SpotContext {
   /** Code BD Forêt au point (null : hors forêt ; undefined : inconnu). */
   forestCode?: string | null;
+  /** La forêt n'est pas connue à ce zoom (tuiles pas encore chargées) : le dire, sans rien retrancher. */
+  forestUnknown?: boolean;
   /** Nature du sol au point (null : hors de la zone couverte). */
   soil?: SoilId | null;
   /**
@@ -253,7 +273,11 @@ function rainFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
   if (!bestEvent) {
     reasons.push(`Pas de grosse pluie depuis ${days(w.days.length)} (${mm(w.rain30)} au total).`);
   } else {
-    const e = bestEvent;
+    // La pluie qui pèse le plus dans l'indice peut être une vieille pluie dont le délai est dépassé,
+    // alors qu'une plus récente n'a pas encore fait pousser : c'est elle qu'on commente (le bloc météo
+    // du bilan la cite aussi, et « revenez dans N jours » sert plus que « le sol sèche »).
+    const coming = w.events.find((x) => x.daysAgo < start);
+    const e = bestEvent.daysAgo > end && coming ? coming : bestEvent;
     const head = `Pluie de ${mm(e.amount)} il y a ${days(e.daysAgo)}`;
     if (e.daysAgo < start) reasons.push(`${head} : encore tôt, pousse attendue d’ici ${days(start - e.daysAgo)}.`);
     else if (e.daysAgo <= end) reasons.push(`${head} : bon délai pour ${m.singular} (${start} à ${end} jours).`);
@@ -269,7 +293,7 @@ function tempFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
   const where = w.elevation ? ` à ${Math.round(w.elevation)} m` : '';
   const verdict = w.tmean7 < lo - m.tempRamp ? 'trop froid' : w.tmean7 < lo ? 'un peu froid' : w.tmean7 <= hi ? 'idéal' : 'trop chaud';
   reasons.push(
-    `${Math.round(w.tmean7)} °C en moyenne sur 7 jours${where} : ${verdict} (idéal ${lo} à ${hi} °C).`,
+    `${Math.round(w.tmean7)} °C en moyenne sur 7 jours${where} : ${verdict} (${verdict === 'idéal' ? '' : 'idéal '}${lo} à ${hi} °C).`,
   );
   if (w.frost && w.tmin5 !== null) {
     f *= m.frost;
@@ -281,7 +305,9 @@ function tempFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
 /** Indice de pousse d'un champignon pour une météo, et si possible un coin précis. */
 export function scoreMushroom(m: Mushroom, w: WeatherSummary, month: number, ctx: SpotContext = {}): MushroomScore {
   const reasons: string[] = [];
+  let blocker: string | undefined;
   const season = m.season[month] ?? 0;
+  if (season === 0) blocker = `hors saison (${seasonText(m)})`;
   if (season < 0.5) reasons.push(season === 0 ? 'Hors saison.' : 'Tout début ou fin de saison.');
 
   let score = season * rainFactor(m, w, reasons) * tempFactor(m, w, reasons);
@@ -293,7 +319,10 @@ export function scoreMushroom(m: Mushroom, w: WeatherSummary, month: number, ctx
     else if (host >= 0.8) reasons.push(`Forêt hôte : ${forest?.toLowerCase()}.`);
     else if (host > 0) reasons.push(`Forêt peu typique (${forest?.toLowerCase()}).`);
     else reasons.push(`Pas un arbre hôte (${forest?.toLowerCase()}).`);
+    if (host === 0) blocker ??= ctx.forestCode ? 'pas un arbre hôte ici' : 'pas de forêt ici';
     score *= host;
+  } else if (ctx.forestUnknown) {
+    reasons.push('Forêt inconnue à ce zoom : météo seule. Zoomez pour en tenir compte.');
   }
   if (ctx.soil) {
     const pref = m.soils[ctx.soil];
@@ -306,7 +335,7 @@ export function scoreMushroom(m: Mushroom, w: WeatherSummary, month: number, ctx
   if (ctx.soilFactor !== undefined) score *= ctx.soilFactor;
 
   score = clamp(score);
-  return { id: m.id, score, chance: chanceOf(score), level: levelOf(score), reasons };
+  return { id: m.id, score, chance: chanceOf(score), level: levelOf(score), reasons, ...(blocker ? { blocker } : {}) };
 }
 
 /** Le sol module sans exclure : la géologie n'est qu'une tendance. */

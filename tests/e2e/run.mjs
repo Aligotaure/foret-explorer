@@ -283,11 +283,29 @@ async function desktopTests(browser, base) {
     await page.mouse.click(pt.x, pt.y);
     await page.waitForSelector('#spot .verdict', { timeout: 10000 });
     return page.evaluate(() => {
-      const section = [...document.querySelectorAll('#spot .spot__section')].find((s) => s.querySelector('.spot__title')?.textContent === 'Droit de cueillir');
+      // « Vu » : dans la partie visible du bilan, sans rien déplier ni faire défiler.
+      const body = document.querySelector('#spot .spot__body').getBoundingClientRect();
+      const seen = (el) => {
+        const r = el?.getBoundingClientRect();
+        return Boolean(r && r.height > 0 && r.top >= body.top && r.bottom <= body.bottom);
+      };
+      const before = (a, b) => Boolean(a && b && a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+      const text = (el) => el?.textContent.replace(/\s+/g, ' ').trim() ?? '';
+      const status = [...document.querySelectorAll('#spot .spot__row')].find((r) => r.querySelector('dt')?.textContent === 'Statut');
+      const rules = document.querySelector('#spot .spot__rules');
+      const alert = document.querySelector('#spot .spot__alert');
+      const pill = document.querySelector('#spot .level-pill');
       return {
-        text: section?.textContent.replace(/\s+/g, ' ') ?? '',
-        link: section?.querySelector('.spot__alert a')?.getAttribute('href') ?? null,
-        warning: document.querySelector('#spot .spot__warning')?.textContent ?? null,
+        status: text(status?.querySelector('dd')),
+        statusSeen: seen(status),
+        alert: text(alert),
+        alertSeen: seen(alert),
+        alertFirst: before(alert, pill),
+        link: alert?.querySelector('a')?.getAttribute('href') ?? null,
+        rules: text(rules),
+        rulesOpen: rules?.open ?? null,
+        rulesLast: before(pill, rules),
+        pillSeen: seen(pill),
       };
     });
   };
@@ -296,9 +314,9 @@ async function desktopTests(browser, base) {
     const blocksBefore = log.meteoCommune.length;
     const prot = await rulesAt(zonePoints.prot);
     check(
-      'bilan : réserve naturelle signalée, fiche INPN, mise en garde sur l’indice',
-      /Réserve naturelle nationale « Réserve d’essai »/.test(prot.text) && /interdire ou limiter la cueillette/.test(prot.text) && prot.link?.startsWith('https://inpn.mnhn.fr/') && /Zone protégée/.test(prot.warning ?? ''),
-      prot.text.slice(0, 110),
+      'bilan : réserve naturelle signalée en tête, visible avant tout pourcentage, fiche INPN',
+      /Réserve naturelle nationale « Réserve d’essai »/.test(prot.alert) && /interdire ou limiter la cueillette/.test(prot.alert) && prot.link?.startsWith('https://inpn.mnhn.fr/') && prot.alertSeen && prot.alertFirst,
+      `${prot.alert.slice(0, 90)} — vue : ${prot.alertSeen}, avant les pourcentages : ${prot.alertFirst}`,
     );
     check(
       'bilan : météo de la case commune, aucun appel à Open-Meteo',
@@ -307,9 +325,23 @@ async function desktopTests(browser, base) {
     );
     await page.screenshot({ path: `${OUT}03b-bureau-bilan-reserve.png` });
     const pub = await rulesAt(zonePoints.pub);
-    check('bilan : forêt publique, cueillette familiale tolérée', /Forêt communale d’essai : forêt publique/.test(pub.text) && /tolérée/.test(pub.text) && !pub.warning, pub.text.slice(0, 110));
+    check(
+      'bilan : forêt publique dite dans le statut, sans alerte ; tolérance dans les règles',
+      /Forêt communale d’essai : forêt publique/.test(pub.status) && pub.statusSeen && !pub.alert && /tolérée/.test(pub.rules),
+      `${pub.status} — vu : ${pub.statusSeen}`,
+    );
     const priv = await rulesAt(zonePoints.priv);
-    check('bilan : forêt sans doute privée, accord du propriétaire', /Forêt sans doute privée/.test(priv.text) && /accord du propriétaire/.test(priv.text) && /délit au-delà de 10 litres/.test(priv.text), priv.text.slice(0, 110));
+    check(
+      'bilan : « forêt sans doute privée, accord du propriétaire » visible sans rien déplier',
+      /Forêt sans doute privée/.test(priv.status) && /accord du propriétaire/.test(priv.status) && priv.statusSeen,
+      `${priv.status} — vu : ${priv.statusSeen}`,
+    );
+    check(
+      'bilan : règles de cueillette repliées, sous les champignons (sanctions, lien vers les règles)',
+      priv.rulesOpen === false && priv.rulesLast && /délit au-delà de 10 litres/.test(priv.rules) && /Règles de cueillette et quantités/.test(priv.rules),
+      `ouvert : ${priv.rulesOpen}, après les pourcentages : ${priv.rulesLast}`,
+    );
+    check('bilan : un pourcentage de champignon visible sans faire défiler', priv.pillSeen && pub.pillSeen, `privée : ${priv.pillSeen}, publique : ${pub.pillSeen}`);
     await page.locator('#spot .panel__close').click();
   } else {
     check('bilan : points dans une réserve, une forêt publique et une forêt privée', false, JSON.stringify(zonePoints));
@@ -401,6 +433,60 @@ async function desktopTests(browser, base) {
     check('bilan : altitude IGN', /^Altitude\s*930 m$/.test(spot.rows[2] ?? ''), spot.rows[2]);
     check('bilan : pluie des 30 jours', /mm de pluie/.test(spot.summary ?? '') && /il y a 1[03] jours/.test(spot.summary ?? '') && spot.bars >= 8, `${spot.summary} (${spot.bars} barres)`);
     check('bilan : un verdict par champignon (5 espèces)', spot.verdicts.length === 5 && spot.verdicts.includes('Morilles'), spot.verdicts.join(', '));
+
+    // Du plus probable au moins probable, sans exception ; le champignon recherché est signalé à son rang.
+    const wanted = spot.verdicts[spot.verdicts.length - 1] === 'Morilles' ? 'girolle' : 'morille';
+    const ranking = await page.evaluate((id) => {
+      const read = () => ({
+        chances: [...document.querySelectorAll('#spot .level-pill')].map((p) => Number(/≈ (\d+) %/.exec(p.textContent)?.[1])),
+        chosen: [...document.querySelectorAll('#spot .verdict--chosen')].map((v) => `${v.querySelector('strong')?.textContent} · ${v.querySelector('.verdict__tag')?.textContent}`),
+        open: [...document.querySelectorAll('#spot details.verdict__card[open]')].length,
+        cards: document.querySelectorAll('#spot details.verdict__card').length,
+        off: [...document.querySelectorAll('#spot .verdict--off .verdict__why')].map((w) => w.textContent),
+      });
+      const before = read();
+      const previous = window.store.state.mushroom;
+      window.store.update({ mushroom: id });
+      const during = read();
+      window.store.update({ mushroom: previous });
+      return { before, during, after: read() };
+    }, wanted);
+    const descending = (list) => list.length === 5 && list.every((v, i) => i === 0 || list[i - 1] >= v);
+    check(
+      'bilan : champignons du plus probable au moins probable, même avec un champignon recherché',
+      descending(ranking.before.chances) && descending(ranking.during.chances) && JSON.stringify(ranking.before.chances) === JSON.stringify(ranking.during.chances),
+      `${ranking.before.chances.join(' ≥ ')} ; recherché : ${ranking.during.chances.join(' ≥ ')}`,
+    );
+    check(
+      'bilan : le champignon recherché est signalé sans recliquer la carte, puis ne l’est plus',
+      ranking.before.chosen.length === 0 && ranking.during.chosen.length === 1 && / · recherché$/.test(ranking.during.chosen[0]) && ranking.after.chosen.length === 0,
+      `${ranking.during.chosen.join(', ')}`,
+    );
+    check(
+      'bilan : raisons repliées (une carte dépliée au plus), champignon exclu sur une ligne avec sa raison',
+      ranking.before.open <= 1 && ranking.before.cards + ranking.before.off.length === 5 && ranking.before.off.every((w) => w.length > 5),
+      `${ranking.before.open} dépliée(s) sur ${ranking.before.cards} ; exclus : ${ranking.before.off.join(' | ') || 'aucun'}`,
+    );
+
+    // Bouton « ? » : explication dépliée au clic, repliée par Échap, le clavier revient sur le bouton.
+    const help = page.locator('#spot .help-btn');
+    const helpBefore = await page.evaluate(() => ({ hidden: document.getElementById('spot-chance-help')?.hidden, expanded: document.querySelector('#spot .help-btn')?.getAttribute('aria-expanded') }));
+    await help.click();
+    const helpOpen = await page.evaluate(() => ({
+      hidden: document.getElementById('spot-chance-help')?.hidden,
+      expanded: document.querySelector('#spot .help-btn')?.getAttribute('aria-expanded'),
+      text: document.getElementById('spot-chance-help')?.textContent ?? '',
+      link: document.querySelector('#spot-chance-help a')?.getAttribute('href'),
+      size: document.querySelector('#spot .help-btn')?.getBoundingClientRect().width,
+    }));
+    await page.keyboard.press('Escape');
+    const helpClosed = await page.evaluate(() => ({ hidden: document.getElementById('spot-chance-help')?.hidden, focus: document.activeElement?.className, spot: !document.getElementById('spot').hidden }));
+    check(
+      'bilan : « ? » déplie l’explication du pourcentage (estimation, pas une probabilité mesurée)',
+      helpBefore.hidden === true && helpBefore.expanded === 'false' && helpOpen.hidden === false && helpOpen.expanded === 'true' && /saison × pluie × température × arbre hôte × sol/.test(helpOpen.text) && /pas une probabilité mesurée/.test(helpOpen.text) && helpOpen.link === 'a-propos.html#fiabilite' && helpOpen.size >= 24,
+      helpOpen.text.slice(0, 80),
+    );
+    check('bilan : Échap replie l’explication et rend le clavier au bouton « ? »', helpClosed.hidden === true && helpClosed.focus === 'help-btn' && helpClosed.spot, JSON.stringify(helpClosed));
     check('surbrillance du polygone cliqué', spot.highlight === JSON.stringify(['==', ['get', 'id'], target.id]), spot.highlight);
     await page.screenshot({ path: `${OUT}03-bureau-bilan.png` });
     await page.locator('#spot .panel__close').click();

@@ -8,24 +8,11 @@ import { CLASS_BY_CODE } from './forestClasses';
 import { ABOUT_URL } from './legal';
 import { CELL_KM } from './meteoGrid';
 import { RAIN_STEPS, describeStatus, indexMushroom, type MeteoLayer } from './meteoLayer';
-import { CHANCE_THRESHOLD, GENERAL_CAUTION, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, hostCodes, type Mushroom } from './mushrooms';
+import { CHANCE_THRESHOLD, GENERAL_CAUTION, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, hostCodes, seasonText, type Mushroom } from './mushrooms';
 import { SOIL_CLASSES, drawPattern } from './soils';
 import type { AppState, Store } from './state';
 import { collapsible, sectionTitle, switchInput } from './ui';
 import { onZonesInfo, zonesInfo } from './zones';
-
-const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-
-function seasonText(m: Mushroom): string {
-  const months = Object.entries(m.season)
-    .filter(([, w]) => (w ?? 0) >= 0.5)
-    .map(([k]) => Number(k))
-    .sort((a, b) => a - b);
-  // Saison à cheval sur l'année (ex. octobre → janvier) : on garde l'ordre naturel.
-  const first = months[0];
-  const last = months[months.length - 1];
-  return first && last ? `${MONTHS[first - 1]} à ${MONTHS[last - 1]}` : '—';
-}
 
 /** Mélanges et forêts mixtes : regroupés en « et leurs mélanges » pour rester lisible. */
 const MIXTURES = new Set(['FF1-00-00', 'FF2-00-00', 'FF2-80-80', 'FF2-90-90', 'FF31', 'FF32', 'FO3']);

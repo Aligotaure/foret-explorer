@@ -120,6 +120,8 @@ store.subscribe((state, prev) => {
   app.classList.toggle('legend-open', state.legendOpen);
   // Sur mobile, un seul tiroir à la fois : ouvrir la légende ferme le bilan.
   if (!wideScreen && state.legendOpen && !prev.legendOpen) spot.close();
+  // Le bilan ouvert suit le champignon recherché (carte dépliée, mention « recherché »).
+  if (state.mushroom !== prev.mushroom) spot.refresh();
 });
 app.classList.toggle('legend-open', store.state.legendOpen);
 
