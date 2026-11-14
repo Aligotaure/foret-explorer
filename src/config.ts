@@ -128,10 +128,17 @@ export const SPOT_ALTITUDE_TIMEOUT_MS = 12_000;
 
 /**
  * Indice de pousse : à partir de ce zoom, chaque case est détaillée en carrés de 4,5 km (même pluie,
- * températures ramenées à l'altitude de chaque carré) ; leurs étiquettes attendent qu'ils soient
- * assez grands.
+ * températures ramenées à l'altitude de chaque carré), avec leur pourcentage.
+ *
+ * Avant le 14/11/2026 les carrés arrivaient dès le zoom 8, sans étiquette jusqu'au zoom 10 : quand la
+ * règle de la carte affiche 20 km, ils ne faisaient que 21 pixels de côté, leur couleur ne se lisait
+ * pas, et ils coûtaient la moitié du temps de dessin d'une image (34 ms sur 68 au zoom 8,2, sans
+ * carte graphique). Les cases de 18 km restent donc jusqu'au zoom 10 (la règle affiche alors 30, 20,
+ * 10 puis 5 km), où les pastilles disent où aller voir ; les carrés de 4,5 km arrivent avec leurs
+ * étiquettes et avec les forêts détaillées. Une expression de zoom dans une propriété `layout`
+ * (le texte des étiquettes) n'est évaluée qu'aux zooms entiers : garder un seuil entier.
  */
-export const WEATHER_SUB_MIN_ZOOM = 8;
+export const WEATHER_SUB_MIN_ZOOM = 10;
 export const WEATHER_SUB_LABEL_MIN_ZOOM = 10;
 
 /**

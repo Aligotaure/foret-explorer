@@ -943,6 +943,20 @@ li.is-off .swatch {
   border-color: #b45309;
 }
 
+/* Hors saison de plus d'un mois : grisé et en tirets (pas la couleur seule), toujours cliquable. */
+.chip--dormant {
+  border-style: dashed;
+  border-color: #8a8aa6;
+  color: #a4a4bd;
+}
+
+.chip--dormant[aria-pressed='true'] {
+  border-style: dashed;
+  border-color: var(--muted);
+  background: #4a4a68;
+  color: #e4e4f2;
+}
+
 .legend-hint {
   margin: 10px 0 0;
   color: var(--muted);

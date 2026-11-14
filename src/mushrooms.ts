@@ -174,16 +174,58 @@ export const MUSHROOM_BY_ID: ReadonlyMap<MushroomId, Mushroom> = new Map(MUSHROO
 
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
-/** Saison en clair (« juin à novembre ») : les mois où le poids de saison atteint 0,5. */
-export function seasonText(m: Mushroom): string {
-  const months = Object.entries(m.season)
+/** Mois de pleine saison (poids d'au moins 0,5), dans l'ordre : ceux que la saison écrite annonce. */
+export function seasonMonths(m: Mushroom): number[] {
+  return Object.entries(m.season)
     .filter(([, w]) => (w ?? 0) >= 0.5)
     .map(([k]) => Number(k))
     .sort((a, b) => a - b);
+}
+
+/** Saison en clair (« juin à novembre ») : les mois où le poids de saison atteint 0,5. */
+export function seasonText(m: Mushroom): string {
+  const months = seasonMonths(m);
   const first = months[0];
   const last = months[months.length - 1];
   return first && last ? `${MONTHS[first - 1]} à ${MONTHS[last - 1]}` : '—';
 }
+
+/** Mois du moment (1 à 12). Lu par `getMonth` seulement : les tests e2e le figent en octobre. */
+export const currentMonth = (): number => new Date().getMonth() + 1;
+
+/**
+ * À combien de mois de sa saison est un champignon : 0 pendant la saison écrite (`seasonText`), sinon
+ * la distance au mois de saison le plus proche, l'année formant une boucle (janvier suit décembre).
+ * Comptée depuis la saison que le visiteur lit (« mars à juin »), pas depuis les mois de début et de
+ * fin au poids faible : sinon « hors saison (septembre à décembre) » resterait actif en mars.
+ */
+export function monthsOutOfSeason(m: Mushroom, month: number): number {
+  let nearest = 6;
+  for (const k of seasonMonths(m)) {
+    const gap = Math.abs(k - month);
+    nearest = Math.min(nearest, gap, 12 - gap);
+  }
+  return nearest;
+}
+
+/**
+ * Hors saison de plus d'un mois : ni dans la saison écrite, ni le mois d'avant, ni le mois d'après.
+ * Le champignon est alors grisé dans la légende et dans le bilan (demande de Clément du 14/11/2026).
+ * Au mois près : les poids de saison sont mensuels. Grisés : cèpes et girolles de janvier à avril,
+ * trompettes de février à juin, chanterelles en tube de février à juillet, morilles d'août à janvier.
+ */
+export const isDormant = (m: Mushroom, month: number): boolean => monthsOutOfSeason(m, month) > 1;
+
+/**
+ * Rien à estimer ce mois-ci : champignon grisé, ou mois au poids nul (l'indice, saison × …, vaut alors
+ * zéro par construction). Rien n'est calculé pour lui : ni grille, ni carrés de 500 m, ni altitudes
+ * demandées, ni indice dans le bilan. Seul cas où un poids non nul est ignoré : les chanterelles en
+ * tube en février (poids 0,1, soit « défavorable » au mieux).
+ */
+export const noEstimate = (m: Mushroom, month: number): boolean => isDormant(m, month) || !m.season[month];
+
+/** « hors saison (mars à juin) » : ce qui écarte un champignon, dans le bilan et la légende. */
+export const offSeasonText = (m: Mushroom): string => `hors saison (${seasonText(m)})`;
 
 /** Types BD Forêt à afficher pour un champignon (hôtes assez typiques). */
 export function hostCodes(m: Mushroom, minWeight = 0.5): string[] {
@@ -229,6 +271,12 @@ export function chanceOf(score: number): number {
  * met en avant (étiquettes, pastilles de la vue d'ensemble) que les secteurs au-dessus.
  */
 export const CHANCE_THRESHOLD = 50;
+/**
+ * Pastilles de la vue d'ensemble : seulement les secteurs « favorables » (70 % et plus). Demande de
+ * Clément du 14/11/2026 : sous le zoom des carrés de 4,5 km, la couleur des cases dit peu ; ce sont
+ * les pastilles qui montrent où aller voir.
+ */
+export const HOTSPOT_MIN_CHANCE = 70;
 
 export interface MushroomScore {
   id: MushroomId;
@@ -330,12 +378,21 @@ function tempFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
   return f;
 }
 
+/**
+ * Plafond de l'indice d'un champignon dans une case météo : saison × pluie. La pluie est la même dans
+ * toute la case ; la température (selon l'altitude) et les arbres ne peuvent que le réduire. Sert à ne
+ * pas détailler les carrés d'une case qui ne peut de toute façon pas atteindre un seuil.
+ */
+export function weatherCeiling(m: Mushroom, w: WeatherSummary, month: number): number {
+  return (m.season[month] ?? 0) * rainFactor(m, w, []);
+}
+
 /** Indice de pousse d'un champignon pour une météo, et si possible un coin précis. */
 export function scoreMushroom(m: Mushroom, w: WeatherSummary, month: number, ctx: SpotContext = {}): MushroomScore {
   const reasons: string[] = [];
   let blocker: string | undefined;
   const season = m.season[month] ?? 0;
-  if (season === 0) blocker = `hors saison (${seasonText(m)})`;
+  if (season === 0) blocker = offSeasonText(m);
   if (season < 0.5) reasons.push(season === 0 ? 'Hors saison.' : 'Tout début ou fin de saison.');
 
   let score = season * rainFactor(m, w, reasons) * tempFactor(m, w, reasons);
