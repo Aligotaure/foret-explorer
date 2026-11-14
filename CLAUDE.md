@@ -165,12 +165,13 @@ d'autant plus qu'ils en couvrent (teinte pleine à `HOST_FULL_COVER`, 50 %) ; so
 par la qualité moyenne de ces hôtes (pas par le sol, inconnu à cette échelle : le bilan, qui regarde
 la forêt et le sol du point, peut différer dans les deux sens). Seuils du 14/11/2026 : à 5 % d'hôtes
 et sans regarder le bâti, 85 % des carrés de France s'allumaient pour les cèpes (25 154 sur 29 483),
-dont 1 600 bâtis à 15 % ou plus : toutes les villes étaient colorées (Nancy : 80 à 84 % sur le
-centre). Avec 10 % et 15 % : 20 048 carrés (68 %). Un carré éteint n'est pas envoyé à la carte : ni
+dont 1 624 bâtis à 15 % ou plus : toutes les villes étaient colorées (Nancy : 80 à 84 % sur le
+centre). Avec 10 % et 15 % : 20 025 carrés (68 %). Les parts s'additionnent en pour cent entiers
+(`forestShare.ts`) : 0,07 + 0,01 + 0,01 + 0,01 fait 0,0999… et laisserait éteints 450 carrés à 10 % pile. Un carré éteint n'est pas envoyé à la carte : ni
 teinte, ni quadrillage, ni étiquette, ni pastille. Propriétés d'un carré : celles du champignon
 montré seulement, sous des noms fixes (`l` niveau, `p` chance estimée, `c` part d'hôtes de 0 à 1 ;
-`c` = −1 si le fichier manque : la grille se dessine alors comme avant et la légende le dit ; `c` = 0
-pour une case éteinte du mode pluie). Case entière (zoom < 8) :
+`c` = −1 si le fichier manque : la grille se dessine alors comme avant et la légende le dit). Les
+cases du mode pluie n'en portent aucune. Case entière (zoom < 8) :
 moyenne de ses carrés, pastille posée sur son carré allumé le plus boisé. Aux zooms des carrés de 500 m, la grille des
 cases reste en fond sans étiquette dès que le relevé fin est fait (`fineDone`), même s'il n'a trouvé
 aucun arbre hôte. Fichier : par case commune, 16 carrés `[rang du code, part en %, …]` (null : pas de
@@ -178,10 +179,9 @@ terre française) dans `cases`, et leur part bâtie en % dans `bati` (champ ajou
 format `v: 1` : un fichier sans lui se lit encore, rien n'est alors tenu pour bâti) ; 993 ko, 236 ko
 compressé ; aux limites de départements des polygones de la BD Forêt se recouvrent (99 carrés ramenés
 à 100 %). Part bâtie : zones bâties et zones d'activité du Plan IGN (voir « Données et API ») ;
-3 509 carrés bâtis à 10 % ou plus, 2 043 à 15 %, 1 011 à 25 %, 299 à 50 %. Les identifiants de texte des cases (« I:J/k ») ne
+3 544 carrés bâtis à 10 % ou plus, 2 067 à 15 %, 1 025 à 25 %, 303 à 50 %, 8 397 à 0 %. Les identifiants de texte des cases (« I:J/k ») ne
 survivent pas aux tuiles de MapLibre : dans les tests, un carré se reconnaît à son centre (`x`, `y`).
-Simulé dans les tests e2e (`forestShare()` de `mocks.mjs`). Le fichier est chargé dans tous les modes (en
-passant de la pluie à la chance estimée, les carrés déjà là sont repeints tout de suite) ; un échec
+Simulé dans les tests e2e (`forestShare()` de `mocks.mjs`). Le fichier est chargé dans tous les modes ; un échec
 de réseau se retente au plus toutes les 30 secondes, un fichier d'un autre format jamais. Une case
 entière est allumée dès qu'un de ses carrés l'est (sa teinte suit la moyenne). La police des
 étiquettes est vide dans les tests : aucune étiquette n'y est dessinée, on y évalue donc les
@@ -196,10 +196,10 @@ profileur du navigateur et l'événement `render` de MapLibre). Un clic sur un c
 
 | Vue | Avant | Après |
 |---|---|---|
-| France entière (zoom 5) | 1,2 à 1,4 s, 20 à 22 images | 0,4 s, 4 images |
-| Lyon (zoom 9) | 1,1 à 1,3 s, 12 à 15 images | 0,5 s, 5 images |
-| Annecy (zoom 11) | 1,8 s, 6 à 8 images | 1,2 à 1,4 s, 5 images |
-| Forêt (zoom 13, carrés de 500 m) | 1,0 s, 9 à 10 images | 0,6 s, 4 à 5 images |
+| France entière (zoom 5) | 1,2 à 1,4 s, 20 à 22 images | 0,4 à 0,5 s, 4 images |
+| Lyon (zoom 9) | 1,1 à 1,3 s, 12 à 15 images | 0,4 à 0,5 s, 4 à 5 images |
+| Annecy (zoom 11) | 1,8 s, 6 à 8 images | 1,2 à 1,5 s, 4 à 6 images |
+| Forêt (zoom 13, carrés de 500 m) | 1,0 s, 9 à 10 images | 0,5 s, 3 images |
 
 Le code du site n'y pèse presque rien (5 à 100 ms) : le temps part dans MapLibre. Deux faits à
 garder en tête avant de toucher à la grille (`meteoLayer.ts`, `mapStyle.ts`) :
@@ -210,13 +210,16 @@ garder en tête avant de toucher à la grille (`meteoLayer.ts`, `mapStyle.ts`) :
   propriété constante (opacité fixe) ne refait rien.
 
 D'où les règles : les carrés ne portent que les valeurs du champignon montré sous des noms fixes
-(`l`, `p`, `c` : changer de champignon ne change plus aucune expression, un test le vérifie) ; un
-carré éteint n'est pas envoyé ; un contenu identique au précédent n'est pas renvoyé (`setSource`) ;
-la grille est refaite tout de suite au changement de mode ou de champignon (les 0,5 s d'attente ne
-servent qu'aux déplacements) ; les carrés de 500 m sont redessinés au plus toutes les 1,2 s pendant
+(`l`, `p`, `c` : changer de champignon ne change plus aucune expression, un test le vérifie), et rien
+de tout cela en mode pluie ; un carré éteint n'est pas envoyé ; un contenu identique au précédent
+n'est pas renvoyé (`setSource`) ; au changement de mode ou de champignon, la grille et les carrés de
+500 m sont redessinés dans l'instant à partir du dernier relevé gardé (`redraw()`, `data`,
+`fineData`), sans attendre le réseau ni le repos de la carte (sinon ils montrent les valeurs de
+l'ancien champignon sous le nom du nouveau ; les 0,5 s d'attente ne servent qu'aux déplacements) ;
+les carrés de 500 m sont redessinés au plus toutes les 1,2 s pendant
 que leurs altitudes arrivent ; pas de fondu des étiquettes (`fadeDuration: 0`) ni de transition de
 0,3 s (`transition` du style) ; sources de la grille avec un `maxzoom` bas (une ou deux tuiles pour
-la vue au lieu de douze).
+la vue au lieu de douze, au prix d'un arrondi de ± 7 m sur les carrés de 4,5 km).
 
 Ce qui reste : à partir du zoom 10, choisir un champignon change aussi le filtre des forêts, et
 MapLibre refait alors toutes les tuiles de la BD Forêt (≈ 1 s à lui seul au zoom 11 sans carte
@@ -247,7 +250,9 @@ bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
   zoom), la forêt est **inconnue**, pas absente (`forestUnknown` : `'zoom'` ou `'loading'`). Le bilan
   applique alors la règle de la carte au carré de 4,5 km qui contient le point (`View.sector`,
   `hostCover`, `isLit`) : sans arbres hôtes dans le secteur, aucune chance annoncée (« peu d'arbres
-  hôtes dans ce secteur ») ; secteur d'abord bâti, de même (« secteur surtout bâti ») ; sinon celle
+  hôtes dans ce secteur ») ; secteur bâti à 15 % ou plus, de même (« secteur urbanisé », jamais
+  « surtout bâti » : à 16 % ce serait faux), mais seulement sous le zoom 12 : au-delà la carte montre
+  des carrés de 500 m jusque dans les massifs en ville, et le bilan les contredirait ; sinon celle
   de ses forêts hôtes, et la raison le dit. Fichier des parts absent :
   météo seule. Sans cela, le bilan annonçait « favorable » en pleine ville dès qu'on dézoomait.
 - La phrase de pluie d'un champignon commente la pluie la plus récente dont le délai n'est pas
@@ -280,8 +285,10 @@ carrés boisés, par lots de 200 points (service en panne : altitude du carré d
 de la case commune corrigées de −0,65 °C par 100 m ; la pluie reste celle de la case. Carré dessiné
 seulement si trois de ses neuf points au moins sont sous un arbre hôte du champignon montré
 (`FINE_MIN_HOST_SHARE`) ; en ville (son carré de 4,5 km est bâti à 15 % ou plus), il en faut cinq et
-deux carrés voisins boisés sur huit (`fineCellsToDraw` : un parc isolé n'en pose plus ; un voisin hors
-de l'écran, inconnu, compte pour boisé). Opacité
+deux carrés voisins boisés sur huit (`fineCellsToDraw` : un parc isolé n'en pose plus). Un carré à
+cheval sur le bord de l'écran, relevé en partie, est quand même compté sur neuf points, et seuls les
+voisins connus comptent : au bord, un carré apparaît quand il est assez visible, il ne disparaît pas
+après coup. Opacité
 selon la part d'arbres hôtes ; défavorable = contour seul. Les forêts s'estompent (45 %) à ces zooms.
 ⚠ Zoom MapLibre = zoom « 512 px » : au zoom 13, ≈ 5 m/pixel (pas 10).
 
@@ -431,6 +438,11 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   `ZONE_INDUS_ACTI` (zones industrielles et d'activité), polygones généralisés ; les deux peuvent se
   recouvrir (part ramenée à 100 %). Autres couches du même niveau : `ocs_vegetation_surf`,
   `hydro_surf`, `routier_route`, `oro_courbe` (la plus lourde)… 889 tuiles, ≈ 100 ko chacune.
+  ⚠ Le côté de la couche (`extent`) n'est pas toujours de 4 096 unités : 9 tuiles des Alpes du Nord
+  (Grenoble, Chambéry, Albertville) en ont 256 à 2 048 pour `bati_zone_surf`. Compter les aires en
+  fraction de tuile, jamais en unités (sinon Grenoble ressort bâtie à 1 % au lieu de 89 %). Et une
+  tuile peut revenir vide une fois puis pleine (Loiret, le 14/11/2026) : le script retente, ne garde
+  pas une tuile vide et le signale.
 - **WFS BD Forêt** (pas utilisé, utile pour un export) : `https://data.geopf.fr/wfs`,
   `TYPENAMES=LANDCOVER.FORESTINVENTORY.V2:formation_vegetale`, `OUTPUTFORMAT=application/json`,
   `CQL_FILTER` et `PROPERTYNAME` acceptés. Avec GeoServer, `BBOX=` et `CQL_FILTER=` ne se combinent
@@ -676,7 +688,7 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   (ni courbe ni comparaison de deux séries).
 - Arbres hôtes des carrés : BD Forêt de 2007 à 2018 ; seuils (10 % d'hôtes, 15 % de bâti, 3 points
   sur 9) choisis à l'œil sur Nancy, Annecy, Lyon, Paris, Limoges et Toulouse. Un carré de 4,5 km qui
-  contient un village reste coloré s'il est assez boisé (tout carré de France en contient un) ; un
+  contient un village reste coloré s'il est assez boisé ; un
   vrai massif collé à une ville (Versailles, Fontainebleau-ville) s'éteint à cette échelle et ne se
   retrouve qu'aux carrés de 500 m ; en ville, un bois de moins de trois carrés de 500 m n'est pas
   montré. Pour les chanterelles en tube (hôtes surtout résineux) la carte se vide en plaine de
