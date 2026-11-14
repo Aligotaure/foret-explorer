@@ -189,6 +189,9 @@ export function sampleCells(map: MapLibreMap, cells: readonly FineCell[]): Map<s
 
 export const hasForest = (samples: readonly Sample[] | undefined): boolean => Boolean(samples?.some((s) => s.code));
 
+/** Un des points du carré est-il sous un arbre hôte du champignon ? */
+export const hasHost = (m: Mushroom, samples: readonly Sample[]): boolean => samples.some((s) => s.code !== null && (m.hosts[s.code] ?? 0) > 0);
+
 // ── Altitudes (cache permanent dans le navigateur) ───────────────────────────
 
 const ALTITUDE_KEY = 'foret-explorer:altitudes';

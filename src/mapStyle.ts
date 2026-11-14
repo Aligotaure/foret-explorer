@@ -116,6 +116,9 @@ export function buildStyle(state: AppState): StyleSpecification {
   return {
     version: 8,
     glyphs: GLYPHS_URL,
+    // Pas de transition de 0,3 s sur les couleurs et les opacités : elle fait redessiner la carte en
+    // continu, plusieurs images de trop sur un appareil sans carte graphique (voir meteoLayer.ts).
+    transition: { duration: 0, delay: 0 },
     sources: {
       [SOURCES.planIgn]: {
         type: 'raster',
@@ -156,13 +159,18 @@ export function buildStyle(state: AppState): StyleSpecification {
         bounds: GEOLOGY.bounds,
         attribution: ATTRIBUTION.geologie,
       },
+      // Grille météo : `maxzoom` bas exprès. Au-delà, MapLibre agrandit les tuiles de ce niveau au
+      // lieu d'en découper de plus petites : une ou deux tuiles couvrent la vue au lieu de douze, donc
+      // moins d'images redessinées à chaque mise à jour (voir meteoLayer.ts). La précision reste sous
+      // le pixel aux zooms où chaque grille se lit (8 192 unités par tuile).
       [SOURCES.meteo]: {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
         attribution: ATTRIBUTION.meteo,
+        maxzoom: 8,
       },
-      [SOURCES.meteoFine]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
-      [SOURCES.meteoTop]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+      [SOURCES.meteoFine]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 12 },
+      [SOURCES.meteoTop]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 5 },
       [SOURCES.zones]: {
         type: 'vector',
         tiles: [archiveTiles(`${ZONES_BASE}${ZONES.archive}`)],

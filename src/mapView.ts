@@ -78,6 +78,9 @@ const map = new maplibregl.Map({
   dragRotate: false,
   pitchWithRotate: false,
   touchPitch: false,
+  // Pas de fondu des étiquettes : il fait redessiner la carte pendant 0,3 s après chaque changement,
+  // soit plusieurs images de trop sur un appareil sans carte graphique (voir meteoLayer.ts).
+  fadeDuration: 0,
   // Compte les tuiles et polices demandées (consommation des API), sans modifier la requête.
   transformRequest: (url, resourceType) => {
     trackMapRequest(url, resourceType);
