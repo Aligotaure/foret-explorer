@@ -8,8 +8,9 @@ import maplibregl from 'maplibre-gl';
 import { Protocol } from 'pmtiles';
 import { BDFORET, FRANCE_BOUNDS, MAP_MAX_ZOOM, MAP_MIN_ZOOM } from './config';
 import { countClasses } from './counts';
-import { byId, debounce, h, toast } from './dom';
+import { byId, debounce, toast } from './dom';
 import { registerSoilPatterns } from './geology';
+import { initChooseHint } from './chooseHint';
 import { initGridLoader } from './gridLoader';
 import { LegendPanel } from './legend';
 import {
@@ -131,16 +132,11 @@ store.subscribe((state, prev) => {
 });
 app.classList.toggle('legend-open', store.state.legendOpen);
 
-// Bandeau « Zoomez pour filtrer » sous le zoom des tuiles vectorielles.
-const zoomHint = byId('zoom-hint');
-const zoomButton = h('button', { class: 'zoom-hint__btn', type: 'button' }, 'Zoomer ici');
-zoomButton.addEventListener('click', () => map.easeTo({ zoom: BDFORET.minZoom + 0.5 }));
-zoomHint.replaceChildren(h('span', {}, 'Zoomez pour filtrer les types de forêt'), zoomButton);
-const updateZoomUi = (): void => {
-  const active = map.getZoom() >= BDFORET.minZoom;
-  zoomHint.hidden = active;
-  legend.setFilteringActive(active);
-};
+// Bandeau « Choisissez un champignon », tant qu'aucun n'est choisi (il a remplacé « Zoomez pour
+// filtrer les types de forêt », que la légende dit dans sa section « Types de forêt »).
+initChooseHint(byId('choose-hint'), store);
+// Sous le zoom des tuiles vectorielles, la légende prévient que les forêts ne se filtrent pas.
+const updateZoomUi = (): void => legend.setFilteringActive(map.getZoom() >= BDFORET.minZoom);
 map.on('zoom', updateZoomUi);
 updateZoomUi();
 

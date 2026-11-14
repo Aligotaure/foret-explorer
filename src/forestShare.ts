@@ -63,11 +63,10 @@ export function loadForestShare(): Promise<boolean> {
       return response.json() as Promise<ShareFile>;
     })
     .then((data) => {
-      if (data.v !== 1 || data.pasLat !== BASE_STEP_LAT || data.pasLon !== BASE_STEP_LON || !Array.isArray(data.codes) || !data.cases) {
+      if (!useForestShare(data)) {
         unusable = true;
         throw new Error('format ou grille inattendus');
       }
-      file = data;
       return true;
     })
     .catch((error: unknown) => {
@@ -77,6 +76,18 @@ export function loadForestShare(): Promise<boolean> {
       return false;
     });
   return loading;
+}
+
+/**
+ * Prend ce contenu pour fichier des parts (faux s'il n'est pas à ce format ou d'une autre grille).
+ * Sert au chargement, et au calcul des moyennes de France, qui lit le fichier sur le disque.
+ */
+export function useForestShare(data: unknown): boolean {
+  const d = data as ShareFile | null;
+  if (!d || d.v !== 1 || d.pasLat !== BASE_STEP_LAT || d.pasLon !== BASE_STEP_LON || !Array.isArray(d.codes) || !d.cases) return false;
+  file = d;
+  cache.clear();
+  return true;
 }
 
 /** Arbres hôtes des carrés d'une case, pour un champignon (null : case absente du fichier). */

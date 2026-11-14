@@ -30,6 +30,8 @@ jobs:
         run: npm run check
       - name: Tester les scripts de données (météo commune simulée, règles des sols sur toute la France)
         run: npm run test:donnees
+      - name: Tester le calcul des moyennes de France (chiffre des puces)
+        run: npm run test:france
       - name: Tests de bout en bout
         run: |
           npx playwright install --with-deps chromium

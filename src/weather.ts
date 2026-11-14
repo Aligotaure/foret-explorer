@@ -272,7 +272,8 @@ function loadIndex(): Promise<MeteoIndexFile | null> {
 
 const blocks = new Map<string, Promise<Map<string, DailySeries> | null>>();
 
-function parseBlock(file: BlockFile): Map<string, DailySeries> {
+/** Séries des cases d'un bloc (aussi lu par franceStats.ts, hors navigateur). */
+export function parseBlock(file: BlockFile): Map<string, DailySeries> {
   const out = new Map<string, DailySeries>();
   if (file?.v !== METEO_FORMAT || !Array.isArray(file.dates)) return out;
   const n = file.dates.length;

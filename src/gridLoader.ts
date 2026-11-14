@@ -33,6 +33,7 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { h } from './dom';
 import { icon } from './icons';
+import { pickMushroom } from './legendExtras';
 import type { GridVerdict } from './meteoLayer';
 import { LEVELS } from './mushrooms';
 import type { Store } from './state';
@@ -80,7 +81,8 @@ function initGridVerdict(el: HTMLElement, grid: { onVerdict(listener: (verdict: 
     const parts: (string | Node)[] = [h('strong', {}, message.slice(0, colon)), message.slice(colon)];
     if (better) {
       const pick = h('button', { class: 'chip grid-verdict__pick', type: 'button' }, `${better.mushroom.label} (${LEVELS[better.level]?.label.toLowerCase() ?? ''})`);
-      pick.addEventListener('click', () => store.update({ mushroom: better.mushroom.id, weatherMode: 'indice' }));
+      // (Comme une puce de la légende : le champignon, ses forêts hôtes, la grille d'indice.)
+      pick.addEventListener('click', () => pickMushroom(store, better.mushroom));
       parts.push(' ', pick);
     }
     text.replaceChildren(...parts);

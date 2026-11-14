@@ -53,6 +53,8 @@ function wideScreen(): HTMLElement {
       h('span', { class: 'tour-map__chance', style: 'left: 40%; top: 24%' }, '≈ 55 %'),
       h('span', { class: 'tour-map__chance', style: 'left: 40%; top: 77%' }, '≈ 74 %'),
       h('span', { class: 'tour-map__pin', style: 'left: 60%; top: 56%' }),
+      // Du coin touché à son bilan : le panneau de droite parle de ce point-là.
+      h('span', { class: 'tour-link tour-link--wide' }),
     ),
     h(
       'div',
@@ -78,7 +80,9 @@ function phoneScreen(): HTMLElement {
     square('left: 52%; top: 18%; width: 40%; height: 19%; background: rgba(233, 196, 106, 0.55)'),
     square('left: 52%; top: 39%; width: 40%; height: 19%; background: rgba(163, 59, 11, 0.78)'),
     h('span', { class: 'tour-map__chance', style: 'left: 12%; top: 25%' }, '≈ 55 %'),
-    h('span', { class: 'tour-map__pin', style: 'left: 66%; top: 44%' }),
+    h('span', { class: 'tour-map__pin', style: 'left: 66%; top: 41%' }),
+    // Du coin touché à son bilan, qui s'ouvre en bas.
+    h('span', { class: 'tour-link tour-link--phone' }),
     h('span', { class: 'tour-phone__menu' }),
     h('span', { class: 'tour-phone__island' }),
     h('div', { class: 'tour-phone__sheet' }, h('div', { class: 'tour-panel__head' }, 'Ce coin'), h('div', { class: 'tour-line' }), bars(), h('span', { class: 'tour-chance' }, '≈ 74 %')),

@@ -368,7 +368,7 @@ function forestShare() {
  * (dans les deux cas, la carte se rabat sur Open-Meteo) ; `'provisoire'` : le passage du jour n'a
  * pas encore eu lieu, hier n'est connu que par l'estimation de la veille.
  */
-export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0, foret = true, mois = 10, delaiForet = () => 0, panneForet = () => false, sec = false, delaiFond = () => 0 } = {}) {
+export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0, foret = true, mois = 10, delaiForet = () => 0, panneForet = () => false, sec = false, delaiFond = () => 0, france = null } = {}) {
   log.meteo ??= [];
   log.foret ??= [];
   // Mois figé (octobre par défaut) dans toutes les pages des tests : la saison des champignons en
@@ -423,6 +423,15 @@ export async function installMocks(page, log, { meteoCommune = true, altitudeLen
     const block = path.match(/\/b\/(-?\d+_-?\d+)\.json$/);
     if (!block) return route.fulfill({ status: 404, headers: CORS, body: '' });
     return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(meteoBlock(block[1], late, sec)) });
+  });
+  // Moyennes de France par champignon (data/meteo/france.json), sur le site en ligne comme sur le
+  // serveur de développement (qui servirait un fichier fabriqué en local). Sans `france` : le
+  // fichier vide que la publication écrit quand le calcul n'a pas pu se faire (aucun chiffre).
+  // Avec : son contenu (« jour » et « mois » y sont mis à hier et au mois simulé s'ils manquent).
+  await page.route('**/data/meteo/france.json*', (route) => {
+    if (!france) return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: '{"v":1,"maj":"","jour":"","mois":0,"moyennes":{},"carres":{}}' });
+    const body = { v: 1, maj: `${parisToday()}T01:40:00.000Z`, jour: addDays(parisToday(), -1), mois, ...france };
+    return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(body) });
   });
   await page.route('https://api.open-meteo.com/**', (route) => {
     const url = new URL(route.request().url());

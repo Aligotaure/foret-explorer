@@ -24,6 +24,7 @@ import {
   type Mushroom,
 } from './mushrooms';
 import { SOIL_CLASSES, drawPattern } from './soils';
+import { loadFranceStats } from './franceStats';
 import type { AppState, Store } from './state';
 import { collapsible, sectionTitle, switchInput } from './ui';
 import { onZonesInfo, zonesInfo } from './zones';
@@ -48,56 +49,81 @@ function soilText(m: Mushroom): string {
     .join(', ');
 }
 
+/**
+ * Choisit un champignon : ses forêts hôtes, et la grille d'indice s'il a une estimation ce mois-ci.
+ * Hors saison, la grille d'indice n'aurait rien à montrer : on garde le mode météo en cours (la
+ * pluie, si elle était affichée) au lieu de la remplacer par une grille vide. `toggle` : un second
+ * clic sur le champignon déjà choisi le retire (puces de la légende).
+ */
+export function pickMushroom(store: Store, m: Mushroom, toggle = false): void {
+  if (store.state.mushroom === m.id) {
+    if (toggle) store.update({ mushroom: null });
+    return;
+  }
+  if (noEstimate(m, currentMonth())) store.update({ mushroom: m.id, selected: new Set(hostCodes(m)) });
+  else store.update({ mushroom: m.id, selected: new Set(hostCodes(m)), weatherMode: 'indice' });
+}
+
+/** Moyennes de France par champignon (`franceStats.ts`), une fois lues ; null : pas de chiffre. */
+export type FranceAverages = Awaited<ReturnType<typeof loadFranceStats>>;
+
+/** Légende des chiffres portés par les puces : toujours « chance estimée », et de quoi c'est la moyenne. */
+export const AVERAGE_CAPTION = 'Le % de chaque champignon : sa chance estimée moyenne en France, là où poussent ses arbres hôtes.';
+
+/**
+ * Puce d'un champignon, pour la légende et pour le bandeau « Choisissez un champignon ».
+ * Son nom accessible reste le nom du champignon, rien d'autre : le chiffre de France est décoratif
+ * (`aria-hidden`) et redit, comme « hors saison (…) », dans sa description (`note`, à placer dans la
+ * page, lue après le nom). Hors saison de plus d'un mois : grisée et en tirets (pas la couleur
+ * seule), toujours cliquable : sa fiche et ses forêts hôtes servent à préparer la saison.
+ */
+export function mushroomChip(
+  m: Mushroom,
+  noteId: string,
+  onPick: () => void,
+): { button: HTMLButtonElement; note: HTMLElement; sync(state: AppState, month: number, averages: FranceAverages): void } {
+  const average = h('span', { class: 'chip__avg', 'aria-hidden': 'true', hidden: true });
+  const button = h('button', { class: 'chip chip--mushroom', type: 'button', 'aria-pressed': 'false' }, m.label, average);
+  const note = h('span', { id: noteId });
+  button.addEventListener('click', onPick);
+  const sync = (state: AppState, month: number, averages: FranceAverages): void => {
+    button.setAttribute('aria-pressed', String(state.mushroom === m.id));
+    // Refait à chaque passage, pas seulement à la construction : le mois peut changer en cours de visite.
+    const dormant = isDormant(m, month);
+    button.classList.toggle('chip--dormant', dormant);
+    // Pas de chiffre pour un champignon sans estimation ce mois-ci, même si le fichier en donnait un.
+    const value = noEstimate(m, month) ? undefined : averages?.[m.id];
+    average.hidden = value === undefined;
+    average.textContent = value === undefined ? '' : `${value} %`;
+    const said = [dormant ? offSeasonText(m) : '', value === undefined ? '' : `chance estimée moyenne en France : ${value} %`].filter(Boolean);
+    note.textContent = said.join(' ; ');
+    if (said.length) button.setAttribute('aria-describedby', note.id);
+    else button.removeAttribute('aria-describedby');
+  };
+  return { button, note, sync };
+}
+
 /** « Je cherche… » : choisir un champignon affiche ses forêts hôtes et son indice de pousse. */
 export function mushroomSection(store: Store): { el: HTMLElement; sync(state: AppState): void } {
   const chips = h('div', { class: 'presets', role: 'group', 'aria-label': 'Champignon recherché' });
-  const buttons = new Map<string, HTMLButtonElement>();
-  // Hors saison de plus d'un mois : puce grisée et en tirets (pas la couleur seule), toujours
-  // cliquable : sa fiche et ses forêts hôtes servent à préparer la saison. Le nom du bouton ne change
-  // pas ; « hors saison (…) » est sa description (aria-describedby), lue après lui.
   const notes = h('div', { class: 'visually-hidden' });
-  const noteOf = new Map<string, HTMLElement>();
-  for (const m of MUSHROOMS) {
-    const note = h('span', { id: `saison-${m.id}` });
-    noteOf.set(m.id, note);
-    notes.append(note);
-    const button = h('button', { class: 'chip chip--mushroom', type: 'button', 'aria-pressed': 'false' }, m.label);
-    button.addEventListener('click', () => {
-      if (store.state.mushroom === m.id) {
-        store.update({ mushroom: null });
-        return;
-      }
-      // Hors saison, la grille d'indice n'aurait rien à montrer : on garde le mode météo en cours
-      // (la pluie, si elle était affichée) au lieu de la remplacer par une grille vide.
-      if (noEstimate(m, currentMonth())) store.update({ mushroom: m.id, selected: new Set(hostCodes(m)) });
-      else store.update({ mushroom: m.id, selected: new Set(hostCodes(m)), weatherMode: 'indice' });
-    });
-    buttons.set(m.id, button);
-    chips.append(button);
+  const all = MUSHROOMS.map((m) => mushroomChip(m, `saison-${m.id}`, () => pickMushroom(store, m, true)));
+  for (const chip of all) {
+    chips.append(chip.button);
+    notes.append(chip.note);
   }
+  const caption = h('p', { class: 'legend-hint chips-caption', hidden: true }, AVERAGE_CAPTION);
+  let averages: FranceAverages = null;
   const card = h('div', { class: 'mushroom-card' });
-  const content = h('div', {}, chips, notes, card);
+  const content = h('div', {}, chips, caption, notes, card);
   const section = collapsible(sectionTitle('Je cherche…', 'mushroom'), content, true);
   // La fiche est refaite à chaque changement d'état : on retient si ses conditions sont dépliées.
   let factsOpen = false;
 
   const sync = (state: AppState): void => {
     const month = currentMonth();
-    for (const [id, b] of buttons) {
-      b.setAttribute('aria-pressed', String(state.mushroom === id));
-      // Refait à chaque passage, pas seulement à la construction : le mois peut changer en cours de visite.
-      const mushroom = MUSHROOM_BY_ID.get(id as Mushroom['id']);
-      const dormant = Boolean(mushroom) && isDormant(mushroom as Mushroom, month);
-      const note = noteOf.get(id);
-      b.classList.toggle('chip--dormant', dormant);
-      if (dormant && note && mushroom) {
-        note.textContent = offSeasonText(mushroom);
-        b.setAttribute('aria-describedby', note.id);
-      } else {
-        if (note) note.textContent = '';
-        b.removeAttribute('aria-describedby');
-      }
-    }
+    for (const chip of all) chip.sync(state, month, averages);
+    caption.hidden = !averages || !MUSHROOMS.some((x) => !noEstimate(x, month) && averages?.[x.id] !== undefined);
     const m = state.mushroom ? MUSHROOM_BY_ID.get(state.mushroom) : undefined;
     if (!m) {
       card.replaceChildren(
@@ -170,6 +196,11 @@ export function mushroomSection(store: Store): { el: HTMLElement; sync(state: Ap
       ),
     );
   };
+  // Les moyennes de France arrivent après coup (un petit fichier) : les puces sont alors refaites.
+  void loadFranceStats().then((loaded) => {
+    averages = loaded;
+    sync(store.state);
+  });
   return { el: section.el, sync };
 }
 
