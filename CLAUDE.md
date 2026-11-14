@@ -171,7 +171,13 @@ aucun arbre hôte. Fichier : par case commune, 16 carrés `[rang du code, part e
 terre française) ; 899 ko, 223 ko compressé ; aux limites de départements des polygones de la BD
 Forêt se recouvrent (99 carrés ramenés à 100 %). Les identifiants de texte des cases (« I:J/k ») ne
 survivent pas aux tuiles de MapLibre : dans les tests, un carré se reconnaît à son centre (`x`, `y`).
-Simulé dans les tests e2e (`forestShare()` de `mocks.mjs`).
+Simulé dans les tests e2e (`forestShare()` de `mocks.mjs`). Le fichier est chargé dans tous les modes (en
+passant de la pluie à la chance estimée, les carrés déjà là sont repeints tout de suite) ; un échec
+de réseau se retente au plus toutes les 30 secondes, un fichier d'un autre format jamais. Une case
+entière est allumée dès qu'un de ses carrés l'est (sa teinte suit la moyenne). La police des
+étiquettes est vide dans les tests : aucune étiquette n'y est dessinée, on y évalue donc les
+expressions de MapLibre carré par carré (`map.style.getLayer(…).paint.get(…).evaluate(…)`). Le mois
+est figé en octobre dans les tests de bureau (saison des champignons).
 
 ## Bilan et légende : la réponse d'abord
 
@@ -194,9 +200,18 @@ bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
 - **« ? »** (un seul, près du titre « Champignons ») : un bouton `aria-expanded` qui déplie un encart
   sur place, au clic, au toucher et au clavier (Échap le replie) ; pas d'infobulle au survol (rien de
   tel sur téléphone, et le panneau la rognerait). Il dit « estimation, pas une probabilité mesurée ».
-- Sous le zoom 10 la forêt est **inconnue**, pas absente (`forestUnknown`) : le bilan le dit et ne
-  retranche rien. La phrase de pluie d'un champignon commente la pluie récente qui n'a pas encore
-  fait pousser plutôt qu'une vieille pluie « dépassée » (sinon elle contredit le bloc météo).
+- Sous le zoom 10, ou tant que les tuiles de la BD Forêt ne sont pas arrivées (clic juste après un
+  zoom), la forêt est **inconnue**, pas absente (`forestUnknown` : `'zoom'` ou `'loading'`). Le bilan
+  applique alors la règle de la carte au carré de 4,5 km qui contient le point (`View.sector`,
+  `hostCover`) : sans arbres hôtes dans le secteur, aucune chance annoncée (« peu d'arbres hôtes dans
+  ce secteur ») ; sinon celle de ses forêts hôtes, et la raison le dit. Fichier des parts absent :
+  météo seule. Sans cela, le bilan annonçait « favorable » en pleine ville dès qu'on dézoomait.
+- La phrase de pluie d'un champignon commente la pluie la plus récente dont le délai n'est pas
+  dépassé, plutôt qu'une vieille pluie « dépassée » qui pèse plus dans l'indice (sinon elle contredit
+  le bloc météo) ; une pluie modeste encore fraîche ne promet rien (« pousse incertaine »).
+- Un `<details>` créé ouvert émet lui aussi « toggle » : ne retenir dans `SpotPanel.cards` que ce qui
+  s'écarte de l'état d'office, sinon l'ancienne ligne reste dépliée quand le champignon recherché
+  change. Le clavier retrouve sa place après un redessin par la clé `data-focus` de l'élément.
 - **Légende** (`legend.ts`), dans l'ordre : « Je cherche… » (seule dépliée à la première visite),
   « Météo », « Types de forêt » (repliée, rappel « 15 / 32 » dans l'en-tête), « Nature du sol »,
   « Droit de cueillir », « Fond de carte : … », puis « Comment ça marche ? » et les liens. À la
@@ -452,8 +467,10 @@ passe : la page privée est servie par le Worker.
   espèces séparées avec leur raison, photo, cuisson, quantités, numéros) est dans « À propos ».
   (2) « La carte en 3 gestes » (`tour.ts`) : libre (bouton, Échap, clic à côté ; fermetures ignorées
   une demi-seconde, contre le double appui), après un premier accord seulement (aucun accord gardé,
-  ou version antérieure à `TOUR_SINCE` ; aucune clé de stockage en plus), retirée quand on quitte la
-  carte, rejouable depuis la légende. Son texte ne fait pas partie des conditions. Un schéma dessiné,
+  ou version antérieure à `TOUR_SINCE` ; aucune clé de stockage en plus ; pas d'office si le
+  navigateur refuse de garder l'accord, sinon elle reviendrait à chaque visite), retirée quand on
+  quitte la carte, rejouable depuis la légende. Écran bas (téléphone couché) ou très étroit : le
+  schéma se retire, la liste suffit. Son texte ne fait pas partie des conditions. Un schéma dessiné,
   pas une capture (illisible à cette taille, à refaire à chaque retouche) ; sur téléphone il n'y a ni
   gauche ni droite : on décrit les gestes.
 - Textes vérifiés le 13/11/2026 : communiqué de l'Anses du 20/10/2026 (liste courte et bilan 2025),
@@ -564,9 +581,12 @@ passe : la page privée est servie par le Worker.
   carte se vide en plaine de feuillus. Un carré de 500 m se dessine dès qu'un de ses neuf points est
   sous un arbre hôte : un petit bois en ville en pose encore un.
 - Accueil : tant qu'une de ses deux fenêtres est ouverte, l'îlot ne répond pas ; sans stockage du
-  navigateur, la présentation revient à chaque visite ; sur téléphone, une fois fermée, la légende
-  reste fermée et rien à l'écran ne dit de choisir un champignon. Rien n'a été essayé sur un vrai
-  téléphone ni avec un lecteur d'écran.
+  navigateur, l'avertissement revient à chaque visite et la présentation n'est pas montrée d'office ;
+  sur téléphone, une fois fermée, la légende reste fermée et rien à l'écran ne dit de choisir un
+  champignon. Rien n'a été essayé sur un vrai téléphone ni avec un lecteur d'écran.
+- Carrés de 4,5 km : pas de facteur de sol (inconnu à cette échelle), donc un pourcentage souvent
+  au-dessus de celui des carrés de 500 m et du bilan au même endroit. Non couvert par les tests : la
+  vue zoomée où le relevé fin ne trouve aucun arbre hôte (`fineDone` sans carré fin).
 - MycoDB : site tiers tenu par des bénévoles ; un renommage d'espèce casse le lien sans erreur
   visible ; la fiche qualifie la comestibilité, ce que le site s'interdit d'écrire lui-même.
 - Mentions légales : `a-propos.html` présente l'éditeur comme un particulier non professionnel qui ne
