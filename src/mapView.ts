@@ -119,8 +119,9 @@ const meteo = new MeteoLayer(map, store);
 const legend = new LegendPanel(byId('legend'), store, meteo);
 const spot = new SpotPanel(byId('spot'), map, store, meteo);
 initLegendToggle(store);
-initGridLoader(byId('grid-loader'), map, meteo, initToolbar(map, store));
-initSearch(byId<HTMLFormElement>('search'), map);
+initGridLoader(byId('grid-loader'), byId('grid-verdict'), map, meteo, initToolbar(map, store), store);
+// Un lieu choisi dans la recherche : le bilan ouvert parlait d'un autre coin, il se ferme.
+initSearch(byId<HTMLFormElement>('search'), map, () => spot.close());
 store.subscribe((state, prev) => {
   app.classList.toggle('legend-open', state.legendOpen);
   // Sur mobile, un seul tiroir à la fois : ouvrir la légende ferme le bilan.

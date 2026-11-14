@@ -41,7 +41,9 @@ https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
   de `src/analyticsData.ts` relu)
 - `npm run test:e2e` : test de bout en bout (Playwright + vrai MapLibre, services simulés ; avertissement,
   À propos et zones compris ; îlot et vue Analytics dans `tests/e2e/views.mjs`). Première fois :
-  `npx playwright install chromium`. Captures dans `tests/e2e/shots/`.
+  `npx playwright install chromium`. Captures dans `tests/e2e/shots/`. La suite entière prend une
+  dizaine de minutes ; pour mettre un test au point, `E2E_SEULS=cache,vide npm run test:e2e` ne joue
+  que ces groupes (`avertissement`, `bureau`, `secours`, `cache`, `vide`, `telephone`, `vues`).
 - `cd worker && npm ci && npm test` : serveur de mesure (26 vérifications, Durable Object simulé sur
   `node:sqlite`, Node ≥ 22.18 qui lit le TypeScript directement) ; aperçus HTML dans `worker/test/apercus/`.
   `npm run typecheck` (types Cloudflare), `npm run dev` (wrangler, secrets dans `worker/.dev.vars`).
@@ -117,7 +119,7 @@ nouvelle dépendance sans raison.
 | `spot.ts` | Bilan d'un coin au clic, la réponse d'abord : zone protégée, terrain (forêt, sol, altitude, statut), une ligne par champignon, bouton « ? », pluie, règles repliées |
 | `search.ts` | Recherche de lieu (autocomplétion de la Géoplateforme) |
 | `toolbar.ts` | Boutons : légende, fond de carte, géolocalisation, plein écran, zoom |
-| `gridLoader.ts` | Calcul des carrés en cours : champignon qui se remplit (`#grid-loader`) et zoom en pause, pilotés par `MeteoLayer.onBusy` |
+| `gridLoader.ts` | Calcul des carrés en cours : champignon qui se remplit (`#grid-loader`) et zoom en pause, pilotés par `MeteoLayer.onBusy` ; puis, si la vue n'a rien à 50 % ou plus, le bandeau « risque de chou blanc » (`#grid-verdict`, `MeteoLayer.onVerdict`) |
 | `counts.ts` | Nombre de polygones par type dans les tuiles affichées |
 | `dom.ts`, `icons.ts` | Utilitaires DOM (`h()`, `toast()`…), icônes SVG |
 
@@ -192,7 +194,7 @@ la forêt et le sol du point, peut différer dans les deux sens). Seuils du 14/1
 et sans regarder le bâti, 85 % des carrés de France s'allumaient pour les cèpes (25 154 sur 29 483),
 dont 1 624 bâtis à 15 % ou plus : toutes les villes étaient colorées (Nancy : 80 à 84 % sur le
 centre). Avec 10 % et 15 % : 20 025 carrés (68 %). Les parts s'additionnent en pour cent entiers
-(`forestShare.ts`) : 0,07 + 0,01 + 0,01 + 0,01 fait 0,0999… et laisserait éteints 450 carrés à 10 % pile. Un carré éteint n'est pas envoyé à la carte : ni
+(`forestShare.ts`) : 0,07 + 0,01 + 0,01 + 0,01 fait 0,0999… et laisserait éteints 450 carrés à 10 % pile. Un carré éteint n'est pas envoyé à la carte, un carré défavorable (moins de 35 %) non plus (voir « Sans carré ») : ni
 teinte, ni quadrillage, ni étiquette, ni pastille. Propriétés d'un carré : celles du champignon
 montré seulement, sous des noms fixes (`l` niveau, `p` chance estimée, `c` part d'hôtes de 0 à 1 ;
 `c` = −1 si le fichier manque : la grille se dessine alors comme avant et la légende le dit). Les
@@ -370,6 +372,40 @@ Dans la même visite, pas de gain de temps : MapLibre a encore les tuiles en mé
 zoom disparaît. Vue jamais relevée : inchangée, l'écart entre les passes est celui du réseau. Le
 cache n'allège pas le dessin : une image coûte toujours autant.
 
+**Sans carré, et bandeau « risque de chou blanc »** (retours de Clément du 14/11/2026 : « j'ai un
+chargement et une fois fini, rien », « il y a des carrés vides, qu'est-ce que c'est ? » ;
+`MeteoLayer.drawGrid` / `renderFine` / `updateVerdict` / `bestOther`, `gridLoader.ts`). Le niveau
+défavorable était dessiné à 4 % d'opacité pour les carrés de 4,5 km (invisible) et en contour seul
+pour ceux de 500 m, et rien ne disait que le calcul était fini. Une seule règle désormais : **un
+carré, c'est une chance estimée d'au moins 35 %**.
+- **Défavorable : pas envoyé à la carte**, ni case, ni carré de 4,5 km, ni carré de 500 m. La légende
+  dit « Sans carré : moins de 35 %, ou pas d'arbres hôtes » (pastille vide en tirets) ; son état
+  compte « N carrés de 500 m avec arbres hôtes, dont M à 35 % ou plus ».
+- **Plafond météo** (`MeteoLayer.reach`, `weatherCeiling`) : saison × pluie d'une case borne l'indice
+  de tous ses carrés (température, arbres et sol valent 1 au plus, et l'altitude ne joue que sur la
+  température). Une case dont le plafond est sous le niveau montré n'est ni calculée carré par carré,
+  ni l'objet d'une demande d'altitude : autour de Bourges le 14/11/2026 (pluie trop ancienne), une vue
+  à l'échelle 1 km ne demande plus aucune altitude.
+- **Bandeau** (`#grid-verdict`, à la place du champignon de chargement, jamais avec lui ; à partir du
+  zoom 10, mode indice, champignon de saison, arbres hôtes connus) quand la vue n'a aucun carré à
+  50 % ou plus **à l'échelle affichée** (carrés de 500 m si leur relevé est fait, de 4,5 km sinon) :
+  « Cèpes : risque de chou blanc ici en ce moment. Meilleure chance estimée : [Trompettes (possible)] »,
+  ou, si aucun champignon de saison n'atteint 50 % : « …, comme pour les autres champignons de saison.
+  Qui ne tente rien n'a rien ! » (textes arrêtés avec Clément : « risque de », jamais « chou blanc »
+  affirmé ; le niveau en mot, pas de pourcentage). Le nom proposé est un bouton qui choisit ce
+  champignon. Icône : champignon barré, pas une croix (la croix est le bouton de fermeture, au bout) ;
+  fermé, il ne revient que pour un autre champignon. `role="status"` sur le texte : annoncé quand il
+  change, pas à chaque déplacement.
+- **La proposition tient parole** : elle est calculée comme la carte dessinerait l'autre champignon
+  (mêmes carrés, mêmes règles : `fineToDraw`, `scoreFineCell`, `squareScore`), sur les données déjà
+  chargées. Aucun fichier en plus : météo, parts de forêt et relevés sont communs aux cinq espèces.
+  Mesuré le 14/11/2026 sur de vraies données : 0,1 à 0,9 ms à Bourges et dans les Alpes, aux échelles
+  2 km et 1 km ; elle n'est calculée que si le champignon choisi n'a rien à 50 %. Pendant le relevé
+  des carrés de 500 m, le bandeau ne s'affiche que si le plafond météo de toutes les cases de la vue
+  est sous 50 % (certitude) ; sinon il attend le relevé.
+- **Recherche de lieu** : choisir un lieu ferme le bilan ouvert (il parlait d'un autre coin, et les
+  deux épingles se ressemblent).
+
 Ce qui reste : à partir du zoom 10, une image coûte encore 125 ms, dont 68 pour les forêts ; choisir
 un champignon y change aussi le filtre des forêts, et MapLibre refait alors toutes les tuiles de la
 BD Forêt (≈ 1 s à lui seul au zoom 11 sans carte graphique). Au zoom 9,2 les zones protégées et les
@@ -474,7 +510,8 @@ deux carrés voisins boisés sur huit (`fineCellsToDraw` : un parc isolé n'en p
 cheval sur le bord de l'écran, relevé en partie, est quand même compté sur neuf points, et seuls les
 voisins connus comptent : au bord, un carré apparaît quand il est assez visible, il ne disparaît pas
 après coup. Opacité
-selon la part d'arbres hôtes ; défavorable = contour seul. Les forêts s'estompent (45 %) à ces zooms.
+selon la part d'arbres hôtes ; un carré défavorable n'est pas dessiné (avant le 14/11/2026 : en
+contour seul, des « carrés vides » illisibles). Les forêts s'estompent (45 %) à ces zooms.
 ⚠ Zoom MapLibre = zoom « 512 px » : au zoom 13, ≈ 5 m/pixel (pas 10).
 
 ## Deux vues : Carte et Analytics
@@ -836,8 +873,8 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   retours de terrain.
 - Chance estimée en % (`chanceOf`, choix du 12/11/2026) : l'indice ramené sur une échelle calée sur
   les niveaux (0,12 → 35 %, 0,28 → 50 %, 0,5 → 70 %, 1 → 95 %, linéaire entre deux). Seuil
-  `CHANCE_THRESHOLD` = 50 % : en dessous, rien n'est mis en avant (pas d'étiquette, case presque
-  effacée). Vue d'ensemble (zoom < 10) : pastilles `meteo-points` sur les secteurs à 70 % et plus
+  `CHANCE_THRESHOLD` = 50 % : en dessous, rien n'est mis en avant (pas d'étiquette, teinte pâle) ;
+  sous 35 % (`SHOWN_MIN_SCORE`), pas de carré du tout (voir « Sans carré »). Vue d'ensemble (zoom < 10) : pastilles `meteo-points` sur les secteurs à 70 % et plus
   (`HOTSPOT_MIN_CHANCE`), 12 au plus, espacées (voir « Pastilles ») ; à partir du zoom 10,
   pourcentage dans chaque carré ; bilan : « ≈ 62 % · possible ».
   Toujours écrire « estimée » ou « ≈ » : ce n'est pas une probabilité mesurée. Sur la carte, le
@@ -922,6 +959,14 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   hôtes dans ce secteur » ou « secteur urbanisé ». Entre les zooms 9,35 et 10 la règle affiche déjà
   5 km et les cases restent de 18 km. Un secteur entre 50 et 69 % n'a ni pastille ni étiquette avant
   le zoom 10 (la légende donne la meilleure chance de la vue).
+- Sans carré : un secteur sans carré peut être sans arbres hôtes, en ville, ou à moins de 35 % ; la
+  carte ne distingue pas ces cas (le bilan d'un clic, lui, donne la raison). Les carrés de 4,5 km
+  entre 35 et 50 % restent très pâles là où la forêt couvre peu (opacité selon la part d'arbres
+  hôtes) : autour de Bourges ils ne se voient presque pas. La proposition du bandeau vaut pour la vue
+  à l'écran ; aux carrés de 500 m elle prend, pour les carrés jamais dessinés, l'altitude du carré de
+  4,5 km (l'altitude exacte, demandée après le clic, peut faire passer un carré juste sous 50 %). Sur
+  téléphone le second texte tient sur quatre lignes. Bandeau et champignon de chargement : leur
+  alternance n'a pas de test.
 - Relevés gardés : un carré relevé reste tel quel 30 jours au plus dans le navigateur, même si la
   BD Forêt ou les sols du site changent entre-temps (changer `SURVEY_VERSION` pour l'éviter). Le
   cache ne sert qu'aux vues déjà vues en entier : une vue neuve attend toujours ses tuiles, et entre

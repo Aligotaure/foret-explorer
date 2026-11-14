@@ -21,10 +21,21 @@
  * Le champignon est décoratif (`aria-hidden`) : l'annoncer à chaque déplacement serait un bavardage.
  * Les boutons de zoom passent en `aria-disabled` (ils gardent le clavier) et sont décrits par
  * « Zoom en pause pendant le calcul des carrés ».
+ *
+ * Le résultat, quand il n'y a rien à montrer (`initGridVerdict`, demande de Clément du 14/11/2026) :
+ * après le calcul, une vue sans aucun carré à 50 % ou plus ne montrait… rien, et personne ne savait
+ * si la carte avait fini. Au même emplacement, un bandeau le dit (« risque de chou blanc ») et
+ * propose le champignon de saison qui a la meilleure chance estimée dans la vue : un bouton, qui le
+ * choisit. Un seul bandeau, pas un texte par carré. Il se ferme (une vraie croix, au bout : c'est
+ * pourquoi l'icône de tête est un champignon barré et pas une croix), et ne revient alors que pour
+ * un autre champignon. Il s'efface pendant que le champignon de chargement est à l'écran.
  */
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { h } from './dom';
 import { icon } from './icons';
+import type { GridVerdict } from './meteoLayer';
+import { LEVELS } from './mushrooms';
+import type { Store } from './state';
 
 /** Un calcul plus court que cela ne montre rien : pas de champignon qui clignote. */
 const SHOW_AFTER_MS = 250;
@@ -34,12 +45,72 @@ const FULL_MS = 220;
 /** Touches de zoom de MapLibre (codes du clavier : =, + du pavé numérique, −, selon le navigateur). */
 const ZOOM_KEY_CODES = new Set([61, 107, 171, 187, 189, 109, 173]);
 
+/** Texte du bandeau, sans le nom du champignon proposé (qui est un bouton). */
+export function verdictText(verdict: GridVerdict): string {
+  const head = `${verdict.mushroom.label} : risque de chou blanc ici en ce moment`;
+  return verdict.better ? `${head}. Meilleure chance estimée :` : `${head}, comme pour les autres champignons de saison. Qui ne tente rien n’a rien !`;
+}
+
+/**
+ * Bandeau « rien à mettre en avant dans la vue ». Rend la fonction à appeler quand le champignon de
+ * chargement s'affiche ou s'efface (ils partagent l'emplacement).
+ */
+function initGridVerdict(el: HTMLElement, grid: { onVerdict(listener: (verdict: GridVerdict | null) => void): void }, store: Store): (loading: boolean) => void {
+  // (`role="status"` : le résultat est annoncé une fois, quand son texte change, pas à chaque déplacement.)
+  const text = h('p', { class: 'grid-verdict__text', role: 'status' });
+  const close = h('button', { class: 'grid-verdict__close', type: 'button', 'aria-label': 'Fermer ce message' }, icon('close'));
+  const box = h('div', { class: 'grid-verdict__box' }, h('span', { class: 'grid-verdict__icon', 'aria-hidden': 'true' }, icon('mushroomOff')), text, close);
+  el.replaceChildren(box);
+
+  let verdict: GridVerdict | null = null;
+  let loading = false;
+  /** Champignon pour lequel le visiteur a fermé le bandeau : il ne revient que pour un autre. */
+  let dismissed: string | null = null;
+  let written = '';
+  const render = (): void => {
+    const show = verdict !== null && verdict.mushroom.id !== dismissed && !loading;
+    el.hidden = !show;
+    if (!verdict || !show) return;
+    const better = verdict.better;
+    const key = `${verdict.mushroom.id}|${better?.mushroom.id ?? ''}|${better?.level ?? ''}`;
+    if (key === written) return;
+    written = key;
+    const message = verdictText(verdict);
+    const colon = message.indexOf(' :');
+    const parts: (string | Node)[] = [h('strong', {}, message.slice(0, colon)), message.slice(colon)];
+    if (better) {
+      const pick = h('button', { class: 'chip grid-verdict__pick', type: 'button' }, `${better.mushroom.label} (${LEVELS[better.level]?.label.toLowerCase() ?? ''})`);
+      pick.addEventListener('click', () => store.update({ mushroom: better.mushroom.id, weatherMode: 'indice' }));
+      parts.push(' ', pick);
+    }
+    text.replaceChildren(...parts);
+  };
+  close.addEventListener('click', () => {
+    dismissed = verdict?.mushroom.id ?? null;
+    render();
+  });
+  store.subscribe((state, prev) => {
+    if (state.mushroom !== prev.mushroom) dismissed = null;
+  });
+  grid.onVerdict((v) => {
+    verdict = v;
+    render();
+  });
+  return (on) => {
+    loading = on;
+    render();
+  };
+}
+
 export function initGridLoader(
   el: HTMLElement,
+  verdictEl: HTMLElement,
   map: MapLibreMap,
-  grid: { onBusy(listener: (busy: boolean) => void): void },
+  grid: { onBusy(listener: (busy: boolean) => void): void; onVerdict(listener: (verdict: GridVerdict | null) => void): void },
   zoomButtons: readonly HTMLButtonElement[],
+  store: Store,
 ): void {
+  const loaderShown = initGridVerdict(verdictEl, grid, store);
   // Deux champignons superposés : le contour, et le même, plein, dans un cache dont la hauteur monte.
   el.replaceChildren(
     h('span', { class: 'grid-loader__icon' }, icon('mushroom'), h('span', { class: 'grid-loader__fill' }, icon('mushroom'))),
@@ -98,7 +169,12 @@ export function initGridLoader(
     if (busy) {
       el.classList.remove('is-full');
       // Affiché après un court délai seulement (l'animation de remplissage part alors de zéro).
-      if (el.hidden) showing = window.setTimeout(() => (el.hidden = false), SHOW_AFTER_MS);
+      if (el.hidden) {
+        showing = window.setTimeout(() => {
+          el.hidden = false;
+          loaderShown(true);
+        }, SHOW_AFTER_MS);
+      }
       return;
     }
     if (el.hidden) return;
@@ -106,6 +182,7 @@ export function initGridLoader(
     hiding = window.setTimeout(() => {
       el.hidden = true;
       el.classList.remove('is-full');
+      loaderShown(false);
     }, FULL_MS);
   });
 }

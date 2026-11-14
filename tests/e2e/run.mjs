@@ -793,7 +793,7 @@ async function desktopTests(browser, base) {
     return { same: before === during && before === read(), size: before.length };
   });
   check('changer de champignon ne change aucune expression de la grille (ni teinte, ni étiquette, ni filtre)', stable.same && stable.size > 200, `${stable.size} caractères`);
-  check('légende : « seuls les secteurs où poussent ses arbres hôtes sont colorés », estimation rappelée', /arbres hôtes sont colorés/.test(hosts.caveat) && /estimées, pas mesurées/.test(hosts.caveat), hosts.caveat.slice(0, 80));
+  check('légende : « un carré : des arbres hôtes, et une chance estimée d’au moins 35 % », estimation rappelée', /Un carré : des arbres hôtes, et une chance estimée d’au moins 35 %\. Ailleurs, pas de carré\./.test(hosts.caveat) && /estimées, pas mesurées/.test(hosts.caveat), hosts.caveat.slice(0, 80));
   check('parts de forêt : un seul chargement du fichier', log.foret.length === 1, `${log.foret.length} requête(s)`);
   // Réglages de dessin qui allègent chaque image (mesurés sans carte graphique) : invisibles dans les
   // captures, une régression passerait inaperçue.
@@ -1338,7 +1338,10 @@ async function desktopTests(browser, base) {
   // Un point par carré demandé (séparés par « | », écrit %7C dans l'adresse).
   const asked = batches.reduce((n, q) => n + (/[?&]lon=([^&]*)/.exec(q)?.[1].split('%7C').length ?? 0), 0);
   check('grille fine : carrés de 500 m dessinés, tous avec au moins 3 points sur 9 sous un arbre hôte', fine.count > 20 && fine.visible === 'visible' && fine.coverage, `${fine.count} carrés, ${fine.levels.join(',')}`);
-  check('grille fine : une altitude demandée par carré à dessiner, pas davantage', asked > 20 && asked <= fine.count, `${asked} altitude(s) demandée(s) pour ${fine.count} carré(s) dessiné(s)`);
+  // (Un carré à arbres hôtes n'est dessiné que s'il atteint 35 % : son altitude, elle, est demandée
+  // dès que la saison et la pluie de sa case le permettent.)
+  const hostSquares = await page.evaluate(() => window.meteo.status.fine.hosts ?? 0);
+  check('grille fine : une altitude demandée par carré à arbres hôtes du champignon montré, pas davantage', asked > 20 && asked <= hostSquares, `${asked} altitude(s) demandée(s) pour ${hostSquares} carré(s) à arbres hôtes`);
   check('grille fine : altitudes IGN groupées et variées', batches.length >= 1 && batches.every((q) => q.includes('%7C')) && fine.altitudes > 5, `${batches.length} requête(s), ${fine.altitudes} altitudes`);
   check('grille fine : altitudes gardées dans le navigateur', fine.saved > 20, `${fine.saved} altitudes`);
   check(
@@ -1787,6 +1790,155 @@ async function surveyCacheTests(browser, base) {
   await broken.close();
 }
 
+/**
+ * Vue sans rien à mettre en avant : les carrés défavorables ne sont plus dessinés, un bandeau le dit
+ * (« risque de chou blanc ») et propose le champignon de saison le mieux placé ; un clic le choisit.
+ */
+async function emptyViewTests(browser, base) {
+  const verdict = (page) =>
+    page.evaluate(() => {
+      const el = document.getElementById('grid-verdict');
+      const pick = el.querySelector('.grid-verdict__pick');
+      const features = (id) => window.map.querySourceFeatures(id);
+      return {
+        shown: !el.hidden,
+        text: el.querySelector('.grid-verdict__text')?.textContent ?? '',
+        pick: pick?.textContent ?? null,
+        icon: Boolean(el.querySelector('.grid-verdict__icon[aria-hidden="true"] svg')),
+        close: el.querySelector('.grid-verdict__close')?.getAttribute('aria-label') ?? '',
+        role: el.querySelector('.grid-verdict__text')?.getAttribute('role') ?? '',
+        coarse: features('meteo').map((f) => f.properties.l),
+        coarseBest: Math.max(0, ...features('meteo').map((f) => f.properties.p)),
+        fine: features('meteo-fin').map((f) => f.properties.l),
+        fineBest: Math.max(0, ...features('meteo-fin').map((f) => f.properties.p)),
+        scale: [...document.querySelectorAll('#legend .scale li')].map((li) => `${li.querySelector('.swatch--none') ? '[vide] ' : ''}${li.textContent}`),
+        hint: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '',
+        mushroom: window.store.state.mushroom,
+      };
+    });
+  const settled = async (page) => {
+    await page.waitForFunction(() => window.meteo.status.state === 'ok' && window.meteo.status.fine.state !== 'loading', null, { timeout: 20000 }).catch(() => {});
+    await page.waitForFunction(() => document.getElementById('grid-loader').hidden, null, { timeout: 12000 }).catch(() => {});
+    await page.waitForTimeout(600);
+  };
+
+  // Temps sec partout (octobre) : aucun champignon n'a de chance, rien n'est dessiné, rien n'est demandé.
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await preAccept(context);
+  const page = await context.newPage();
+  const log = { tms: [], wmts: [], geocode: [], other: [] };
+  await installMocks(page, log, { sec: true });
+  await page.goto(`${base}#carte=11.5/45.92/6.19`);
+  await waitForMap(page);
+  await page.evaluate(() => window.store.update({ mushroom: 'cepe', weatherMode: 'indice' }));
+  await settled(page);
+  const dry = await verdict(page);
+  check(
+    'vue sans rien de favorable : aucun carré de 4,5 km dessiné, et un bandeau le dit (champignon barré, texte annoncé, croix pour fermer)',
+    dry.shown &&
+      dry.coarse.length === 0 &&
+      dry.text === 'Cèpes : risque de chou blanc ici en ce moment, comme pour les autres champignons de saison. Qui ne tente rien n’a rien !' &&
+      dry.pick === null &&
+      dry.icon &&
+      dry.close === 'Fermer ce message' &&
+      dry.role === 'status',
+    `${dry.coarse.length} carré(s) ; « ${dry.text} »`,
+  );
+  check(
+    'légende : le niveau défavorable devient « Sans carré », sans couleur ; les trois autres gardent la leur',
+    dry.scale.length === 4 && dry.scale[0] === '[vide] Sans carré : moins de 35 %, ou pas d’arbres hôtes' && /^Peu probable \(35 à 50 %\)$/.test(dry.scale[1]) && /Aucun secteur à 50 % ou plus dans la vue/.test(dry.hint),
+    dry.scale.join(' | '),
+  );
+  // Fermé, le bandeau ne revient pas en se déplaçant ; il revient pour un autre champignon.
+  await page.locator('.grid-verdict__close').click();
+  const closed = await verdict(page);
+  await page.evaluate(() => window.map.jumpTo({ center: [6.3, 45.95] }));
+  await settled(page);
+  const moved = await verdict(page);
+  await page.evaluate(() => window.store.update({ mushroom: 'girolle' }));
+  await settled(page);
+  const other = await verdict(page);
+  check(
+    'bandeau fermé : il ne revient pas en se déplaçant, seulement pour un autre champignon',
+    !closed.shown && !moved.shown && other.shown && /^Girolles : risque de chou blanc ici en ce moment, comme pour/.test(other.text),
+    `fermé : ${closed.shown}, déplacé : ${moved.shown}, girolles : ${other.shown} « ${other.text.slice(0, 40)}… »`,
+  );
+  // Aux carrés de 500 m : rien de dessiné non plus, et aucune altitude demandée (la saison et la pluie
+  // plafonnent l'indice sous le niveau montré, l'altitude n'y changerait rien).
+  await page.evaluate(() => window.map.jumpTo({ center: [6.19, 45.92], zoom: 13.6 }));
+  await settled(page);
+  const dryFine = await verdict(page);
+  check(
+    'vue sans rien de favorable aux carrés de 500 m : aucun carré dessiné, aucune altitude demandée, la légende compte les carrés à arbres hôtes « aucun à 35 % ou plus »',
+    dryFine.shown && dryFine.fine.length === 0 && log.altitude.length === 0 && /\d+ carrés de 500 m avec arbres hôtes, aucun à 35 % ou plus\./.test(dryFine.hint),
+    `${dryFine.fine.length} carré(s), ${log.altitude.length} altitude(s) ; ${dryFine.hint.slice(-70)}`,
+  );
+  // Sous le zoom des carrés de 4,5 km : pas de bandeau (l'emplacement est celui de « Zoomez… »).
+  await page.evaluate(() => window.map.jumpTo({ zoom: 9 }));
+  await settled(page);
+  const wide = await verdict(page);
+  check('vue d’ensemble : pas de bandeau sous le zoom des carrés de 4,5 km', !wide.shown && !(await page.evaluate(() => document.getElementById('zoom-hint').hidden)), `bandeau : ${wide.shown}`);
+  await context.close();
+
+  // Décembre, pluies du jeu d'essai : les girolles (poids de saison 0,2) n'atteignent 50 % nulle part,
+  // d'autres champignons de saison si. Le bandeau propose le mieux placé ; un clic le choisit, et la
+  // carte tient parole : au moins un carré à 50 % ou plus, bandeau retiré.
+  const winter = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await preAccept(winter);
+  const page2 = await winter.newPage();
+  await installMocks(page2, { tms: [], wmts: [], geocode: [], other: [] }, { mois: 12 });
+  await page2.goto(`${base}#carte=11.5/45.92/6.19`);
+  await waitForMap(page2);
+  await page2.evaluate(() => window.store.update({ mushroom: 'girolle', weatherMode: 'indice' }));
+  await settled(page2);
+  const low = await verdict(page2);
+  check(
+    'champignon sans rien à 50 % : seuls les carrés à 35 % ou plus sont dessinés, et le bandeau propose le champignon de saison le mieux placé',
+    low.shown && low.coarse.length > 0 && low.coarse.every((l) => l === 1) && low.text === 'Girolles : risque de chou blanc ici en ce moment. Meilleure chance estimée : ' + low.pick && /^(Cèpes|Trompettes|Chanterelles en tube) \((possible|favorable)\)$/.test(low.pick ?? ''),
+    `niveaux dessinés : ${[...new Set(low.coarse)].join()} ; « ${low.text} »`,
+  );
+  await page2.locator('.grid-verdict__pick').click();
+  await settled(page2);
+  const picked = await verdict(page2);
+  check(
+    'clic sur la proposition : le champignon est choisi, la carte montre au moins un carré à 50 % ou plus, le bandeau se retire',
+    picked.mushroom !== 'girolle' && picked.mushroom !== null && !picked.shown && picked.coarseBest >= 50 && /Meilleure chance estimée dans la vue/.test(picked.hint),
+    `${picked.mushroom}, meilleur carré ${picked.coarseBest} %, bandeau : ${picked.shown}`,
+  );
+  // Même promesse aux carrés de 500 m, où la proposition est calculée sur les relevés de la vue.
+  await page2.evaluate(() => {
+    window.store.update({ mushroom: 'girolle' });
+    window.map.jumpTo({ zoom: 13.6 });
+  });
+  await settled(page2);
+  const lowFine = await verdict(page2);
+  const fineAltitudes = await page2.evaluate(() => window.meteo.status.fine);
+  if (lowFine.pick) await page2.locator('.grid-verdict__pick').click();
+  await settled(page2);
+  await page2.waitForTimeout(1500);
+  const pickedFine = await verdict(page2);
+  check(
+    'carrés de 500 m : la proposition est tenue une fois cliquée (au moins un carré de 500 m à 50 % ou plus pour le champignon proposé)',
+    lowFine.shown && lowFine.pick !== null && lowFine.fineBest < 50 && pickedFine.mushroom !== 'girolle' && !pickedFine.shown && pickedFine.fineBest >= 50,
+    `girolles : meilleur carré ${lowFine.fineBest} % (${JSON.stringify(fineAltitudes)}), proposé « ${lowFine.pick} » → ${pickedFine.mushroom}, meilleur carré ${pickedFine.fineBest} %`,
+  );
+
+  // Recherche de lieu : le bilan ouvert parlait d'un autre coin, il se ferme.
+  await page2.evaluate(() => window.map.jumpTo({ zoom: 11.5 }));
+  await settled(page2);
+  await page2.mouse.click(700, 450);
+  await page2.waitForSelector('#spot:not([hidden]) .verdict, #spot:not([hidden]) .spot__facts', { timeout: 10000 }).catch(() => {});
+  const opened = await page2.evaluate(() => !document.getElementById('spot').hidden);
+  await page2.locator('#search-input').fill('Parmel');
+  await page2.waitForSelector('.search__option', { timeout: 5000 });
+  await page2.keyboard.press('ArrowDown');
+  await page2.keyboard.press('Enter');
+  await page2.waitForTimeout(400);
+  const afterSearch = await page2.evaluate(() => !document.getElementById('spot').hidden);
+  check('recherche de lieu : le bilan ouvert sur un autre coin se ferme', opened && !afterSearch, `ouvert avant : ${opened}, après : ${afterSearch}`);
+  await winter.close();
+}
+
 /** Fichiers météo communs injoignables : la carte interroge Open-Meteo elle-même, avec mesure. */
 async function fallbackTests(browser, base) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -1988,14 +2140,16 @@ async function fallbackTests(browser, base) {
     await idle(page8);
     const drawn = await page8.evaluate(() => new Set(window.map.querySourceFeatures('meteo-fin').map((f) => f.geometry.coordinates[0][0].map((v) => v.toFixed(4)).join())).size);
     const asked = log8.altitude.reduce((n, q) => n + (/[?&]lon=([^&]*)/.exec(q)?.[1].split('%7C').length ?? 0), 0);
-    return { drawn, asked };
+    // (Carrés qui ont assez d'arbres hôtes du champignon ; seuls ceux à 35 % ou plus sont dessinés.)
+    const hosts = await page8.evaluate(() => window.meteo.status.fine.hosts ?? 0);
+    return { drawn, asked, hosts };
   };
   const tube = await fineOf('chanterelle');
   const cepe = await fineOf('cepe');
   check(
     'carrés de 500 m : altitudes demandées pour les seuls carrés du champignon montré (les chênaies attendent qu’on cherche des cèpes)',
-    tube.drawn > 0 && tube.asked > 0 && tube.asked <= tube.drawn + 8 && cepe.drawn > tube.drawn && cepe.asked > tube.asked,
-    `chanterelles : ${tube.asked} altitude(s) pour ${tube.drawn} carré(s) ; puis cèpes : ${cepe.asked} en tout pour ${cepe.drawn} carré(s)`,
+    tube.drawn > 0 && tube.asked > 0 && tube.asked <= tube.hosts && cepe.hosts > tube.hosts && cepe.asked > tube.asked && cepe.asked <= cepe.hosts,
+    `chanterelles : ${tube.asked} altitude(s) pour ${tube.hosts} carré(s) à arbres hôtes ; puis cèpes : ${cepe.asked} en tout pour ${cepe.hosts}`,
   );
   await page8.close();
 
@@ -2165,13 +2319,20 @@ const browser = await chromium.launch({
   headless: !process.env.HEADED,
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 });
+// `E2E_SEULS=cache,vide npm run test:e2e` ne joue que ces groupes (mise au point d'un test : la suite
+// entière prend une dizaine de minutes). Sans la variable, tout est joué.
+const only = (process.env.E2E_SEULS ?? '').split(',').filter(Boolean);
+const group = async (name, run) => {
+  if (!only.length || only.includes(name)) await run();
+};
 try {
-  await disclaimerTests(browser, server.url);
-  await desktopTests(browser, server.url);
-  await fallbackTests(browser, server.url);
-  await surveyCacheTests(browser, server.url);
-  await mobileTests(browser, server.url);
-  await viewTests({ browser, base: server.url, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour });
+  await group('avertissement', () => disclaimerTests(browser, server.url));
+  await group('bureau', () => desktopTests(browser, server.url));
+  await group('secours', () => fallbackTests(browser, server.url));
+  await group('cache', () => surveyCacheTests(browser, server.url));
+  await group('vide', () => emptyViewTests(browser, server.url));
+  await group('telephone', () => mobileTests(browser, server.url));
+  await group('vues', () => viewTests({ browser, base: server.url, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour }));
 } finally {
   await browser.close();
   await server.close();

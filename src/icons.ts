@@ -21,6 +21,8 @@ export const ICONS = {
   tree: svg('<path d="M12 3 6 12h3.5L5 18.5h14L14.5 12H18z"/><path d="M12 18.5V22"/>'),
   target: svg('<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>'),
   mushroom: svg('<path d="M3.5 11.5a8.5 7.5 0 0 1 17 0z"/><path d="M9.5 11.5v6.5a2.5 2.5 0 0 0 5 0v-6.5"/>'),
+  // Champignon barré : rien à mettre en avant dans la vue (bandeau de gridLoader.ts).
+  mushroomOff: svg('<path d="M3.5 11.5a8.5 7.5 0 0 1 17 0z"/><path d="M9.5 11.5v6.5a2.5 2.5 0 0 0 5 0v-6.5"/><path d="M4 3.5l16 17.5"/>'),
   rain: svg('<path d="M7 14.5a4 4 0 0 1-.6-7.95A5.5 5.5 0 0 1 17 7.5a3.5 3.5 0 0 1 0 7z"/><path d="m8.5 18-1 2.5M12.5 18l-1 2.5M16.5 18l-1 2.5"/>'),
   strata: svg('<path d="M3 7.5c3-2 6 2 9 0s6 2 9 0M3 12.5c3-2 6 2 9 0s6 2 9 0M3 17.5c3-2 6 2 9 0s6 2 9 0"/>'),
   info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.01"/>'),

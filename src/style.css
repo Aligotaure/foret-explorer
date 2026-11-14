@@ -501,6 +501,13 @@ li.is-off .swatch {
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
 }
 
+/* « Sans carré » : rien n'est dessiné sur la carte pour ce niveau. */
+.swatch--none {
+  background: transparent;
+  box-shadow: none;
+  border: 1px dashed #8f8fb0;
+}
+
 /* Cases à cocher personnalisées */
 .cb {
   flex: none;
@@ -880,6 +887,85 @@ li.is-off .swatch {
   background: var(--france-soft);
 }
 
+/* ── Rien à mettre en avant dans la vue : bandeau « risque de chou blanc » (gridLoader.ts) ──
+   Même emplacement que le champignon de chargement, jamais en même temps. L'élément couvre la
+   place libre entre les panneaux (il ne prend aucun geste à la carte) ; la boîte s'y centre. */
+.grid-verdict {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
+  right: calc(var(--btn) + 2 * var(--gap));
+  left: calc(var(--btn) + 2 * var(--gap));
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.grid-verdict[hidden] {
+  display: none;
+}
+
+.grid-verdict__box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 440px;
+  padding: 7px 6px 7px 10px;
+  border-radius: var(--radius);
+  background: var(--navy-800);
+  box-shadow: var(--shadow);
+  color: var(--lavender-soft);
+  font-size: 13px;
+  line-height: 1.45;
+  pointer-events: auto;
+  animation: grid-loader-in 0.15s both;
+}
+
+.grid-verdict__icon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--lavender);
+}
+
+.grid-verdict__text {
+  margin: 2px 0;
+}
+
+.grid-verdict__text strong {
+  color: #fff;
+}
+
+.grid-verdict__pick {
+  margin: 1px 0;
+  padding: 5px 12px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.grid-verdict__pick:hover {
+  background: var(--accent);
+  filter: brightness(1.12);
+}
+
+.grid-verdict__close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--lavender);
+  cursor: pointer;
+}
+
+.grid-verdict__close:hover {
+  background: var(--navy-700);
+}
+
 /* ── Grand écran : le bandeau de zoom évite la légende ouverte ───────────── */
 @media (min-width: 641px) {
   #app.legend-open .zoom-hint {
@@ -888,6 +974,15 @@ li.is-off .swatch {
 
   #app.legend-open .grid-loader {
     left: max(50%, calc(var(--panel-width) + 2 * var(--gap) + 110px));
+  }
+
+  /* Le bandeau se centre dans la place libre : à droite de la légende, à gauche du bilan. */
+  #app.legend-open .grid-verdict {
+    left: calc(var(--panel-width) + 2 * var(--gap));
+  }
+
+  #app:has(#spot:not([hidden])) .grid-verdict {
+    right: calc(var(--panel-width) + var(--btn) + 3 * var(--gap));
   }
 }
 
@@ -938,6 +1033,12 @@ li.is-off .swatch {
   /* Sous la recherche, et arrêté avant la colonne de boutons (qui cachait « Zoomer ici »). */
   .grid-loader {
     top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
+  }
+
+  .grid-verdict {
+    top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
+    left: var(--gap);
+    justify-content: flex-start;
   }
 
   .zoom-hint {
@@ -1226,7 +1327,8 @@ li.is-off .swatch {
   }
 
   .zoom-hint,
-  .grid-loader {
+  .grid-loader,
+  .grid-verdict {
     top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
   }
 
@@ -2468,7 +2570,8 @@ html[data-view='analytics'] .island__link[data-view='analytics'] {
 
 /* Animations réduites : le champignon s'affiche à demi plein, sans monter. */
 @media (prefers-reduced-motion: reduce) {
-  .grid-loader {
+  .grid-loader,
+  .grid-verdict__box {
     animation: none;
   }
 

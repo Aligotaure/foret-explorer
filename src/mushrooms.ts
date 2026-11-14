@@ -242,10 +242,17 @@ export const LEVELS: readonly { label: string; color: string; range: string }[] 
   { label: 'Favorable', color: '#a33b0b', range: '70 % et plus' },
 ];
 
+/**
+ * Indice à partir duquel un secteur est montré sur la carte (niveau « peu probable », 35 %), et à
+ * partir duquel il est mis en avant (« possible », 50 % : étiquette, CHANCE_THRESHOLD).
+ */
+export const SHOWN_MIN_SCORE = 0.12;
+export const NOTED_MIN_SCORE = 0.28;
+
 export function levelOf(score: number): Level {
   if (score >= 0.5) return 3;
-  if (score >= 0.28) return 2;
-  if (score >= 0.12) return 1;
+  if (score >= NOTED_MIN_SCORE) return 2;
+  if (score >= SHOWN_MIN_SCORE) return 1;
   return 0;
 }
 

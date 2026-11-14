@@ -314,7 +314,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
   const caveat = h(
     'p',
     { class: 'legend-hint legend-hint--caveat' },
-    'Seuls les secteurs où poussent ses arbres hôtes sont colorés. Chances estimées, pas mesurées : ni promesse d’en trouver, ni droit de cueillir, ni avis sur ce qui se mange.',
+    'Un carré : des arbres hôtes, et une chance estimée d’au moins 35 %. Ailleurs, pas de carré. Chances estimées, pas mesurées : ni promesse d’en trouver, ni droit de cueillir, ni avis sur ce qui se mange.',
   );
   const content = h(
     'div',
@@ -340,7 +340,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
       h(
         'p',
         {},
-        `En dessous de ${CHANCE_THRESHOLD} %, peu d’espoir sans connaître un coin précis : la carte n’étiquette que les carrés au-dessus. En vue d’ensemble, une pastille marque les secteurs à ${HOTSPOT_MIN_CHANCE} % et plus : son chiffre est celui du meilleur carré de 4,5 km de la case. Pour un point précis, touchez la carte. Météo : Open-Meteo (modèles, pas de pluviomètres).`,
+        `En dessous de 35 %, la carte ne dessine pas de carré. En dessous de ${CHANCE_THRESHOLD} %, peu d’espoir sans connaître un coin précis : elle n’étiquette que les carrés au-dessus, et si la vue n’en a aucun, un bandeau le dit et propose le champignon de saison qui y a la meilleure chance estimée. En vue d’ensemble, une pastille marque les secteurs à ${HOTSPOT_MIN_CHANCE} % et plus : son chiffre est celui du meilleur carré de 4,5 km de la case. Pour un point précis, touchez la carte. Météo : Open-Meteo (modèles, pas de pluviomètres).`,
       ),
       h(
         'p',
@@ -372,12 +372,13 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
     // Champignon montré hors saison : rien n'est coloré, l'échelle et sa mise en garde n'ont pas lieu d'être.
     const offSeason = state.weatherMode === 'indice' && Boolean(m) && noEstimate(m as Mushroom, currentMonth());
     indexLabel.textContent = `Chance estimée : ${m?.label.toLowerCase() ?? ''}${m && noEstimate(m, currentMonth()) ? ' (hors saison)' : ''}`;
-    const items =
+    // Indice : le niveau « défavorable » n'a pas de couleur sur la carte, il n'y est pas dessiné.
+    const items: (readonly [string | null, string])[] =
       state.weatherMode === 'indice'
-        ? LEVELS.map((l) => [l.color, `${l.label} (${l.range})`] as const)
+        ? LEVELS.map((l, k) => (k === 0 ? ([null, `Sans carré : ${l.range}, ou pas d’arbres hôtes`] as const) : ([l.color, `${l.label} (${l.range})`] as const)))
         : RAIN_STEPS.map((s) => [s.color, s.label] as const);
     scale.replaceChildren(
-      ...items.map(([color, label]) => h('li', {}, h('span', { class: 'swatch', style: `--swatch: ${color}` }), label)),
+      ...items.map(([color, label]) => h('li', {}, color ? h('span', { class: 'swatch', style: `--swatch: ${color}` }) : h('span', { class: 'swatch swatch--none' }), label)),
     );
     scale.hidden = state.weatherMode === 'off' || offSeason;
     caveat.hidden = state.weatherMode !== 'indice' || offSeason;

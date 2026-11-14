@@ -282,14 +282,15 @@ function meteoIndex(late = 0) {
   const day = addDays(parisToday(), -late);
   return { v: 1, pasLat: STEP_LAT, pasLon: STEP_LON, bloc: BLOCK, jours: 30, dernierJour: addDays(day, -1), maj: `${day}T01:40:00.000Z`, cases: blocs.length * 64, aJour: blocs.length * 64, blocs, source: 'essai' };
 }
-function meteoBlock(id, late = 0) {
+function meteoBlock(id, late = 0, sec = false) {
   const [bi, bj] = id.split('_').map(Number);
   // Comme les écrit scripts/meteo/mettre-a-jour.mjs : 30 jours complets, puis le jour du passage,
   // provisoire (`c` : dernier jour connu, `f` : dernier jour définitif, `m` : jour de la demande).
   const day = addDays(parisToday(), -late);
   const dates = Array.from({ length: 31 }, (_, k) => addDays(day, k - 30));
   // Passage de la veille : sa journée, estimée, était pluvieuse (une barre à part dans le bilan).
-  const rain = late ? [...DAILY.rain.slice(0, 30), 6.5] : DAILY.rain;
+  // `sec` : pas une goutte en 30 jours (rien de favorable nulle part).
+  const rain = sec ? DAILY.rain.map(() => 0) : late ? [...DAILY.rain.slice(0, 30), 6.5] : DAILY.rain;
   const cells = {};
   for (let i = bi * BLOCK; i < (bi + 1) * BLOCK; i++) {
     for (let j = bj * BLOCK; j < (bj + 1) * BLOCK; j++) {
@@ -367,7 +368,7 @@ function forestShare() {
  * (dans les deux cas, la carte se rabat sur Open-Meteo) ; `'provisoire'` : le passage du jour n'a
  * pas encore eu lieu, hier n'est connu que par l'estimation de la veille.
  */
-export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0, foret = true, mois = 10, delaiForet = () => 0, panneForet = () => false } = {}) {
+export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0, foret = true, mois = 10, delaiForet = () => 0, panneForet = () => false, sec = false } = {}) {
   log.meteo ??= [];
   log.foret ??= [];
   // Mois figé (octobre par défaut) dans toutes les pages des tests : la saison des champignons en
@@ -421,7 +422,7 @@ export async function installMocks(page, log, { meteoCommune = true, altitudeLen
     }
     const block = path.match(/\/b\/(-?\d+_-?\d+)\.json$/);
     if (!block) return route.fulfill({ status: 404, headers: CORS, body: '' });
-    return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(meteoBlock(block[1], late)) });
+    return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(meteoBlock(block[1], late, sec)) });
   });
   await page.route('https://api.open-meteo.com/**', (route) => {
     const url = new URL(route.request().url());
