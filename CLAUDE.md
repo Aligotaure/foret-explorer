@@ -239,9 +239,43 @@ que leurs altitudes arrivent ; pas de fondu des étiquettes (`fadeDuration: 0`) 
 0,3 s (`transition` du style) ; sources de la grille avec un `maxzoom` bas (une ou deux tuiles pour
 la vue au lieu de douze, au prix d'un arrondi de ± 7 m sur les carrés de 4,5 km).
 
-Ce qui reste : à partir du zoom 10, choisir un champignon change aussi le filtre des forêts, et
-MapLibre refait alors toutes les tuiles de la BD Forêt (≈ 1 s à lui seul au zoom 11 sans carte
-graphique). Voir « Pistes ».
+Se déplacer et zoomer (second retour de Clément, le 14/11/2026 : « ça manque encore de fluidité ») :
+sa machine virtuelle dessine au processeur (rendu « llvmpipe », vérifié dans le navigateur intégré),
+comme le Chromium des mesures. Trompettes choisies, autour de Lyon (`parcours.mjs`, fil principal
+occupé et images redessinées) :
+
+| Geste | Avant | Après |
+|---|---|---|
+| Zoom de 7,2 à 8,2 (règle : 30 → 20 km) | 5,5 s, 69 images | 2,5 s, 32 images |
+| Déplacement d'un demi-écran au zoom 8,2 | 1,8 s, 22 images | 1,1 s, 19 images |
+| Zoom de 8,2 à 9,2 (règle : 10 km) | 5,9 s, 53 images | 2,6 s, 26 images |
+| Déplacement au zoom 9,2 | 2,5 s, 20 images | 1,7 s, 15 images |
+| Zoom de 9,8 à 10,5 (forêts détaillées) | 9,1 s, 43 images | 4,4 s, 24 images |
+| Déplacement au zoom 10,5 | 4,6 s, 17 images | 2,8 s, 12 images |
+
+Une passe diffère d'une autre de 30 % (arrivée des tuiles) : ne comparer deux réglages qu'en
+alternance (`essais.mjs`), jamais sur une seule passe. Ce que coûte **une image** (`images.mjs`,
+`forets.mjs` : la carte forcée à se redessiner 3 s, couches allumées puis éteintes) : au zoom 8,2,
+68 ms dont 34 pour la grille en carrés de 4,5 km (19 pour son seul quadrillage) → 51 ms dont 4 pour
+la grille en cases de 18 km ; au zoom 10,5, 176 ms dont 123 pour `bdforet-fill` → 125 ms. Trois causes,
+trois corrections (`mapStyle.ts`, `meteoLayer.ts`, `config.ts`) :
+- **fondu des tuiles d'images** (`raster-fade-duration`, 0,3 s d'office) : la carte se redessinait en
+  continu tant que des tuiles arrivaient. Sans lui, en alternance sur huit zooms : 23 à 28 images et
+  1,2 à 1,5 s au lieu de 46 à 76 images et 3,2 à 5,0 s. C'est le plus gros gain ;
+- **lissage des bords** (`fill-antialias`) : une seconde passe qui trace le contour de chaque polygone.
+  Retiré des forêts (des milliers de polygones par vue), des motifs (sols, zones) et des carrés de la
+  grille, rectangles pour lesquels il ne sert à rien ;
+- **carrés de 4,5 km trop tôt** : cases de 18 km jusqu'au zoom 10 (voir « Carrés de 4,5 km »), et le
+  quadrillage n'existe plus sous ce zoom en mode indice (son opacité lit une propriété des carrés :
+  MapLibre traçait la couche même invisible ; hors de sa plage de zoom, il ne la trace pas).
+Essayé puis abandonné : ne plus renvoyer la grille à chaque déplacement sous le zoom 10 (cases gardées
+par blocs météo). En alternance au zoom 9,2, aucun écart mesurable (12 à 19 images sans renvoi, 15 à
+20 avec) : la complexité d'un cache de plus n'était pas payée.
+
+Ce qui reste : à partir du zoom 10, une image coûte encore 125 ms, dont 68 pour les forêts ; choisir
+un champignon y change aussi le filtre des forêts, et MapLibre refait alors toutes les tuiles de la
+BD Forêt (≈ 1 s à lui seul au zoom 11 sans carte graphique). Au zoom 9,2 les zones protégées et les
+couches invisibles coûtent 21 ms par image, pas encore regardés. Voir « Pistes ».
 
 ## Bilan et légende : la réponse d'abord
 
@@ -512,7 +546,8 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   fichiers, champ `a`) : RGE ALTI au centre du carré, ou au point du territoire le plus proche du
   centre (5 × 5 points essayés) ; null sans terre française ; 29 483 carrés, de −3 à 4 489 m. La mesure
   ci-dessus suppose les températures ramenées à l'altitude de chaque point de 4,5 km : c'est ce que
-  fait la grille à partir du zoom 8, et le bilan d'un coin avec l'altitude exacte.
+  fait la grille à partir du zoom 10 (en deçà, les pastilles seulement : la teinte d'une case entière
+  vaut pour son altitude médiane), et le bilan d'un coin avec l'altitude exacte.
 - Fichiers servis par GitHub Pages : `data/meteo/index.json` (grille, blocs, date de mise à jour `maj`,
   `dernierJour` = dernier jour définitif de la plupart des cases) et `data/meteo/b/<bi>_<bj>.json`
   (blocs de 8 × 8 cases : `dates` = 30 jours complets + la journée du passage, par case `p` pluie,
@@ -598,6 +633,10 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   une même adresse (entreprise, école, certains réseaux mobiles) partagent les 5 requêtes par seconde
   de l'altitude : au-delà, les carrés de 500 m prennent l'altitude du carré de 4,5 km et le bilan
   dit l'altitude indisponible, la carte continue.
+- Depuis le 14/11/2026 l'altitude n'est plus demandée que là où une estimation est possible : carrés
+  de 500 m à dessiner pour le champignon montré (plus toute forêt de la vue), bilan d'un coin où au
+  moins un champignon peut être estimé (pas en ville, hors forêt hôte ni hors saison). Le relevé du
+  tableau (4 requêtes d'altitude) date d'avant ; il n'a pas été refait.
 - Serveur de mesure, s'il est branché un jour : chaque envoi écrit une ligne par compteur non nul
   (13 compteurs sur la visite du scénario, un envoi par minute). À ≈ 25 lignes par visite
   (estimation, non mesurée), les 100 000 lignes par jour sont atteintes vers 4 000 visites par jour ;
@@ -658,8 +697,29 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   volcanique) ; puis quelques corrections (pélites et siltites du socle ancien = sol acide, « Altérites
   de granite » = sol de granite). Réglé sur les 17 000 descriptions de France (`tests/geologie.mjs`) :
   99 % de la surface classée ; le reste n'est nommé que par un lieu ou un étage (« Assise des Carreaux »).
-- Saisons larges exprès (cèpes de mai à décembre, chanterelles en tube jusqu'en février…) : c'est la
-  température qui départage les régions (littoral atlantique et Midi plus tardifs que la montagne).
+- Saisons larges exprès (cèpes de mai à décembre, chanterelles en tube jusqu'en janvier ; février, au
+  poids 0,1, n'est plus estimé : voir « Hors saison »…) : c'est la température qui départage les
+  régions (littoral atlantique et Midi plus tardifs que la montagne).
+- **Hors saison** (`mushrooms.ts`, demande de Clément du 14/11/2026). Deux notions, au mois près (les
+  poids de saison sont mensuels ; le mois est lu par `currentMonth()`, donc par `getMonth`) :
+  - `isDormant` : à plus d'un mois de la saison **écrite** (`seasonText`, les mois au poids ≥ 0,5 :
+    c'est elle que le visiteur lit, « hors saison (mars à juin) »). Grisés : cèpes et girolles de
+    janvier à avril, trompettes de février à juin, chanterelles en tube de février à juillet, morilles
+    d'août à janvier. Dans la légende : puce grise à bord en tirets (pas la couleur seule), toujours
+    cliquable (sa fiche et ses forêts hôtes servent à préparer la saison), nom du bouton inchangé,
+    « hors saison (…) » en `aria-describedby`. Dans le bilan : ligne grisée, sans pourcentage, après
+    les champignons de saison.
+  - `noEstimate` : grisé, ou mois au poids nul (l'indice, saison × …, vaut alors zéro par
+    construction). **Rien n'est calculé** : la grille, les pastilles et les carrés de 500 m ne sont ni
+    chargés ni dessinés (état `offSeason` de `MeteoLayer`, « Morilles hors saison (mars à juin) : aucune
+    chance estimée en ce moment. », échelle des couleurs masquée), aucune altitude n'est demandée, et le
+    bilan n'appelle pas `scoreMushroom` pour lui. Seul poids non nul ignoré : les chanterelles en tube
+    en février (0,1). Le dernier relevé est gardé : revenir à un champignon de saison redessine dans
+    l'instant. Choisir un champignon sans estimation ne force pas le mode « indice » (la grille de
+    pluie affichée reste). Sans champignon choisi, la grille montre le cèpe : de janvier à avril elle
+    dit donc « Cèpes hors saison (juin à novembre) » (choisir un champignon de saison la rallume).
+  Gain de fluidité : seulement quand un champignon hors saison est choisi ; le bilan n'y gagne rien de
+  mesurable (cinq calculs de quelques microsecondes).
 - Morilles : printemps (mars à juin, l'altitude passant par la température), hôtes `FF1-49-49`
   (frênaies…), `FP` (peupleraies), `FF1-00-00`, `FF1-00`, `FF0` (coupes, chablis), sapin-épicéa en
   montagne ; sols calcaires, alluvions, marnes. Fiche avec encadré gyromitre et cuisson.
@@ -671,8 +731,9 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
 - Chance estimée en % (`chanceOf`, choix du 12/11/2026) : l'indice ramené sur une échelle calée sur
   les niveaux (0,12 → 35 %, 0,28 → 50 %, 0,5 → 70 %, 1 → 95 %, linéaire entre deux). Seuil
   `CHANCE_THRESHOLD` = 50 % : en dessous, rien n'est mis en avant (pas d'étiquette, case presque
-  effacée). Vue d'ensemble (zoom < 10) : pastilles `meteo-points` sur les 12 meilleurs secteurs de la
-  vue, espacés ; à partir du zoom 10, pourcentage dans chaque carré ; bilan : « ≈ 62 % · possible ».
+  effacée). Vue d'ensemble (zoom < 10) : pastilles `meteo-points` sur les secteurs à 70 % et plus
+  (`HOTSPOT_MIN_CHANCE`), 12 au plus, espacées (voir « Pastilles ») ; à partir du zoom 10,
+  pourcentage dans chaque carré ; bilan : « ≈ 62 % · possible ».
   Toujours écrire « estimée » ou « ≈ » : ce n'est pas une probabilité mesurée. Sur la carte, le
   pourcentage d'un carré vaut pour ses forêts hôtes (voir « Arbres hôtes ») ; un carré éteint n'est
   pas « sans champignon », un carré coloré n'est ni une promesse ni un droit de cueillir.
@@ -686,8 +747,8 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
 - `localStorage` toujours dans un try/catch (navigation privée).
 - Accessibilité : vrais `<input type="checkbox">`, interrupteurs `role="switch"`, `aria-*` à jour.
 - Mobile : légende et bilan en tiroirs bas sous 640 px (un seul ouvert à la fois), boutons de 46 px.
-- En développement, `window.map`, `window.store`, `window.spot` et `window.metrics` (totaux de la
-  visite, `flush()`) sont exposés (console, tests e2e) une fois la vue Carte chargée (avant, `window.map`
+- En développement, `window.map`, `window.store`, `window.spot`, `window.meteo` (la grille) et
+  `window.metrics` (totaux de la visite, `flush()`) sont exposés (console, tests e2e) une fois la vue Carte chargée (avant, `window.map`
   désigne la balise `<div id="map">`) ; `window.analytics` (`data`, `check()`, `render(contenu)`) une
   fois la vue Analytics chargée.
 - Mesure : seulement des totaux par jour, jamais d'identifiant de visiteur ni de cookie ; envoi coupé
@@ -745,8 +806,21 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   sur téléphone, une fois fermée, la légende reste fermée et rien à l'écran ne dit de choisir un
   champignon. Rien n'a été essayé sur un vrai téléphone ni avec un lecteur d'écran.
 - Fluidité : sans carte graphique (machine virtuelle, vieux téléphone), choisir un champignon à partir
-  du zoom 10 prend encore plus d'une seconde, à cause du filtre des forêts (voir « Fluidité »).
-  Mesures faites dans Chromium sans carte graphique seulement, pas sur un vrai téléphone.
+  du zoom 10 prend encore plus d'une seconde, à cause du filtre des forêts, et un zoom occupe encore
+  le processeur 2,5 à 4,5 s (voir « Fluidité »). Mesures faites dans Chromium sans carte graphique
+  seulement, pas sur un vrai téléphone ni dans le navigateur de Clément. Les bords des forêts ne sont
+  plus lissés (léger crénelage sous le zoom 12, où aucun contour ne les souligne).
+- Vue d'ensemble (zoom < 10) : la teinte d'une case de 18 km vaut pour son altitude médiane et la
+  moyenne de ses arbres hôtes ; en montagne elle peut être pâle alors qu'une pastille y annonce 80 %
+  (le meilleur carré de la case). Entre les zooms 9,35 et 10 la règle affiche déjà 5 km et les cases
+  restent de 18 km. Un secteur entre 50 et 69 % n'a ni pastille ni étiquette avant le zoom 10 (la
+  légende donne la meilleure chance de la vue).
+- Hors saison : au mois près, sans tenir compte de la région (les morilles sont grisées en janvier
+  jusque dans le Midi) ; les chanterelles en tube sont grisées en février malgré un poids de 0,1.
+- Bilan sans appel : sous le zoom 12, un vrai massif pris dans un secteur bâti à 15 % ou plus reçoit
+  « secteur urbanisé : zoomez pour juger ce bois » au lieu d'une estimation ; à partir du zoom 12 la
+  règle de ville n'est connue que si la grille d'indice a relevé la vue (sinon le bilan estime et
+  demande une altitude).
 - Montée en charge : première limite, le trafic de GitHub Pages (voir « Montée en charge ») ; aucun
   essai de charge n'a été fait, les chiffres viennent d'une visite jouée par un script.
 - Carrés de 4,5 km : pas de facteur de sol (inconnu à cette échelle), donc un pourcentage souvent

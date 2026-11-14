@@ -204,6 +204,17 @@ export function summaryAtAltitude(w: WeatherSummary, z: number | null): WeatherS
   };
 }
 
+/**
+ * Les seules températures que lit l'indice, ramenées à l'altitude `z` : même décalage et même arrondi
+ * que `summaryAtAltitude`, sans recopier les trente jours (calcul en série des carrés d'une case).
+ */
+export function temperaturesAt(w: WeatherSummary, z: number | null): Pick<WeatherSummary, 'tmean7' | 'tmin5' | 'frost' | 'elevation'> {
+  if (z === null || !Number.isFinite(w.elevation) || z === w.elevation) return w;
+  const shift = -LAPSE_RATE * (z - w.elevation);
+  const tmin5 = w.tmin5 === null ? null : round1(w.tmin5 + shift);
+  return { elevation: z, tmean7: w.tmean7 === null ? null : round1(w.tmean7 + shift), tmin5, frost: tmin5 !== null && tmin5 <= FROST_C };
+}
+
 /** Altitude médiane des carrés de 4,5 km d'une case (null : inconnue). */
 export function medianAltitude(series: DailySeries): number | null {
   const zs = (series.subAltitudes ?? []).filter((z): z is number => z !== null).sort((a, b) => a - b);

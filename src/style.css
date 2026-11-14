@@ -1334,12 +1334,12 @@ summary.verdict__head::before {
 }
 
 .verdict--dormant .verdict__name strong {
-  color: #6c6c88;
+  color: #5c5c78;
   font-weight: 600;
 }
 
 .verdict--dormant .verdict__why {
-  color: #6c6c88;
+  color: #5c5c78;
 }
 
 .spot__urban {

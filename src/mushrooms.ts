@@ -328,7 +328,7 @@ const awaited = (wait: number): string => `pousse attendue d’ici ${days(wait)}
 export const AWAITED = /pousse attendue d’ici \d+ jours?/;
 const mm = (x: number): string => `${Math.round(x)} mm`;
 
-function rainFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
+function rainFactor(m: Mushroom, w: WeatherSummary, reasons?: string[]): number {
   let best = 0;
   let bestEvent = w.events[0];
   for (const e of w.events) {
@@ -342,6 +342,7 @@ function rainFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
   const moisture = clamp((w.rain20 - 15) / 45);
   const [, start, end] = m.lag;
 
+  if (!reasons) return clamp(0.7 * best + 0.3 * moisture);
   if (!bestEvent) {
     reasons.push(`Pas de grosse pluie depuis ${days(w.days.length)} (${mm(w.rain30)} au total).`);
   } else {
@@ -362,29 +363,43 @@ function rainFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
   return clamp(0.7 * best + 0.3 * moisture);
 }
 
-function tempFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
+/** Ce que l'indice lit des températures : moyenne sur 7 jours, minimum sur 5 jours, gel, altitude. */
+export type Temperatures = Pick<WeatherSummary, 'tmean7' | 'tmin5' | 'frost' | 'elevation'>;
+
+function tempFactor(m: Mushroom, w: Temperatures, reasons?: string[]): number {
   if (w.tmean7 === null) return 0.5;
   const [lo, hi] = m.temp;
   let f = trapezoid(w.tmean7, [lo - m.tempRamp, lo, hi, hi + m.tempRamp]);
-  const where = w.elevation ? ` à ${Math.round(w.elevation)} m` : '';
-  const verdict = w.tmean7 < lo - m.tempRamp ? 'trop froid' : w.tmean7 < lo ? 'un peu froid' : w.tmean7 <= hi ? 'idéal' : 'trop chaud';
-  reasons.push(
-    `${Math.round(w.tmean7)} °C en moyenne sur 7 jours${where} : ${verdict} (${verdict === 'idéal' ? '' : 'idéal '}${lo} à ${hi} °C).`,
-  );
+  if (reasons) {
+    const where = w.elevation ? ` à ${Math.round(w.elevation)} m` : '';
+    const verdict = w.tmean7 < lo - m.tempRamp ? 'trop froid' : w.tmean7 < lo ? 'un peu froid' : w.tmean7 <= hi ? 'idéal' : 'trop chaud';
+    reasons.push(
+      `${Math.round(w.tmean7)} °C en moyenne sur 7 jours${where} : ${verdict} (${verdict === 'idéal' ? '' : 'idéal '}${lo} à ${hi} °C).`,
+    );
+  }
   if (w.frost && w.tmin5 !== null) {
     f *= m.frost;
-    reasons.push(`Gel récent (${Math.round(w.tmin5)} °C)${m.frost >= 0.8 ? ', supporté' : ' : pousse freinée'}.`);
+    reasons?.push(`Gel récent (${Math.round(w.tmin5)} °C)${m.frost >= 0.8 ? ', supporté' : ' : pousse freinée'}.`);
   }
   return f;
 }
 
 /**
- * Plafond de l'indice d'un champignon dans une case météo : saison × pluie. La pluie est la même dans
- * toute la case ; la température (selon l'altitude) et les arbres ne peuvent que le réduire. Sert à ne
- * pas détailler les carrés d'une case qui ne peut de toute façon pas atteindre un seuil.
+ * Part de l'indice commune à toute une case météo : saison × pluie (la pluie est la même dans toute la
+ * case). Avec `squareScore`, elle donne l'indice de chacun de ses carrés sans refaire tout le calcul.
  */
 export function weatherCeiling(m: Mushroom, w: WeatherSummary, month: number): number {
-  return (m.season[month] ?? 0) * rainFactor(m, w, []);
+  return (m.season[month] ?? 0) * rainFactor(m, w);
+}
+
+/**
+ * Indice d'un carré de 4,5 km, sans les phrases d'explication : la part commune à sa case
+ * (`weatherCeiling`) × température à son altitude × qualité de ses arbres hôtes. Mêmes facteurs,
+ * multipliés dans le même ordre que `scoreMushroom` : le résultat est le même au dernier chiffre
+ * (un test le vérifie), pour un calcul bien plus léger (seize carrés par case en vue d'ensemble).
+ */
+export function squareScore(m: Mushroom, ceiling: number, temperatures: Temperatures, hostQuality: number): number {
+  return clamp(ceiling * tempFactor(m, temperatures) * hostQuality);
 }
 
 /** Indice de pousse d'un champignon pour une météo, et si possible un coin précis. */

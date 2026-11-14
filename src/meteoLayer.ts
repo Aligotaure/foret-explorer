@@ -28,7 +28,7 @@ import {
 } from './fineGrid';
 import { hostCover, hostCoverOfCell, isLit, loadForestShare } from './forestShare';
 import { track } from './metrics';
-import { CELL_KM, subBox, subIndexAt } from './meteoGrid';
+import { BASE_STEP_LAT, BASE_STEP_LON, CELL_KM, subBox, subIndexAt } from './meteoGrid';
 import {
   CHANCE_THRESHOLD,
   HOTSPOT_MIN_CHANCE,
@@ -36,9 +36,11 @@ import {
   MUSHROOM_BY_ID,
   chanceOf,
   currentMonth,
+  levelOf,
   noEstimate,
   offSeasonText,
   scoreMushroom,
+  squareScore,
   weatherCeiling,
   type Mushroom,
   type MushroomId,
@@ -52,6 +54,7 @@ import {
   medianAltitude,
   summarize,
   summaryAtAltitude,
+  temperaturesAt,
   todayKey,
   weatherForCells,
   type DailySeries,
@@ -189,6 +192,8 @@ const MAX_LAYER_ZOOM = 24;
 
 const round2 = (v: number): number => Math.round(v * 100) / 100;
 
+const sameBox = (a: Box, b: Box): boolean => a.west === b.west && a.south === b.south && a.east === b.east && a.north === b.north;
+
 const isAbort = (error: unknown): boolean => error instanceof DOMException && error.name === 'AbortError';
 
 /** Attend que la carte ait fini de charger ses tuiles (relevés des forêts et des sols). */
@@ -214,9 +219,9 @@ function waitForIdle(map: MapLibreMap, signal: AbortSignal): Promise<void> {
  * 4,5 km à partir du zoom WEATHER_SUB_MIN_ZOOM (même pluie, températures ramenées à l'altitude de
  * chaque carré) ; à partir du zoom FINE_MIN_ZOOM, des carrés de 500 m précisent l'indice là où
  * poussent les arbres hôtes (voir fineGrid.ts). En deçà, des cases entières, et une pastille sur les
- * secteurs « favorables » : sa chance est celle du meilleur carré de 4,5 km de la case (à l'altitude
- * de ce carré), pas celle de la case entière, qui ne vaut qu'à l'altitude médiane (en montagne les
- * pastilles disparaîtraient des vallées).
+ * secteurs « favorables » : la teinte de la case et le chiffre de sa pastille sont ceux de son
+ * meilleur carré de 4,5 km (à l'altitude de ce carré), pas ceux de la case entière, qui ne valent
+ * qu'à son altitude médiane (en montagne les pastilles disparaîtraient des vallées).
  *
  * Champignon montré hors saison (`noEstimate`) : rien n'est chargé, calculé ni dessiné.
  *
@@ -329,10 +334,27 @@ export class MeteoLayer {
   /** Redessine la grille et les carrés de 500 m à partir du dernier relevé, sans rien redemander. */
   private redraw(): void {
     if (this.offSeason()) return this.showOffSeason();
-    if (!this.data) return;
+    // Le relevé gardé est celui d'une autre vue (la carte a bougé pendant que la grille était éteinte,
+    // ou qu'un champignon hors saison était montré) : rien à redessiner, `update()` le refait. Sans
+    // cela, un relevé de la France entière serait découpé en carrés de 4,5 km en arrivant sur une forêt.
+    const view = this.viewBox();
+    if (!this.data || !view || !sameBox(view, this.data.view)) return;
     const index = this.store.state.weatherMode === 'indice';
     const fine = index && this.map.getZoom() >= FINE_MIN_ZOOM ? this.fineData : null;
     this.drawGrid(!index ? { state: 'off' } : fine ? { state: 'ok', count: this.renderFine(fine), altitude: !fine.fallback } : { state: 'loading' });
+  }
+
+  /** Emprise de la vue, limitée à celle de la France (null : la vue est ailleurs). */
+  private viewBox(): Box | null {
+    const b = this.map.getBounds();
+    const [west, south, east, north] = FRANCE_BOUNDS;
+    const view = {
+      west: Math.max(b.getWest(), west),
+      south: Math.max(b.getSouth(), south),
+      east: Math.min(b.getEast(), east),
+      north: Math.min(b.getNorth(), north),
+    };
+    return view.west >= view.east || view.south >= view.north ? null : view;
   }
 
   /** Champignon montré par la grille d'indice (undefined : mode pluie ou grille éteinte). */
@@ -468,15 +490,8 @@ export class MeteoLayer {
     if (this.offSeason()) return this.showOffSeason();
     if (this.map.getZoom() < WEATHER_MIN_ZOOM) return this.clearGrid({ state: 'zoom' });
     // Vue limitée à l'emprise de la France : pas de météo ailleurs, et jamais trop de cases.
-    const b = this.map.getBounds();
-    const [west, south, east, north] = FRANCE_BOUNDS;
-    const view = {
-      west: Math.max(b.getWest(), west),
-      south: Math.max(b.getSouth(), south),
-      east: Math.min(b.getEast(), east),
-      north: Math.min(b.getNorth(), north),
-    };
-    if (view.west >= view.east || view.south >= view.north) return this.clearGrid({ state: 'outside' });
+    const view = this.viewBox();
+    if (!view) return this.clearGrid({ state: 'outside' });
     const cells = cellsForBounds(view, WEATHER_MAX_CELLS);
     if (!cells) return this.clearGrid({ state: 'many' });
     const controller = new AbortController();
@@ -532,9 +547,17 @@ export class MeteoLayer {
      * `host` : arbres hôtes du champignon montré dans ce carré (null : inconnus, météo seule) ;
      * `lit` : le carré est allumé (assez d'arbres hôtes, pas d'abord une ville : `isLit`).
      */
-    const add = (id: string, weatherOf: () => WeatherSummary, box: Box, sub: 0 | 1, host: { cover: number; quality: number } | null, lit: boolean): void => {
+    const add = (
+      id: string,
+      weatherOf: () => WeatherSummary,
+      box: Box,
+      sub: 0 | 1,
+      host: { cover: number; quality: number } | null,
+      lit: boolean,
+      known?: { l: number; p: number },
+    ): Record<string, number> | null => {
       // En mode indice un carré éteint n'est pas dessiné du tout : il n'est ni calculé ni envoyé.
-      if (index && !lit) return;
+      if (index && !lit) return null;
       const w = weatherOf();
       const properties: Record<string, number> = {
         rain20: Math.round(w.rain20),
@@ -547,12 +570,13 @@ export class MeteoLayer {
         // Champignon montré seulement : niveau, chance estimée, part d'arbres hôtes (−1 : inconnue).
         // Arbres hôtes connus : l'indice vaut pour eux (qualité moyenne des hôtes du carré). En mode
         // pluie, rien de tout cela : changer de champignon n'y change pas le contenu de la source.
-        const score = shown ? scoreMushroom(shown, w, month, host ? { hostQuality: host.quality } : {}) : null;
-        properties['l'] = score?.level ?? 0;
-        properties['p'] = score?.chance ?? 0;
+        const score = known ? null : shown ? scoreMushroom(shown, w, month, host ? { hostQuality: host.quality } : {}) : null;
+        properties['l'] = known?.l ?? score?.level ?? 0;
+        properties['p'] = known?.p ?? score?.chance ?? 0;
         properties['c'] = host ? round2(host.cover) : -1;
       }
       features.push({ type: 'Feature', id, properties, geometry: boxPolygon(box) });
+      return properties;
     };
     for (const c of data.cells) {
       const s = series.get(c.id);
@@ -576,14 +600,17 @@ export class MeteoLayer {
         // une seule vraie forêt ne doit pas s'éteindre en vue d'ensemble puis réapparaître en zoomant.
         const lit = !cell || cell.best >= 0;
         const host = cell && lit ? { cover: Math.max(cell.cover, HOST_MIN_COVER), quality: cell.quality } : cell;
-        // Case entière : à l'altitude médiane de ses carrés plutôt qu'à celle du point de relevé.
-        // (Aux zooms des carrés, une case sans altitudes de carrés, en secours, est ce qu'on a de
-        // plus fin : `sub` = 1, elle porte alors son étiquette.)
-        add(c.id, () => summaryAtAltitude(w, medianAltitude(s)), c, subdivide ? 1 : 0, host, lit);
-        if (index && !subdivide && shown && lit) {
-          const spot = this.bestSquare(shown, c, s, w, month, hosts);
-          if (spot) spots.push(spot);
-        }
+        // Vue d'ensemble du mode indice : la case prend le niveau et la chance de son meilleur carré
+        // de 4,5 km (à l'altitude de ce carré, pour ses arbres hôtes), ceux que sa pastille affiche et
+        // que l'étiquette du carré affichera au zoom 10. Calculée pour la case entière, à son
+        // altitude médiane, elle pâlissait en montagne là où une vallée est favorable, ou fonçait là
+        // où aucun de ses carrés boisés ne l'est.
+        const best = index && !subdivide && shown && cell && lit ? this.bestSquare(shown, c, s, w, month) : null;
+        // Sinon (pluie, secours sans altitudes de carrés, arbres hôtes inconnus) : la case entière, à
+        // l'altitude médiane de ses carrés plutôt qu'à celle du point de relevé. Aux zooms des carrés,
+        // une case de secours est ce qu'on a de plus fin : `sub` = 1, elle porte alors son étiquette.
+        const drawn = add(c.id, () => summaryAtAltitude(w, medianAltitude(s)), c, subdivide ? 1 : 0, host, lit, best ?? undefined);
+        if (index && !subdivide && drawn) spots.push(best ?? { p: drawn['p'] ?? 0, l: drawn['l'] ?? 0, x: drawn['x'] ?? 0, y: drawn['y'] ?? 0 });
       }
     }
     this.setSource(SOURCES.meteo, features);
@@ -593,38 +620,43 @@ export class MeteoLayer {
       // Aux zooms des carrés de 4,5 km (et en mode pluie), pas de pastilles : la couche ne s'affiche
       // pas, inutile de lui renvoyer un contenu à chaque déplacement.
       this.setSource(SOURCES.meteoTop, []);
-      const top = index ? Math.max(0, ...features.map((f) => Number(f.properties?.['p'] ?? 0))) : 0;
+      // Meilleure chance de la vue : les carrés des cases qui la touchent débordent de l'écran, on ne
+      // garde que ceux dont une partie s'y trouve.
+      const { view } = data;
+      const seen = (f: Feature): boolean => {
+        const x = Number(f.properties?.['x']);
+        const y = Number(f.properties?.['y']);
+        return x + BASE_STEP_LON / 2 > view.west && x - BASE_STEP_LON / 2 < view.east && y + BASE_STEP_LAT / 2 > view.south && y - BASE_STEP_LAT / 2 < view.north;
+      };
+      const top = index ? Math.max(0, ...features.filter(seen).map((f) => Number(f.properties?.['p'] ?? 0))) : 0;
       best = top >= CHANCE_THRESHOLD ? top : null;
     }
     this.setStatus({ state: 'ok', cells: count, day, estimated, shared: data.shared, sub: detailed, hosts, best, spots: index && !subdivide, fine });
   }
 
   /**
-   * Meilleur carré de 4,5 km d'une case pour le champignon montré : sa chance estimée (à son
-   * altitude, pour ses arbres hôtes) et son centre. C'est le chiffre que son étiquette affichera au
-   * même endroit en zoomant. null : aucun carré allumé, ou case qui ne peut pas atteindre
-   * CHANCE_THRESHOLD (saison × pluie trop faibles : inutile de calculer ses seize carrés).
-   * Sans altitudes de carrés (secours) ou sans arbres hôtes connus : la case entière, en son centre.
+   * Meilleur carré de 4,5 km allumé d'une case pour le champignon montré : sa chance estimée (à son
+   * altitude, pour ses arbres hôtes), son niveau et son centre. C'est le chiffre que son étiquette
+   * affichera au même endroit au zoom des carrés (`squareScore` rend le même indice que
+   * `scoreMushroom`). null : pas d'altitudes de carrés (secours), ou aucun carré allumé.
    */
-  private bestSquare(shown: Mushroom, c: GridCell, s: DailySeries, w: WeatherSummary, month: number, hosts: boolean): Hotspot | null {
-    if (chanceOf(weatherCeiling(shown, w, month)) < CHANCE_THRESHOLD) return null;
-    const centre = (box: Box): { x: number; y: number } => ({ x: +((box.west + box.east) / 2).toFixed(4), y: +((box.south + box.north) / 2).toFixed(4) });
-    if (!s.subAltitudes || !hosts) {
-      const score = scoreMushroom(shown, summaryAtAltitude(w, medianAltitude(s)), month);
-      return { p: score.chance, l: score.level, ...centre(c) };
-    }
-    let best: Hotspot | null = null;
-    let bestScore = -1;
+  private bestSquare(shown: Mushroom, c: GridCell, s: DailySeries, w: WeatherSummary, month: number): Hotspot | null {
+    if (!s.subAltitudes) return null;
+    const ceiling = weatherCeiling(shown, w, month);
+    let top = -1;
+    let at = -1;
     s.subAltitudes.forEach((z, k) => {
       if (z === null) return;
       const host = hostCover(c.id, k, shown);
       if (!host || !isLit(host)) return;
-      const score = scoreMushroom(shown, summaryAtAltitude(w, z), month, { hostQuality: host.quality });
-      if (score.score <= bestScore) return;
-      bestScore = score.score;
-      best = { p: score.chance, l: score.level, ...centre(subBox(c, k)) };
+      const score = squareScore(shown, ceiling, temperaturesAt(w, z), host.quality);
+      if (score <= top) return;
+      top = score;
+      at = k;
     });
-    return best;
+    if (at < 0) return null;
+    const box = subBox(c, at);
+    return { p: chanceOf(top), l: levelOf(top), x: +((box.west + box.east) / 2).toFixed(4), y: +((box.south + box.north) / 2).toFixed(4) };
   }
 
   /**
@@ -706,20 +738,23 @@ export class MeteoLayer {
         // Les altitudes arrivent par lots : redessiner à chacun ferait refaire toutes les tuiles des
         // carrés plusieurs fois par seconde. On redessine de temps en temps, puis une fois à la fin.
         let drawn = performance.now();
+        let received = false;
         try {
           await fetchAltitudes(missing, signal, (start, values) => {
             values.forEach((z, k) => {
               const c = missing[start + k];
               if (c) altitudes.set(c.id, z);
             });
+            received = true;
             if (signal.aborted || performance.now() - drawn < FINE_RENDER_EVERY_MS) return;
             drawn = performance.now();
             count = this.renderFine(fine);
           });
         } finally {
-          // Une seule écriture dans le navigateur, à la fin ou à l'abandon : le cache entier (jusqu'à
-          // 40 000 altitudes) est récrit à chaque fois, sur le fil qui dessine la carte.
-          saveAltitudes();
+          // Une seule écriture dans le navigateur, à la fin ou à l'abandon, et seulement si un lot est
+          // arrivé : le cache entier (jusqu'à 40 000 altitudes) est récrit à chaque fois, sur le fil
+          // qui dessine la carte.
+          if (received) saveAltitudes();
         }
         if (!signal.aborted) count = this.renderFine(fine);
       } catch (error) {

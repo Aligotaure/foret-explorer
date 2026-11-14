@@ -286,9 +286,12 @@ export function soilSection(store: Store): { el: HTMLElement; sync(state: AppSta
 /** Météo : pluie des 20 derniers jours ou chance estimée du champignon recherché, sur une grille. */
 export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLElement; sync(state: AppState): void } {
   const toggle = switchInput('Afficher la grille météo');
-  toggle.addEventListener('change', () =>
-    store.update({ weatherMode: toggle.checked ? (store.state.mushroom ? 'indice' : 'pluie') : 'off' }),
-  );
+  toggle.addEventListener('change', () => {
+    // Allumer la grille montre l'indice du champignon choisi, sauf s'il est hors saison : la grille
+    // d'indice serait vide, alors que la pluie a quelque chose à montrer.
+    const chosen = store.state.mushroom ? MUSHROOM_BY_ID.get(store.state.mushroom) : undefined;
+    store.update({ weatherMode: toggle.checked ? (chosen && !noEstimate(chosen, currentMonth()) ? 'indice' : 'pluie') : 'off' });
+  });
 
   const radios = h('div', { class: 'basemaps', role: 'radiogroup', 'aria-label': 'Grille météo' });
   const inputs = new Map<string, HTMLInputElement>();

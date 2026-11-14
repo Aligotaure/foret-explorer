@@ -634,7 +634,7 @@ async function desktopTests(browser, base) {
     check(
       'bilan : champignon hors saison de plus d’un mois (morilles en octobre) grisé, sans pourcentage, en dernier ; « recherché » gardé',
       ranking.before.dormant.join() === 'Morilles : hors saison (mars à juin) sans %' && ranking.before.last === 'Morilles' &&
-        ranking.asleep.dormant.join() === 'Morilles : hors saison (mars à juin) sans % · recherché' && ranking.asleep.last === 'Morilles' && !ranking.asleep.opened.includes('Morilles'),
+        ranking.asleep.dormant.join() === 'Morilles : hors saison (mars à juin) sans % · recherché' && ranking.asleep.last === 'Morilles' && ranking.asleep.opened.length === ranking.before.open,
       `${ranking.before.dormant.join()} ; recherché : ${ranking.asleep.dormant.join()}`,
     );
     check(
@@ -819,11 +819,38 @@ async function desktopTests(browser, base) {
     `${spots.chances.length} pastille(s) ${spots.chances.slice(0, 5).join(', ')} ; ${spots.status.slice(0, 120)}`,
   );
   check(
-    'vue d’ensemble (zoom 9) : cases entières de 18 km, sans quadrillage ni « carrés de 4,5 km » ; la pastille porte la chance du meilleur carré, pas celle de la case',
-    spots.whole && !/par carrés de 4,5 km/.test(spots.status) && spots.lines === 10 && Math.max(...spots.chances) >= Math.max(...spots.cellChances) &&
-      Number(/≈ (\d+) %/.exec(spots.status)?.[1]) === Math.max(...spots.chances),
+    'vue d’ensemble (zoom 9) : cases entières de 18 km, sans quadrillage ni « carrés de 4,5 km » ; la meilleure chance annoncée est celle de la plus forte pastille',
+    spots.whole && !/par carrés de 4,5 km/.test(spots.status) && spots.lines === 10 && Number(/≈ (\d+) %/.exec(spots.status)?.[1]) === Math.max(...spots.chances),
     `cases : ${[...new Set(spots.cellChances)].join(', ')} % ; pastilles : ${[...new Set(spots.chances)].join(', ')} % ; quadrillage à partir du zoom ${spots.lines}`,
   );
+  // La pastille (et la teinte de sa case) porte le chiffre de son meilleur carré de 4,5 km : au zoom 10,
+  // le carré posé au même endroit affiche ce chiffre, et aucun carré de la case ne le dépasse.
+  const overview = await page.evaluate(() => ({
+    points: window.map.querySourceFeatures('meteo-points').map((f) => ({ p: f.properties.p, x: +f.geometry.coordinates[0].toFixed(3), y: +f.geometry.coordinates[1].toFixed(3) })),
+    cells: window.map.querySourceFeatures('meteo').map((f) => ({ p: f.properties.p, x: f.properties.x, y: f.properties.y })),
+  }));
+  await page.evaluate(() => window.map.jumpTo({ zoom: 10.2 }));
+  await page.waitForFunction(() => window.map.querySourceFeatures('meteo').some((f) => f.properties.sub === 1), null, { timeout: 15000 }).catch(() => {});
+  await idle(page);
+  const detail = await page.evaluate(() => window.map.querySourceFeatures('meteo').filter((f) => f.properties.sub === 1).map((f) => ({ p: f.properties.p, x: +Number(f.properties.x).toFixed(3), y: +Number(f.properties.y).toFixed(3) })));
+  const cellOf = (o) => `${Math.floor(o.y / 0.16)}:${Math.floor(o.x / 0.224)}`;
+  const compared = overview.points
+    .map((pt) => {
+      const inCell = detail.filter((sq) => cellOf(sq) === cellOf(pt));
+      const here = inCell.find((sq) => sq.x === pt.x && sq.y === pt.y);
+      const cell = overview.cells.find((c) => cellOf(c) === cellOf(pt));
+      // (Au zoom 10 la vue est plus petite : seules les pastilles dont le carré est encore dans les tuiles chargées se comparent.)
+      return here ? { pastille: pt.p, carre: here.p, max: Math.max(...inCell.map((sq) => sq.p)), case: cell?.p ?? null, altitudes: new Set(inCell.map((sq) => sq.p)).size } : null;
+    })
+    .filter(Boolean);
+  check(
+    'pastille et teinte de la case : le chiffre du meilleur carré de 4,5 km de la case, celui que son étiquette affiche au zoom 10 au même endroit',
+    compared.length > 0 && compared.every((c) => c.pastille === c.carre && c.pastille === c.max && c.case === c.pastille) && compared.some((c) => c.altitudes > 1),
+    JSON.stringify(compared.slice(0, 3)),
+  );
+  await page.evaluate(() => window.map.jumpTo({ zoom: 9 }));
+  await page.waitForFunction(() => window.map.getZoom() < 10 && window.map.querySourceFeatures('meteo').some((f) => f.properties.sub === 0), null, { timeout: 15000 }).catch(() => {});
+  await idle(page);
 
   // Bilan sous le zoom 10 : la forêt y est inconnue (pas absente), l'indice ne retombe pas à zéro.
   await page.mouse.click(760, 470);
@@ -885,8 +912,8 @@ async function desktopTests(browser, base) {
     link: document.querySelector('#spot .spot__urban a')?.getAttribute('href') ?? '',
   }));
   check(
-    'bilan sous le zoom 10, secteur urbanisé (une ville avec un bois) : aucune chance annoncée, « secteur urbanisé »',
-    townSpot.chances.length === 4 && townSpot.chances.every((c) => c === 0) && townSpot.lines.filter((l) => /secteur urbanisé/.test(l)).length >= 3,
+    'bilan sous le zoom 10, secteur urbanisé (une ville avec un bois) : aucune chance annoncée, « secteur urbanisé » sans pourcentage (rien n’y est estimé)',
+    townSpot.chances.every((c) => c === 0) && townSpot.lines.filter((l) => /secteur urbanisé/.test(l)).length >= 3 && townSpot.lines.filter((l) => /secteur urbanisé/.test(l)).every((l) => !/≈/.test(l)),
     townSpot.lines.join(' | ').slice(0, 200),
   );
   check(
@@ -894,6 +921,95 @@ async function desktopTests(browser, base) {
     log.altitude.length === altitudeBefore && /cueillez loin des routes, des zones industrielles et des décharges/.test(townSpot.urban) && townSpot.link === 'a-propos.html#identifier' && !/comestible|autorisé|garanti/i.test(townSpot.urban),
     `${log.altitude.length - altitudeBefore} appel(s) d’altitude ; ${townSpot.urban.slice(0, 90)}`,
   );
+  // Même ville, forêt connue (zoom 11) : la carte n'y allume aucun carré de 4,5 km, le bilan n'estime
+  // pas non plus et ne demande rien ; il invite à zoomer. Puis, aux zooms des carrés de 500 m, il suit
+  // le relevé de la carte : un bois qu'elle ne dessinerait pas est écarté, un massif est estimé.
+  const townCentre = await page.evaluate(({ cell, k }) => {
+    const [ci, cj] = cell.split(':').map(Number);
+    return [(cj * 4 + (k % 4) + 0.5) * 0.056, (ci * 4 + Math.floor(k / 4) + 0.5) * 0.04];
+  }, { cell: SHARE_CELL, k: SHARE_BUILT });
+  const hostPoint = () =>
+    page.evaluate(({ centre }) => {
+      // Un point de l'écran sous une hêtraie ou une chênaie, dans le carré de 4,5 km bâti.
+      for (let y = 200; y < 700; y += 8) {
+        for (let x = 420; x < 1100; x += 8) {
+          const ll = window.map.unproject([x, y]);
+          if (Math.abs(ll.lng - centre[0]) > 0.024 || Math.abs(ll.lat - centre[1]) > 0.017) continue;
+          const hit = window.map.queryRenderedFeatures([x, y], { layers: ['bdforet-hit'] })[0];
+          if (hit && ['FF1-09-09', 'FF1G01-01'].includes(hit.properties.code_tfv)) return { x, y };
+        }
+      }
+      return null;
+    }, { centre: townCentre });
+  const readTown = () =>
+    page.evaluate(() => ({
+      lines: [...document.querySelectorAll('#spot .verdict')].map((v) => `${v.querySelector('strong')?.textContent} : ${v.querySelector('.verdict__why')?.textContent ?? ''} ${v.querySelector('.level-pill')?.textContent ?? ''}`),
+      urban: document.querySelector('#spot .spot__urban')?.textContent ?? '',
+      forest: document.querySelector('#spot .spot__row dd')?.textContent ?? '',
+    }));
+  await page.evaluate((c) => window.map.jumpTo({ center: c, zoom: 11 }), townCentre);
+  await page.waitForTimeout(900);
+  await idle(page);
+  const wood = await hostPoint();
+  let cityClicks = 0;
+  if (wood) {
+    await page.mouse.click(wood.x, wood.y);
+    cityClicks++;
+    await page.waitForFunction(() => [...document.querySelectorAll('#spot .verdict__why')].some((w) => /juger ce bois/.test(w.textContent)), null, { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(400);
+    const known = await readTown();
+    check(
+      'bilan en ville, forêt hôte connue (zoom 11) : « secteur urbanisé : zoomez pour juger ce bois », sans pourcentage, sans altitude demandée, avec le conseil',
+      /hêtre|chênes/i.test(known.forest) && known.lines.filter((l) => /secteur urbanisé : zoomez pour juger ce bois $/.test(l)).length >= 2 && log.altitude.length === altitudeBefore && /cueillez loin des routes/.test(known.urban),
+      `${known.forest} ; ${known.lines.join(' | ').slice(0, 220)} ; ${log.altitude.length - altitudeBefore} altitude(s)`,
+    );
+  } else {
+    check('bilan en ville, forêt hôte connue (zoom 11) : un bois dans le carré bâti', false, 'aucun point trouvé');
+  }
+  await page.evaluate((c) => window.map.jumpTo({ center: c, zoom: 13.6 }), townCentre);
+  await page.waitForFunction(() => [...document.querySelectorAll('#legend .legend-hint')].some((p) => /carrés? de 500 m avec arbres hôtes/.test(p.textContent)), null, { timeout: 20000 }).catch(() => {});
+  await idle(page);
+  const wood13 = await hostPoint();
+  if (wood13) {
+    // Le relevé de la carte dit « ce carré ne serait pas dessiné » : écarté, rien n'est demandé.
+    const altitudeTown = log.altitude.length;
+    await page.evaluate(() => {
+      window.__survey = window.spot.survey;
+      window.spot.survey = { townSquareKept: () => false };
+    });
+    await page.mouse.click(wood13.x, wood13.y);
+    cityClicks++;
+    await page.waitForFunction(() => [...document.querySelectorAll('#spot .verdict__why')].some((w) => /trop peu de bois/.test(w.textContent)), null, { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(400);
+    const park = await readTown();
+    const parkCalls = log.altitude.length - altitudeTown;
+    // Le vrai relevé de la carte (un massif dans la tuile simulée) : estimé, altitude demandée, conseil gardé.
+    await page.evaluate(() => {
+      window.spot.survey = window.__survey;
+    });
+    const kept = await page.evaluate(async ({ x, y }) => {
+      const { MUSHROOM_BY_ID } = await import('/src/mushrooms.ts');
+      const ll = window.map.unproject([x, y]);
+      return window.meteo.townSquareKept(ll.lat, ll.lng, MUSHROOM_BY_ID.get('cepe'));
+    }, wood13);
+    await page.mouse.click(wood13.x, wood13.y);
+    cityClicks++;
+    await page.waitForSelector('#spot .rain-chart', { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(400);
+    const massif = await readTown();
+    check(
+      'bilan en ville aux zooms des carrés de 500 m : écarté sans appel si la carte n’y dessinerait pas de carré (« trop peu de bois autour du point »)',
+      park.lines.filter((l) => /secteur urbanisé, trop peu de bois autour du point $/.test(l)).length >= 2 && parkCalls === 0 && /cueillez loin des routes/.test(park.urban),
+      `${park.lines.join(' | ').slice(0, 200)} ; ${parkCalls} altitude(s)`,
+    );
+    check(
+      'bilan en ville aux zooms des carrés de 500 m : le bilan suit le relevé de la carte (massif dessiné : estimé, altitude demandée), le conseil reste affiché',
+      kept === null || (kept ? massif.lines.some((l) => /^Cèpes :  ≈ \d+ %/.test(l)) && log.altitude.length > altitudeTown : massif.lines.some((l) => /^Cèpes : secteur urbanisé, trop peu de bois/.test(l))) && /cueillez loin des routes/.test(massif.urban),
+      `relevé de la carte : ${kept} ; ${massif.lines.join(' | ').slice(0, 160)}`,
+    );
+  } else {
+    check('bilan en ville aux zooms des carrés de 500 m : un bois dans le carré bâti', false, 'aucun point trouvé');
+  }
   await page.locator('#spot .panel__close').click();
   await page.evaluate((v) => window.map.jumpTo({ center: [v.lng, v.lat], zoom: v.zoom }), viewBefore);
   await page.waitForTimeout(900);
@@ -1020,8 +1136,38 @@ async function desktopTests(browser, base) {
       // Tout mois grisé est hors de la saison écrite, et rien n'est estimé ce mois-là.
       coherent: MUSHROOMS.every((m) => months.every((k) => !isDormant(m, k) || (noEstimate(m, k) && (m.season[k] ?? 0) < 0.5))),
       text: seasonText(MUSHROOMS.find((m) => m.id === 'morille')),
+      // Rien à estimer sans être grisé : poids de saison nul à un mois de la saison écrite (trompettes en juillet).
+      nearly: MUSHROOMS.flatMap((m) => months.filter((k) => noEstimate(m, k) && !isDormant(m, k)).map((k) => `${m.id} ${k}`)).join(', '),
+      estimated: MUSHROOMS.every((m) => months.every((k) => noEstimate(m, k) || (m.season[k] ?? 0) > 0)),
     };
   });
+  // L'indice léger d'un carré (pastilles) rend exactement celui du calcul complet.
+  const quick = await page.evaluate(async () => {
+    const { MUSHROOMS, scoreMushroom, squareScore, weatherCeiling } = await import('/src/mushrooms.ts');
+    const { summaryAtAltitude, temperaturesAt } = await import('/src/weather.ts');
+    const base = { rain20: 62, rain30: 80, tmean7: 12.3, tmin5: 4.1, frost: false, elevation: 500, lastDate: '', estimated: false, days: [], events: [{ date: '', amount: 31, daysAgo: 9 }, { date: '', amount: 18, daysAgo: 3 }] };
+    let checked = 0;
+    let differ = 0;
+    for (const m of MUSHROOMS) {
+      for (const month of [4, 7, 10, 11]) {
+        for (const z of [null, 200, 500, 930, 1410, 2300]) {
+          for (const quality of [1, 0.9, 0.55]) {
+            const full = scoreMushroom(m, summaryAtAltitude(base, z), month, { hostQuality: quality }).score;
+            const quick = squareScore(m, weatherCeiling(m, base, month), temperaturesAt(base, z), quality);
+            checked++;
+            if (full !== quick) differ++;
+          }
+        }
+      }
+    }
+    return { checked, differ };
+  });
+  check('indice léger des carrés (pastilles) : identique au calcul complet, au dernier chiffre', quick.checked === 360 && quick.differ === 0, JSON.stringify(quick));
+  check(
+    'rien à estimer sans être grisé : seulement les trompettes en juillet et les chanterelles en tube en août ; partout ailleurs, un champignon estimé a un poids de saison',
+    rules.nearly === 'trompette 7, chanterelle 8' && rules.estimated,
+    rules.nearly,
+  );
   check(
     'pastilles : 69 % écarté, 70 % gardé ; deux secteurs voisins n’en font qu’une ; 12 au plus',
     rules.threshold === '70' && rules.spaced === '90,80' && rules.capped === 12,
@@ -1068,11 +1214,7 @@ async function desktopTests(browser, base) {
   // Un point par carré demandé (séparés par « | », écrit %7C dans l'adresse).
   const asked = batches.reduce((n, q) => n + (/[?&]lon=([^&]*)/.exec(q)?.[1].split('%7C').length ?? 0), 0);
   check('grille fine : carrés de 500 m dessinés, tous avec au moins 3 points sur 9 sous un arbre hôte', fine.count > 20 && fine.visible === 'visible' && fine.coverage, `${fine.count} carrés, ${fine.levels.join(',')}`);
-  check(
-    'grille fine : l’altitude IGN n’est demandée que pour les carrés dessinés (pas pour toute forêt de la vue)',
-    asked > 20 && asked <= fine.count,
-    `${asked} altitude(s) demandée(s) pour ${fine.count} carré(s) dessiné(s)`,
-  );
+  check('grille fine : une altitude demandée par carré à dessiner, pas davantage', asked > 20 && asked <= fine.count, `${asked} altitude(s) demandée(s) pour ${fine.count} carré(s) dessiné(s)`);
   check('grille fine : altitudes IGN groupées et variées', batches.length >= 1 && batches.every((q) => q.includes('%7C')) && fine.altitudes > 5, `${batches.length} requête(s), ${fine.altitudes} altitudes`);
   check('grille fine : altitudes gardées dans le navigateur', fine.saved > 20, `${fine.saved} altitudes`);
   check(
@@ -1140,6 +1282,8 @@ async function desktopTests(browser, base) {
     text: JSON.stringify(window.map.getLayoutProperty('meteo-etiquettes', 'text-field')),
   }));
   check('mode pluie : couleurs et étiquettes en mm', rain.fill.startsWith('["step",["get","rain20"]') && rain.text.includes('rain20'), rain.text);
+  const rainLines = await page.evaluate(() => window.map.getLayer('meteo-contours').minzoom);
+  check('mode pluie : le quadrillage des cases revient à tous les zooms', rainLines === 4, `à partir du zoom ${rainLines}`);
   const wholeCells = await page
     .waitForFunction(
       () => {
@@ -1283,7 +1427,7 @@ async function desktopTests(browser, base) {
       totals['ign.altitude.points'] > 20 &&
       totals['pages.geology'] > 0 &&
       totals['pages.zones'] > 0 &&
-      totals['app.spots'] === 7,
+      totals['app.spots'] === 7 + cityClicks,
     JSON.stringify(totals),
   );
   await page.evaluate(() => window.metrics.flush());
@@ -1471,6 +1615,89 @@ async function fallbackTests(browser, base) {
     `c = ${blind.covers.join()} ; ${blind.status.slice(-90)}`,
   );
   await page5.close();
+
+  // En secours, Open-Meteo n'est interrogé que pour les cases que l'appelant dessinera.
+  const filtered = await page.evaluate(async () => {
+    const { weatherForCells } = await import('/src/weather.ts');
+    const cell = (i, j) => ({ i, j, id: `${i}:${j}`, lat: +((i + 0.5) * 0.16).toFixed(4), lon: +((j + 0.5) * 0.224).toFixed(4) });
+    const wanted = cell(280, 20);
+    const skipped = cell(280, 21);
+    const result = await weatherForCells([wanted, skipped], undefined, (c) => c.id !== skipped.id);
+    return { got: [...result.series.keys()].join(), wanted: wanted.lat, skipped: skipped.lat, lonWanted: wanted.lon, lonSkipped: skipped.lon, shared: result.shared };
+  });
+  const lastQuery = decodeURIComponent(log.meteo[log.meteo.length - 1] ?? '');
+  check(
+    'secours : une case que la carte ne dessinera pas (aucun carré allumé) n’est pas demandée à Open-Meteo',
+    filtered.shared === false && filtered.got === '280:20' && lastQuery.includes(String(filtered.lonWanted)) && !lastQuery.includes(String(filtered.lonSkipped)),
+    `séries : ${filtered.got} ; ${lastQuery.slice(0, 110)}`,
+  );
+
+  // Juillet : les trompettes ne sont pas grisées (août est à un mois) mais leur poids de saison est nul.
+  // Rien n'est calculé : ni grille, ni carrés de 500 m, ni altitude ; le bilan le dit avec « ≈ 0 % ».
+  const page7 = await context.newPage();
+  const log7 = { tms: [], wmts: [], geocode: [], other: [] };
+  await installMocks(page7, log7, { mois: 7 });
+  await page7.goto(`${base}#carte=13.6/45.92/6.19`);
+  await waitForMap(page7);
+  await page7.evaluate(() => window.store.update({ mushroom: null, weatherMode: 'off' })); // l'état gardé par le navigateur vient des pages précédentes
+  await page7.getByRole('button', { name: 'Trompettes', exact: true }).click();
+  await page7.waitForTimeout(1500);
+  await idle(page7);
+  const july = await page7.evaluate(() => {
+    const chip = [...document.querySelectorAll('.chip--mushroom')].find((b) => b.textContent === 'Trompettes');
+    return {
+      dormant: [...document.querySelectorAll('.chip--dormant')].map((b) => b.textContent).join(),
+      chip: chip?.classList.contains('chip--dormant'),
+      mode: window.store.state.weatherMode,
+      sources: ['meteo', 'meteo-points', 'meteo-fin'].map((id) => window.map.querySourceFeatures(id).length).join(),
+      card: document.querySelector('.mushroom-card__season')?.textContent ?? '',
+    };
+  });
+  // La grille allumée sur l'indice n'a rien à montrer : la légende le dit, aucune altitude n'est demandée.
+  await page7.evaluate(() => window.store.update({ weatherMode: 'indice' }));
+  await page7.waitForTimeout(1500);
+  await idle(page7);
+  const julyIndex = await page7.evaluate(() => ({
+    sources: ['meteo', 'meteo-points', 'meteo-fin'].map((id) => window.map.querySourceFeatures(id).length).join(),
+    hints: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).join(' | '),
+  }));
+  check(
+    'juillet, trompettes (poids de saison nul, pas grisées) : la puce reste normale, le mode météo n’est pas forcé, la fiche dit « hors saison »',
+    july.chip === false && !/Trompettes/.test(july.dormant) && july.mode === 'off' && /Hors saison en ce moment : aucune chance estimée avant la saison \(août à décembre\)/.test(july.card),
+    JSON.stringify(july),
+  );
+  check(
+    'juillet, trompettes, grille d’indice allumée : ni grille, ni carrés de 500 m, ni altitude demandée ; « Trompettes hors saison (août à décembre) »',
+    julyIndex.sources === '0,0,0' && log7.altitude.length === 0 && /Trompettes hors saison \(août à décembre\) : aucune chance estimée en ce moment/.test(julyIndex.hints),
+    `${julyIndex.sources} ; ${log7.altitude.length} altitude(s)`,
+  );
+  await page7.close();
+
+  // Carrés de 500 m : l'altitude n'est demandée que pour les carrés à dessiner pour le champignon montré.
+  // Chanterelles en tube (les chênaies ne sont pas leurs hôtes) puis cèpes (elles le sont) : le second
+  // doit encore demander des altitudes, celles des chênaies que le premier a laissées de côté.
+  const page8 = await context.newPage();
+  const log8 = { tms: [], wmts: [], geocode: [], other: [] };
+  await installMocks(page8, log8);
+  await page8.goto(`${base}#carte=13.6/45.92/6.19`);
+  await waitForMap(page8);
+  const fineOf = async (id) => {
+    await page8.evaluate((m) => window.store.update({ mushroom: m, weatherMode: 'indice' }), id);
+    await page8.waitForFunction(() => [...document.querySelectorAll('#legend .legend-hint')].some((p) => /carrés? de 500 m avec arbres hôtes/.test(p.textContent)), null, { timeout: 20000 }).catch(() => {});
+    await page8.waitForTimeout(1500);
+    await idle(page8);
+    const drawn = await page8.evaluate(() => new Set(window.map.querySourceFeatures('meteo-fin').map((f) => f.geometry.coordinates[0][0].map((v) => v.toFixed(4)).join())).size);
+    const asked = log8.altitude.reduce((n, q) => n + (/[?&]lon=([^&]*)/.exec(q)?.[1].split('%7C').length ?? 0), 0);
+    return { drawn, asked };
+  };
+  const tube = await fineOf('chanterelle');
+  const cepe = await fineOf('cepe');
+  check(
+    'carrés de 500 m : altitudes demandées pour les seuls carrés du champignon montré (les chênaies attendent qu’on cherche des cèpes)',
+    tube.drawn > 0 && tube.asked > 0 && tube.asked <= tube.drawn + 8 && cepe.drawn > tube.drawn && cepe.asked > tube.asked,
+    `chanterelles : ${tube.asked} altitude(s) pour ${tube.drawn} carré(s) ; puis cèpes : ${cepe.asked} en tout pour ${cepe.drawn} carré(s)`,
+  );
+  await page8.close();
 
   // Fichier des parts de forêt qui ne répond jamais (réseau qui pend) : le bilan ne l'attend pas plus de
   // 2,5 s ; il fait sans (météo et forêt du point) et demande l'altitude.

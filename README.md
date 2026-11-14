@@ -38,7 +38,7 @@ légales, la confidentialité et un bouton « Effacer mes données ».
   carte ne garde que leurs forêts hôtes et colore une grille selon l'indice de pousse ; la fiche
   rappelle arbres, sols, délai après la pluie, températures, saison, et les confusions dangereuses
   (gyromitre pour les morilles…).
-- **Carrés de 4,5 km** : à partir du zoom 8, chaque case météo (≈ 18 km) est détaillée en 16 carrés,
+- **Carrés de 4,5 km** : à partir du zoom 10, chaque case météo (≈ 18 km) est détaillée en 16 carrés,
   chacun avec les températures ramenées à sa propre altitude (un fond de vallée et un versant à
   1 500 m n'ont pas le même indice). La pluie reste celle de la case.
 - **Carrés de 500 m** : à partir du zoom 12, la grille de l'indice se resserre encore. Chaque carré
@@ -66,8 +66,9 @@ légales, la confidentialité et un bouton « Effacer mes données ».
   tant que la mise à jour du jour n'est pas passée, la veille est une estimation et c'est écrit.
 
 La carte affiche une **chance estimée en %** : 70 % et plus, bonnes conditions ; 50 à 70 %, ça se
-tente ; en dessous de 50 %, peu d'espoir sans connaître un coin précis. En vue d'ensemble, des
-pastilles marquent les meilleurs secteurs. L'indice applique des règles de cueilleur (délai après une grosse pluie, températures, gel, arbre
+tente ; en dessous de 50 %, peu d'espoir sans connaître un coin précis. En vue d'ensemble (cases de
+18 km), des pastilles marquent les secteurs à 70 % et plus. Un champignon à plus d'un mois de sa saison
+est grisé : rien n'est calculé pour lui. L'indice applique des règles de cueilleur (délai après une grosse pluie, températures, gel, arbre
 hôte, sol). C'est une aide pour choisir où aller, pas une garantie, et il ne dit rien de ce qui se
 mange : au moindre doute, faites contrôler la récolte par un pharmacien ou une société mycologique.
 

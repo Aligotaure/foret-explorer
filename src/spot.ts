@@ -171,14 +171,20 @@ function rulesText(zones: ZonesAtPoint, forest: ForestAtPoint | null): HTMLEleme
   return h('p', { class: 'spot__rule' }, h('strong', {}, 'Hors forêt cartographiée'), ' : la cueillette demande l’accord du propriétaire du terrain.');
 }
 
-/** Ce qui écarte un champignon d'un coin sans rien calculer ; `dormant` : hors saison de plus d'un mois (ligne grisée). */
+/**
+ * Ce qui écarte un champignon d'un coin sans rien calculer. `dormant` : hors saison de plus d'un mois
+ * (ligne grisée). `zero` : l'indice vaut zéro par construction (pas la saison, pas de forêt, pas
+ * d'arbre hôte), la ligne garde « ≈ 0 % » ; sinon (ville : on n'a rien estimé) elle n'affiche pas de
+ * pourcentage, un « 0 % » y contredirait « zoomez pour juger ce bois ».
+ */
 interface Exclusion {
   why: string;
   dormant: boolean;
+  zero: boolean;
 }
 
-/** Une ligne du bilan : un indice calculé, ou un champignon écarté sans calcul (`dormant` : grisé, sans pourcentage). */
-type Verdict = MushroomScore & { dormant?: boolean };
+/** Une ligne du bilan : un indice calculé, ou un champignon écarté sans calcul (`bare` : sans pourcentage). */
+type Verdict = MushroomScore & { dormant?: boolean; bare?: boolean };
 
 const URBAN = 'secteur urbanisé';
 
@@ -337,13 +343,27 @@ export class SpotPanel {
       // point, secteur sans arbres hôtes, ville, champignons hors saison… alors ni altitude IGN, ni
       // météo de secours (demande de Clément du 14/11/2026 : pas d'appel là où il n'y a pas de carré).
       const month = currentMonth();
+      const decide = (): Map<MushroomId, Exclusion> => {
+        const out = new Map<MushroomId, Exclusion>();
+        for (const m of MUSHROOMS) {
+          const why = this.exclusion(m, view, month, true);
+          if (why) out.set(m.id, why);
+        }
+        return out;
+      };
       const hopeless = !MUSHROOMS.some((m) => !this.exclusion(m, view, month, false));
-      if (!hopeless) await Promise.race([shares, deadline]);
+      const ready = hopeless ? true : await Promise.race([shares.then(() => true), deadline]);
       if (controller.signal.aborted) return;
-      const excluded = new Map<MushroomId, Exclusion>();
-      for (const m of MUSHROOMS) {
-        const out = this.exclusion(m, view, month, true);
-        if (out) excluded.set(m.id, out);
+      let excluded = decide();
+      if (ready === late) {
+        // Le fichier des parts n'est pas arrivé à temps : on a décidé sans lui (météo seule). S'il
+        // arrive ensuite, la décision est revue et le bilan redessiné : sinon il resterait
+        // « favorable » en pleine ville. (L'altitude, elle, a peut-être été demandée pour rien.)
+        void shares.then(() => {
+          if (controller.signal.aborted) return;
+          excluded = decide();
+          show({ excluded });
+        });
       }
       if (excluded.size === MUSHROOMS.length) {
         // Rien à estimer : les lignes des champignons s'affichent tout de suite, puis la pluie si les
@@ -397,8 +417,8 @@ export class SpotPanel {
    * l'écran) : on estime, quitte à demander une altitude de trop.
    */
   private exclusion(m: Mushroom, v: View, month: number, sector: boolean): Exclusion | null {
-    if (noEstimate(m, month)) return { why: offSeasonText(m), dormant: isDormant(m, month) };
-    const out = (why: string): Exclusion => ({ why, dormant: false });
+    if (noEstimate(m, month)) return { why: offSeasonText(m), dormant: isDormant(m, month), zero: true };
+    const out = (why: string, zero = true): Exclusion => ({ why, dormant: false, zero });
     if (!v.forestUnknown) {
       // Mêmes mots que la ligne « Forêt » du bilan : sous le point, pas alentour (un chemin, une clairière).
       if (!v.forest) return out('pas de forêt cartographiée sous ce point');
@@ -406,8 +426,8 @@ export class SpotPanel {
       if (!sector) return null;
       const host = hostCover(v.sector.cell, v.sector.k, m);
       if (!host || host.built < BUILT_MAX_COVER) return null;
-      if (v.zoom < FINE_MIN_ZOOM) return out(`${URBAN} : zoomez pour juger ce bois`);
-      return this.survey?.townSquareKept(v.lat, v.lng, m) === false ? out(`${URBAN}, trop peu de bois autour du point`) : null;
+      if (v.zoom < FINE_MIN_ZOOM) return out(`${URBAN} : zoomez pour juger ce bois`, false);
+      return this.survey?.townSquareKept(v.lat, v.lng, m) === false ? out(`${URBAN}, trop peu de bois autour du point`, false) : null;
     }
     if (!sector) return null;
     // Forêt inconnue sous le point : la règle du carré de la carte. Fichier des parts absent : météo
@@ -416,7 +436,7 @@ export class SpotPanel {
     const host = hostCover(v.sector.cell, v.sector.k, m);
     if (!host) return null;
     if (host.cover < HOST_MIN_COVER) return out('peu d’arbres hôtes dans ce secteur');
-    return v.zoom < FINE_MIN_ZOOM && !isLit(host) ? out(URBAN) : null;
+    return v.zoom < FINE_MIN_ZOOM && !isLit(host) ? out(URBAN, false) : null;
   }
 
   /** Les tuiles de la BD Forêt de la vue ne sont pas toutes arrivées. */
@@ -475,7 +495,7 @@ export class SpotPanel {
           h(
             'li',
             { class: `${classes} verdict--off${s.dormant ? ' verdict--dormant' : ''}` },
-            h('div', { class: 'verdict__head' }, h('span', { class: 'verdict__name' }, name, tag, h('span', { class: 'verdict__why' }, s.blocker)), s.dormant ? null : pill),
+            h('div', { class: 'verdict__head' }, h('span', { class: 'verdict__name' }, name, tag, h('span', { class: 'verdict__why' }, s.blocker)), s.bare ? null : pill),
           ),
         );
         continue;
@@ -540,7 +560,7 @@ export class SpotPanel {
       h('div', { class: 'spot__title-row' }, h('h3', { class: 'spot__title' }, 'Champignons · chance estimée'), help),
       note,
       list,
-      // En ville, le conseil de « À propos » (Anses) : il vaut que le bilan estime ou non.
+      // En secteur urbanisé, le conseil de « À propos » (Anses) : il vaut que le bilan estime ou non.
       urban
         ? h(
             'p',
@@ -600,14 +620,17 @@ export class SpotPanel {
     const verdicts = (w: WeatherSummary | null): Verdict[] =>
       MUSHROOMS.flatMap((m): Verdict[] => {
         const out = excluded?.get(m.id);
-        if (out) return [{ id: m.id, score: 0, chance: 0, level: 0, reasons: [], blocker: out.why, dormant: out.dormant }];
+        if (out) return [{ id: m.id, score: 0, chance: 0, level: 0, reasons: [], blocker: out.why, dormant: out.dormant, bare: out.dormant || !out.zero }];
         if (!w) return [];
         // Forêt inconnue sous le point : la chance vaut pour les forêts hôtes du secteur (carré de
         // 4,5 km), à leur qualité moyenne. Fichier des parts absent : météo seule.
         const host = v.forestUnknown ? hostCover(v.sector.cell, v.sector.k, m) : null;
         return [scoreMushroom(m, w, month, host ? { ...context, hostQuality: host.quality } : context)];
       });
-    const urban = [...(excluded?.values() ?? [])].some((e) => e.why.startsWith(URBAN));
+    // Secteur urbanisé (carré de 4,5 km bâti à BUILT_MAX_COVER ou plus ; la part bâtie ne dépend pas du
+    // champignon) : le conseil s'affiche que le bilan estime ou non. Fichier des parts absent : inconnu.
+    const first = MUSHROOMS[0];
+    const urban = ((first ? hostCover(v.sector.cell, v.sector.k, first)?.built : undefined) ?? 0) >= BUILT_MAX_COVER;
 
     if (status === 'loading') {
       parts.push(h('p', { class: 'spot__status' }, 'Lecture de la météo des derniers jours…'));
