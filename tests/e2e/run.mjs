@@ -1237,7 +1237,7 @@ async function desktopTests(browser, base) {
     };
   });
   check(
-    'bilan en ville : la règle des carrés de 500 m est connue au centre de la vue relevée, inconnue au bord de l’écran et hors de la vue (le bilan estime alors)',
+    'bilan en ville : la règle des carrés de 500 m est connue au centre de la vue relevée, inconnue dès qu’un des neuf carrés autour du point manque au relevé (coin de l’écran, hors de la vue) : le bilan estime alors',
     survey.centre === 'boolean' && survey.edge === null && survey.outside === null,
     JSON.stringify(survey),
   );

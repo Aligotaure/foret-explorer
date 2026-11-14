@@ -153,8 +153,8 @@ l'indice), `bdforet-highlight-casing`, `bdforet-highlight`.
 Carrés de 4,5 km (`meteoLayer.ts`, zoom ≥ `WEATHER_SUB_MIN_ZOOM` = 10, mode indice) : chaque case
 commune est dessinée en 16 carrés (id « I:J/k », propriété `sub` = 1), même pluie, températures
 ramenées à l'altitude de chaque carré (`a` dans les fichiers, `summaryAtAltitude`) ; un carré sans
-terre française n'est pas dessiné. En deçà du zoom 10, et en mode pluie, cases entières (`sub` = 0, à
-l'altitude médiane de leurs carrés), sans quadrillage en mode indice (`setLayerZoomRange`). Seuls
+terre française n'est pas dessiné. En deçà du zoom 10, et en mode pluie, cases entières (`sub` = 0 ;
+indice : voir « Pastilles »), sans quadrillage en mode indice (`setLayerZoomRange`). Seuls
 les carrés (`sub` = 1) portent une étiquette, dès leur arrivée au zoom 10 (une expression de zoom
 dans une propriété `layout` n'est évaluée qu'aux zooms entiers : garder un seuil entier) ; une case
 entière encore dans la source au passage du zoom 10 n'affiche donc rien. Avant le 14/11/2026 les
@@ -167,13 +167,19 @@ n'avoir qu'un seuil (carrés, étiquettes et forêts détaillées arrivent ensem
 Pastilles (`meteo-points`, zoom < 10, mode indice ; `pickHotspots`, `bestSquare`) : une par case où
 la chance estimée atteint `HOTSPOT_MIN_CHANCE` (70 %, le niveau « favorable » ; 50 % avant le
 14/11/2026), 12 au plus, espacées d'un septième de la vue. Leur chiffre est celui du **meilleur carré
-de 4,5 km de la case** (à son altitude, pour ses arbres hôtes), où elles sont posées : celui que son
-étiquette affichera au zoom 10. La chance de la case entière ne vaut qu'à son altitude médiane : en
-montagne (Annecy : 447 à 2 351 m dans une case) les pastilles disparaissaient des vallées. Les seize
-carrés d'une case ne sont calculés que si saison × pluie (`weatherCeiling`) permet d'atteindre 50 %.
-« Meilleure chance estimée dans la vue » (légende) lit les mêmes candidats, au seuil de 50 %
-(`CHANCE_THRESHOLD`), et précise « (pastilles à partir de 70 %) » quand aucune n'est posée. À
-partir du zoom 10, la source des pastilles est vidée une fois pour toutes.
+de 4,5 km allumé de la case** (à son altitude, pour ses arbres hôtes), où elles sont posées : celui
+que son étiquette affichera au zoom 10 (un test compare les deux). **La teinte de la case (`l`, `p`)
+est celle de ce même carré** : calculée pour la case entière, à son altitude médiane (Annecy : 447 à
+2 351 m dans une case), elle pâlissait là où une vallée est favorable, ou fonçait là où aucun carré
+boisé ne l'est. Les seize carrés sont calculés par `squareScore` (part commune à la case
+`weatherCeiling` = saison × pluie, × température à l'altitude du carré `temperaturesAt`, × qualité
+des hôtes) : mêmes facteurs et même ordre que `scoreMushroom`, donc le même indice au dernier chiffre
+(un test le vérifie sur 360 cas), sans phrases ni copie des trente jours. En mode pluie, en secours
+(pas d'altitudes de carrés) ou sans le fichier des parts, la case reste calculée d'un bloc, à son
+altitude médiane. « Meilleure chance estimée dans la vue » (légende) lit les mêmes candidats, au
+seuil de 50 % (`CHANCE_THRESHOLD`), et précise « (pastilles à partir de 70 %) » quand aucune n'est
+posée ; à partir du zoom 10 elle ne regarde que les carrés dont une partie est à l'écran, et la
+source des pastilles est vidée une fois pour toutes.
 
 Arbres hôtes (`forestShare.ts`, `public/foret/parts.json`, mode indice) : avant le 14/11/2026, cases
 et carrés ne regardaient que la météo (Paris affichait « 78 % · favorable », le bilan au même point
@@ -253,8 +259,17 @@ occupé et images redessinées) :
 | Zoom de 9,8 à 10,5 (forêts détaillées) | 9,1 s, 43 images | 4,4 s, 24 images |
 | Déplacement au zoom 10,5 | 4,6 s, 17 images | 2,8 s, 12 images |
 
-Une passe diffère d'une autre de 30 % (arrivée des tuiles) : ne comparer deux réglages qu'en
-alternance (`essais.mjs`), jamais sur une seule passe. Ce que coûte **une image** (`images.mjs`,
+Ces deux colonnes ont été mesurées à une heure d'écart, machine au calme. Une passe diffère d'une
+autre de 30 % (arrivée des tuiles), et la machine elle-même varie du simple au double selon ce que
+fait le bureau (le soir du 14/11, `gnome-shell` occupait la moitié d'un processeur : chaque image
+coûtait deux fois plus cher, ancien code compris). Ne comparer deux réglages qu'en alternance, dans
+la même fenêtre de temps (`essais.mjs` ; pour deux versions du code : l'ancienne servie sur un second
+port par `git worktree`, puis `parcours.mjs` sur l'une et l'autre tour à tour). Ainsi mesuré, deux
+passes par version, machine chargée : zoom de 7,2 à 8,2, 6,1 et 7,2 s avant, 3,9 et 3,9 s après ;
+déplacement au zoom 8,2, 3,9 et 3,5 s → 2,8 et 1,9 s ; au zoom 9,2, 8,1 et 4,3 s → 3,0 et 3,5 s ; au
+zoom 10,5, 10,9 et 11,9 s → 6,2 et 6,5 s ; grille visible à l'ouverture, 3,6 et 2,6 s → 2,6 et 2,1 s.
+Le zoom de 9,8 à 10,5 remplissait la fenêtre de mesure de 9 s dans les deux versions : non concluant
+ce soir-là. Le clic sur un champignon redessine toujours 3 à 6 images (tableau du haut). Ce que coûte **une image** (`images.mjs`,
 `forets.mjs` : la carte forcée à se redessiner 3 s, couches allumées puis éteintes) : au zoom 8,2,
 68 ms dont 34 pour la grille en carrés de 4,5 km (19 pour son seul quadrillage) → 51 ms dont 4 pour
 la grille en cases de 18 km ; au zoom 10,5, 176 ms dont 123 pour `bdforet-fill` → 125 ms. Trois causes,
@@ -327,11 +342,17 @@ bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
   grille météo (« ≈ N m (d'après la grille météo) », ou « non demandée (rien à estimer ici) » sans
   fichiers météo), terrain, statut, pluie et règles restent. Le fichier des parts n'est attendu que
   s'il peut changer la décision, et 2,5 s au plus (`SPOT_ALTITUDE_WAIT_MS`, un seul délai compté
-  depuis le clic, qui vaut aussi pour l'altitude) : s'il ne répond pas, on estime sans lui.
-- En secteur urbanisé, sous la liste : « cueillez loin des routes, des zones industrielles et des
-  décharges, les champignons absorbent les polluants », avec un lien vers `a-propos.html#identifier`,
-  qui porte déjà ce conseil (Anses ; relu le 14/11/2026 sur service-public.gouv.fr, fiche A15186 du
-  14/10/2026). Le bilan ne fait pas partie des conditions : `TERMS_VERSION` ne change pas.
+  depuis le clic, qui vaut aussi pour l'altitude) : s'il ne répond pas, on estime sans lui, et s'il
+  arrive ensuite la décision est revue et le bilan redessiné (sinon il resterait « favorable » en
+  pleine ville ; l'altitude a alors été demandée pour rien). Une ligne écartée garde « ≈ 0 % » quand
+  l'indice vaut zéro par construction (saison au poids nul, pas de forêt, pas d'arbre hôte) ; pour une
+  ville (`Exclusion.zero` à faux) elle n'affiche pas de pourcentage : rien n'y a été estimé, et un
+  « 0 % » contredirait « zoomez pour juger ce bois ».
+- En secteur urbanisé (carré de 4,5 km bâti à 15 % ou plus, que le bilan estime ou non), sous la
+  liste : « cueillez loin des routes, des zones industrielles et des décharges, les champignons
+  absorbent les polluants », avec un lien vers `a-propos.html#identifier`, qui porte déjà ce conseil
+  (Anses ; relu le 14/11/2026 sur service-public.gouv.fr, fiche A15186 du 14/10/2026). Le bilan ne
+  fait pas partie des conditions : `TERMS_VERSION` ne change pas.
 - La phrase de pluie d'un champignon commente la pluie la plus récente dont le délai n'est pas
   dépassé, plutôt qu'une vieille pluie « dépassée » qui pèse plus dans l'indice (sinon elle contredit
   le bloc météo) ; une pluie modeste encore fraîche ne promet rien (« pousse incertaine »).
@@ -546,8 +567,8 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   fichiers, champ `a`) : RGE ALTI au centre du carré, ou au point du territoire le plus proche du
   centre (5 × 5 points essayés) ; null sans terre française ; 29 483 carrés, de −3 à 4 489 m. La mesure
   ci-dessus suppose les températures ramenées à l'altitude de chaque point de 4,5 km : c'est ce que
-  fait la grille à partir du zoom 10 (en deçà, les pastilles seulement : la teinte d'une case entière
-  vaut pour son altitude médiane), et le bilan d'un coin avec l'altitude exacte.
+  fait la grille à partir du zoom 10 (en deçà, la case et sa pastille prennent l'indice de son meilleur
+  carré, à l'altitude de ce carré), et le bilan d'un coin avec l'altitude exacte.
 - Fichiers servis par GitHub Pages : `data/meteo/index.json` (grille, blocs, date de mise à jour `maj`,
   `dernierJour` = dernier jour définitif de la plupart des cases) et `data/meteo/b/<bi>_<bj>.json`
   (blocs de 8 × 8 cases : `dates` = 30 jours complets + la journée du passage, par case `p` pluie,
@@ -715,8 +736,10 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
     chance estimée en ce moment. », échelle des couleurs masquée), aucune altitude n'est demandée, et le
     bilan n'appelle pas `scoreMushroom` pour lui. Seul poids non nul ignoré : les chanterelles en tube
     en février (0,1). Le dernier relevé est gardé : revenir à un champignon de saison redessine dans
-    l'instant. Choisir un champignon sans estimation ne force pas le mode « indice » (la grille de
-    pluie affichée reste). Sans champignon choisi, la grille montre le cèpe : de janvier à avril elle
+    l'instant, si la carte n'a pas bougé entre-temps (`redraw()` ignore le relevé d'une autre vue : celui
+    de la France entière, découpé en carrés de 4,5 km en arrivant sur une forêt, gelait la carte).
+    Choisir un champignon sans estimation ne force pas le mode « indice » (la grille de pluie affichée
+    reste), et l'interrupteur de la grille allume alors la pluie. Sans champignon choisi, la grille montre le cèpe : de janvier à avril elle
     dit donc « Cèpes hors saison (juin à novembre) » (choisir un champignon de saison la rallume).
   Gain de fluidité : seulement quand un champignon hors saison est choisi ; le bilan n'y gagne rien de
   mesurable (cinq calculs de quelques microsecondes).
@@ -810,11 +833,12 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   le processeur 2,5 à 4,5 s (voir « Fluidité »). Mesures faites dans Chromium sans carte graphique
   seulement, pas sur un vrai téléphone ni dans le navigateur de Clément. Les bords des forêts ne sont
   plus lissés (léger crénelage sous le zoom 12, où aucun contour ne les souligne).
-- Vue d'ensemble (zoom < 10) : la teinte d'une case de 18 km vaut pour son altitude médiane et la
-  moyenne de ses arbres hôtes ; en montagne elle peut être pâle alors qu'une pastille y annonce 80 %
-  (le meilleur carré de la case). Entre les zooms 9,35 et 10 la règle affiche déjà 5 km et les cases
-  restent de 18 km. Un secteur entre 50 et 69 % n'a ni pastille ni étiquette avant le zoom 10 (la
-  légende donne la meilleure chance de la vue).
+- Vue d'ensemble (zoom < 10) : la teinte d'une case de 18 km est celle de son meilleur carré de
+  4,5 km : une case foncée peut n'avoir qu'un seul carré favorable (zoomer le dit). Le bilan d'un
+  clic, lui, juge le carré de 4,5 km du point : dans une case colorée il peut répondre « peu d'arbres
+  hôtes dans ce secteur » ou « secteur urbanisé ». Entre les zooms 9,35 et 10 la règle affiche déjà
+  5 km et les cases restent de 18 km. Un secteur entre 50 et 69 % n'a ni pastille ni étiquette avant
+  le zoom 10 (la légende donne la meilleure chance de la vue).
 - Hors saison : au mois près, sans tenir compte de la région (les morilles sont grisées en janvier
   jusque dans le Midi) ; les chanterelles en tube sont grisées en février malgré un poids de 0,1.
 - Bilan sans appel : sous le zoom 12, un vrai massif pris dans un secteur bâti à 15 % ou plus reçoit
