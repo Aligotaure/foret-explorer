@@ -204,6 +204,17 @@ export function summaryAtAltitude(w: WeatherSummary, z: number | null): WeatherS
   };
 }
 
+/**
+ * Les seules températures que lit l'indice, ramenées à l'altitude `z` : même décalage et même arrondi
+ * que `summaryAtAltitude`, sans recopier les trente jours (calcul en série des carrés d'une case).
+ */
+export function temperaturesAt(w: WeatherSummary, z: number | null): Pick<WeatherSummary, 'tmean7' | 'tmin5' | 'frost' | 'elevation'> {
+  if (z === null || !Number.isFinite(w.elevation) || z === w.elevation) return w;
+  const shift = -LAPSE_RATE * (z - w.elevation);
+  const tmin5 = w.tmin5 === null ? null : round1(w.tmin5 + shift);
+  return { elevation: z, tmean7: w.tmean7 === null ? null : round1(w.tmean7 + shift), tmin5, frost: tmin5 !== null && tmin5 <= FROST_C };
+}
+
 /** Altitude médiane des carrés de 4,5 km d'une case (null : inconnue). */
 export function medianAltitude(series: DailySeries): number | null {
   const zs = (series.subAltitudes ?? []).filter((z): z is number => z !== null).sort((a, b) => a - b);
@@ -434,18 +445,21 @@ export interface CellsWeather extends SharedStatus {
 
 /**
  * Météo des cases : fichiers communs ; s'ils sont injoignables, Open-Meteo en direct (au plus
- * DIRECT_MAX_CELLS cases, cache du jour), comme avant les fichiers communs.
+ * DIRECT_MAX_CELLS cases, cache du jour), comme avant les fichiers communs. `wanted` : en secours,
+ * les seules cases à demander (les fichiers communs, lus par blocs, rendent toujours tout).
  */
-export async function weatherForCells(cells: readonly GridCell[], signal?: AbortSignal): Promise<CellsWeather> {
-  const shared = await sharedSeries(cells);
+export async function weatherForCells(all: readonly GridCell[], signal?: AbortSignal, wanted?: (cell: GridCell) => boolean): Promise<CellsWeather> {
+  const shared = await sharedSeries(all);
   if (shared) {
     const series = new Map<string, DailySeries>();
-    for (const c of cells) {
+    for (const c of all) {
       const s = shared.series.get(c.id);
       if (s) series.set(c.id, s);
     }
     return { series, shared: true, updated: shared.updated, tooMany: false };
   }
+  // En secours, seulement les cases que l'appelant dessinera (`wanted`) : un appel par case.
+  const cells = wanted ? all.filter(wanted) : all;
   if (cells.length > DIRECT_MAX_CELLS) return { series: new Map(), shared: false, updated: null, tooMany: true };
   loadCache(todayKey());
   const key = (c: GridCell): string => `${c.lat},${c.lon}`;

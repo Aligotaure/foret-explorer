@@ -2,30 +2,31 @@
  * Sections ajoutées au panneau « Légendes » : « Je cherche… », nature du sol, météo.
  * Comme le reste du panneau, elles ne touchent jamais la carte : elles lisent et modifient le Store.
  */
-import { FINE_MIN_ZOOM, GEOLOGY, WEATHER_SUB_MIN_ZOOM, ZONES } from './config';
+import { BDFORET, BUILT_MAX_COVER, FINE_MIN_ZOOM, GEOLOGY, HOST_MIN_COVER, WEATHER_SUB_MIN_ZOOM, ZONES } from './config';
 import { h } from './dom';
 import { CLASS_BY_CODE } from './forestClasses';
 import { ABOUT_URL } from './legal';
 import { CELL_KM } from './meteoGrid';
 import { RAIN_STEPS, describeStatus, indexMushroom, type MeteoLayer } from './meteoLayer';
-import { CHANCE_THRESHOLD, GENERAL_CAUTION, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, hostCodes, type Mushroom } from './mushrooms';
+import {
+  CHANCE_THRESHOLD,
+  GENERAL_CAUTION,
+  HOTSPOT_MIN_CHANCE,
+  LEVELS,
+  MUSHROOMS,
+  MUSHROOM_BY_ID,
+  currentMonth,
+  hostCodes,
+  isDormant,
+  noEstimate,
+  offSeasonText,
+  seasonText,
+  type Mushroom,
+} from './mushrooms';
 import { SOIL_CLASSES, drawPattern } from './soils';
 import type { AppState, Store } from './state';
 import { collapsible, sectionTitle, switchInput } from './ui';
 import { onZonesInfo, zonesInfo } from './zones';
-
-const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-
-function seasonText(m: Mushroom): string {
-  const months = Object.entries(m.season)
-    .filter(([, w]) => (w ?? 0) >= 0.5)
-    .map(([k]) => Number(k))
-    .sort((a, b) => a - b);
-  // Saison à cheval sur l'année (ex. octobre → janvier) : on garde l'ordre naturel.
-  const first = months[0];
-  const last = months[months.length - 1];
-  return first && last ? `${MONTHS[first - 1]} à ${MONTHS[last - 1]}` : '—';
-}
 
 /** Mélanges et forêts mixtes : regroupés en « et leurs mélanges » pour rester lisible. */
 const MIXTURES = new Set(['FF1-00-00', 'FF2-00-00', 'FF2-80-80', 'FF2-90-90', 'FF31', 'FF32', 'FO3']);
@@ -51,42 +52,70 @@ function soilText(m: Mushroom): string {
 export function mushroomSection(store: Store): { el: HTMLElement; sync(state: AppState): void } {
   const chips = h('div', { class: 'presets', role: 'group', 'aria-label': 'Champignon recherché' });
   const buttons = new Map<string, HTMLButtonElement>();
+  // Hors saison de plus d'un mois : puce grisée et en tirets (pas la couleur seule), toujours
+  // cliquable : sa fiche et ses forêts hôtes servent à préparer la saison. Le nom du bouton ne change
+  // pas ; « hors saison (…) » est sa description (aria-describedby), lue après lui.
+  const notes = h('div', { class: 'visually-hidden' });
+  const noteOf = new Map<string, HTMLElement>();
   for (const m of MUSHROOMS) {
+    const note = h('span', { id: `saison-${m.id}` });
+    noteOf.set(m.id, note);
+    notes.append(note);
     const button = h('button', { class: 'chip chip--mushroom', type: 'button', 'aria-pressed': 'false' }, m.label);
     button.addEventListener('click', () => {
       if (store.state.mushroom === m.id) {
         store.update({ mushroom: null });
         return;
       }
-      store.update({ mushroom: m.id, selected: new Set(hostCodes(m)), weatherMode: 'indice' });
+      // Hors saison, la grille d'indice n'aurait rien à montrer : on garde le mode météo en cours
+      // (la pluie, si elle était affichée) au lieu de la remplacer par une grille vide.
+      if (noEstimate(m, currentMonth())) store.update({ mushroom: m.id, selected: new Set(hostCodes(m)) });
+      else store.update({ mushroom: m.id, selected: new Set(hostCodes(m)), weatherMode: 'indice' });
     });
     buttons.set(m.id, button);
     chips.append(button);
   }
   const card = h('div', { class: 'mushroom-card' });
-  const content = h('div', {}, chips, card);
+  const content = h('div', {}, chips, notes, card);
   const section = collapsible(sectionTitle('Je cherche…', 'mushroom'), content, true);
+  // La fiche est refaite à chaque changement d'état : on retient si ses conditions sont dépliées.
+  let factsOpen = false;
 
   const sync = (state: AppState): void => {
-    for (const [id, b] of buttons) b.setAttribute('aria-pressed', String(state.mushroom === id));
+    const month = currentMonth();
+    for (const [id, b] of buttons) {
+      b.setAttribute('aria-pressed', String(state.mushroom === id));
+      // Refait à chaque passage, pas seulement à la construction : le mois peut changer en cours de visite.
+      const mushroom = MUSHROOM_BY_ID.get(id as Mushroom['id']);
+      const dormant = Boolean(mushroom) && isDormant(mushroom as Mushroom, month);
+      const note = noteOf.get(id);
+      b.classList.toggle('chip--dormant', dormant);
+      if (dormant && note && mushroom) {
+        note.textContent = offSeasonText(mushroom);
+        b.setAttribute('aria-describedby', note.id);
+      } else {
+        if (note) note.textContent = '';
+        b.removeAttribute('aria-describedby');
+      }
+    }
     const m = state.mushroom ? MUSHROOM_BY_ID.get(state.mushroom) : undefined;
     if (!m) {
       card.replaceChildren(
         h(
           'p',
           { class: 'legend-hint' },
-          'Choisissez un champignon : la carte montre ses forêts hôtes et, sur une grille, l’indice de pousse calculé avec la météo des 30 derniers jours. Touchez ensuite la carte pour le bilan d’un coin.',
+          'Choisissez un champignon : la carte estime sa chance là où poussent ses arbres hôtes, d’après la météo des derniers jours. Touchez-la ensuite pour le bilan d’un coin.',
         ),
       );
       return;
     }
     const [, start, end] = m.lag;
-    const outOfSeason = !m.season[new Date().getMonth() + 1];
-    card.replaceChildren(
-      h('p', { class: 'mushroom-card__summary' }, h('em', {}, m.latin), ' — ', m.summary),
-      ...(outOfSeason
-        ? [h('p', { class: 'mushroom-card__season' }, `Hors saison en ce moment : l’indice reste nul jusqu’à la saison (${seasonText(m)}).`)]
-        : []),
+    const dormant = isDormant(m, month);
+    const outOfSeason = noEstimate(m, month);
+    const facts = h(
+      'details',
+      { class: 'legend-help mushroom-card__more', open: factsOpen },
+      h('summary', {}, 'Ses conditions : arbres, sols, saison'),
       h(
         'dl',
         { class: 'mushroom-card__facts' },
@@ -101,6 +130,38 @@ export function mushroomSection(store: Store): { el: HTMLElement; sync(state: Ap
         h('dt', {}, 'Saison'),
         h('dd', {}, seasonText(m)),
       ),
+    );
+    facts.addEventListener('toggle', () => {
+      factsOpen = facts.open;
+    });
+    card.replaceChildren(
+      h('p', { class: 'mushroom-card__summary' }, h('em', {}, m.latin), ' — ', m.summary),
+      ...(dormant
+        ? [
+            h(
+              'p',
+              { class: 'mushroom-card__season' },
+              `Hors saison en ce moment (saison : ${seasonText(m)}) : aucune chance estimée n’est calculée. Ses forêts hôtes sont cochées dans « Types de forêt » (visibles à partir du zoom ${BDFORET.minZoom}).`,
+            ),
+          ]
+        : outOfSeason
+          ? [h('p', { class: 'mushroom-card__season' }, `Hors saison en ce moment : aucune chance estimée avant la saison (${seasonText(m)}).`)]
+          : []),
+      // Lien vers une fiche de référence : libellé neutre, espèce nommée (l'entrée est souvent un
+      // groupe), site tiers annoncé. L'encadré de précaution reste la dernière chose lue.
+      h(
+        'p',
+        { class: 'mushroom-card__link' },
+        h(
+          'a',
+          { class: 'legend-link', href: m.sheet.url, target: '_blank', rel: 'noopener noreferrer' },
+          'Photos et description : ',
+          h('em', {}, m.sheet.species),
+          ' sur MycoDB (site tiers) ↗',
+          h('span', { class: 'visually-hidden' }, ' (nouvel onglet)'),
+        ),
+      ),
+      facts,
       h(
         'div',
         { class: 'mushroom-card__caution', role: 'note' },
@@ -112,7 +173,7 @@ export function mushroomSection(store: Store): { el: HTMLElement; sync(state: Ap
   return { el: section.el, sync };
 }
 
-/** « Où cueillir » : zones protégées (affichées par défaut) et forêts publiques, à titre indicatif. */
+/** « Droit de cueillir » : zones protégées (affichées par défaut) et forêts publiques, à titre indicatif. */
 export function zonesSection(store: Store): { el: HTMLElement; sync(state: AppState): void } {
   const protectedToggle = switchInput('Afficher les zones protégées');
   protectedToggle.addEventListener('change', () => store.update({ zones: protectedToggle.checked }));
@@ -161,7 +222,8 @@ export function zonesSection(store: Store): { el: HTMLElement; sync(state: AppSt
   };
   onZonesInfo(describe);
   describe();
-  const section = collapsible(sectionTitle('Où cueillir', 'shield'), content, false);
+  // Même intitulé que dans le bilan d'un coin : « Où cueillir » pouvait se lire « où l'on a le droit ».
+  const section = collapsible(sectionTitle('Droit de cueillir', 'shield'), content, false);
   const sync = (state: AppState): void => {
     protectedToggle.checked = state.zones;
     publicToggle.checked = state.publicForests;
@@ -204,7 +266,7 @@ export function soilSection(store: Store): { el: HTMLElement; sync(state: AppSta
       `Couverture : ${GEOLOGY.coverage}, à partir du zoom ${GEOLOGY.minZoom}. La géologie donne la tendance du sol (acide, calcaire…), pas le sol exact. Source : BRGM, carte géologique au 1/50 000.`,
     ),
   );
-  const section = collapsible(sectionTitle('Nature du sol', 'strata'), content, false, toggle);
+  const section = collapsible(sectionTitle('Nature du sol', 'strata'), content, store.state.geology, toggle);
   let wasOn = store.state.geology;
 
   const sync = (state: AppState): void => {
@@ -221,18 +283,21 @@ export function soilSection(store: Store): { el: HTMLElement; sync(state: AppSta
   return { el: section.el, sync };
 }
 
-/** Météo des 30 derniers jours : pluie cumulée ou indice de pousse, sur une grille. */
+/** Météo : pluie des 20 derniers jours ou chance estimée du champignon recherché, sur une grille. */
 export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLElement; sync(state: AppState): void } {
   const toggle = switchInput('Afficher la grille météo');
-  toggle.addEventListener('change', () =>
-    store.update({ weatherMode: toggle.checked ? (store.state.mushroom ? 'indice' : 'pluie') : 'off' }),
-  );
+  toggle.addEventListener('change', () => {
+    // Allumer la grille montre l'indice du champignon choisi, sauf s'il est hors saison : la grille
+    // d'indice serait vide, alors que la pluie a quelque chose à montrer.
+    const chosen = store.state.mushroom ? MUSHROOM_BY_ID.get(store.state.mushroom) : undefined;
+    store.update({ weatherMode: toggle.checked ? (chosen && !noEstimate(chosen, currentMonth()) ? 'indice' : 'pluie') : 'off' });
+  });
 
   const radios = h('div', { class: 'basemaps', role: 'radiogroup', 'aria-label': 'Grille météo' });
   const inputs = new Map<string, HTMLInputElement>();
   const indexLabel = h('span', {});
   for (const [mode, label] of [
-    ['pluie', h('span', {}, 'Pluie cumulée sur 20 jours')],
+    ['pluie', h('span', {}, 'Pluie des 20 derniers jours')],
     ['indice', indexLabel],
   ] as const) {
     const input = h('input', { type: 'radio', name: 'meteo', value: mode });
@@ -245,19 +310,47 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
 
   const scale = h('ul', { class: 'scale' });
   const status = h('p', { class: 'legend-hint', 'aria-live': 'polite' });
+  // Toujours sous les yeux quand la grille est allumée : ce que vaut le chiffre. Le mode d'emploi, lui, se déplie.
+  const caveat = h(
+    'p',
+    { class: 'legend-hint legend-hint--caveat' },
+    'Un carré : des arbres hôtes, et une chance estimée d’au moins 35 %. Ailleurs, pas de carré. Chances estimées, pas mesurées : ni promesse d’en trouver, ni droit de cueillir, ni avis sur ce qui se mange.',
+  );
   const content = h(
     'div',
     {},
     radios,
     scale,
+    caveat,
     status,
     h(
-      'p',
-      { class: 'legend-hint' },
-      `Pluie et températures par cases d’environ ${CELL_KM} km sur toute la France, mises à jour une fois par jour. L’indice se précise en zoomant : carrés de 4,5 km à partir du zoom ${WEATHER_SUB_MIN_ZOOM}, puis carrés de 500 m là où poussent les arbres hôtes à partir du zoom ${FINE_MIN_ZOOM}, avec le sol de chacun. Les températures sont ramenées à l’altitude de chaque carré ; la pluie reste celle de la case. Les pourcentages sont des chances estimées : en dessous de ${CHANCE_THRESHOLD} %, peu d’espoir sans connaître un coin précis, et la carte ne met en avant que les secteurs au-dessus (pastilles en vue d’ensemble). Pour un point précis, touchez la carte. Météo : Open-Meteo (modèles, pas de pluviomètres).`,
+      'details',
+      { class: 'legend-help' },
+      h('summary', {}, 'Comment c’est calculé'),
+      h(
+        'p',
+        {},
+        `Pluie et températures par cases d’environ ${CELL_KM} km sur toute la France, mises à jour une fois par jour. L’estimation se précise en zoomant : cases de ${CELL_KM} km en vue d’ensemble, carrés de 4,5 km avec leur pourcentage à partir du zoom ${WEATHER_SUB_MIN_ZOOM}, puis carrés de 500 m là où poussent les arbres hôtes à partir du zoom ${FINE_MIN_ZOOM}, avec le sol de chacun. Les températures sont ramenées à l’altitude de chaque carré ; la pluie reste celle de la case.`,
+      ),
+      h(
+        'p',
+        {},
+        `Un carré de 4,5 km n’est coloré que si les arbres hôtes du champignon y couvrent au moins ${Math.round(HOST_MIN_COVER * 100)} % de la surface (BD Forêt de l’IGN) et si moins de ${Math.round(BUILT_MAX_COVER * 100)} % est bâti (Plan IGN) ; il l’est d’autant plus qu’il est boisé. Son pourcentage vaut pour ces forêts, sans tenir compte du sol. En ville, les carrés de 500 m ne montrent que les vrais massifs, pas les parcs. Le bilan d’un coin, lui, regarde la forêt et le sol du point touché : son chiffre peut différer, plus haut ou plus bas.`,
+      ),
+      h(
+        'p',
+        {},
+        `En dessous de 35 %, la carte ne dessine pas de carré. En dessous de ${CHANCE_THRESHOLD} %, peu d’espoir sans connaître un coin précis : elle n’étiquette que les carrés au-dessus, et si la vue n’en a aucun, un bandeau le dit et propose le champignon de saison qui y a la meilleure chance estimée. En vue d’ensemble, une pastille marque les secteurs à ${HOTSPOT_MIN_CHANCE} % et plus : son chiffre est celui du meilleur carré de 4,5 km de la case. Pour un point précis, touchez la carte. Météo : Open-Meteo (modèles, pas de pluviomètres).`,
+      ),
+      h(
+        'p',
+        {},
+        'Un champignon à plus d’un mois de sa saison est grisé et en pointillés dans « Je cherche… » : aucune chance estimée n’est calculée pour lui, ni sur la carte ni dans le bilan.',
+      ),
     ),
   );
-  const section = collapsible(sectionTitle('Météo des 30 derniers jours', 'rain'), content, false, toggle);
+  // Dépliée dès que la grille est allumée, y compris au chargement : une grille sans son échelle ne se lit pas.
+  const section = collapsible(sectionTitle('Météo', 'rain'), content, store.state.weatherMode !== 'off', toggle);
   let wasOn = store.state.weatherMode !== 'off';
 
   let lastStatus: Parameters<typeof describeStatus>[0] = { state: 'off' };
@@ -276,15 +369,19 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
       input.disabled = state.weatherMode === 'off';
     }
     const m = MUSHROOM_BY_ID.get(indexMushroom(state));
-    indexLabel.textContent = `Indice de pousse : ${m?.label.toLowerCase() ?? ''}`;
-    const items =
+    // Champignon montré hors saison : rien n'est coloré, l'échelle et sa mise en garde n'ont pas lieu d'être.
+    const offSeason = state.weatherMode === 'indice' && Boolean(m) && noEstimate(m as Mushroom, currentMonth());
+    indexLabel.textContent = `Chance estimée : ${m?.label.toLowerCase() ?? ''}${m && noEstimate(m, currentMonth()) ? ' (hors saison)' : ''}`;
+    // Indice : le niveau « défavorable » n'a pas de couleur sur la carte, il n'y est pas dessiné.
+    const items: (readonly [string | null, string])[] =
       state.weatherMode === 'indice'
-        ? LEVELS.map((l) => [l.color, `${l.label} (${l.range})`] as const)
+        ? LEVELS.map((l, k) => (k === 0 ? ([null, `Sans carré : ${l.range}, ou pas d’arbres hôtes`] as const) : ([l.color, `${l.label} (${l.range})`] as const)))
         : RAIN_STEPS.map((s) => [s.color, s.label] as const);
     scale.replaceChildren(
-      ...items.map(([color, label]) => h('li', {}, h('span', { class: 'swatch', style: `--swatch: ${color}` }), label)),
+      ...items.map(([color, label]) => h('li', {}, color ? h('span', { class: 'swatch', style: `--swatch: ${color}` }) : h('span', { class: 'swatch swatch--none' }), label)),
     );
-    scale.hidden = state.weatherMode === 'off';
+    scale.hidden = state.weatherMode === 'off' || offSeason;
+    caveat.hidden = state.weatherMode !== 'indice' || offSeason;
     status.textContent = describeStatus(lastStatus, state);
   };
   return { el: section.el, sync };

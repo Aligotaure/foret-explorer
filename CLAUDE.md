@@ -6,10 +6,15 @@ choisir les types affichés, enrichie pour la cueillette : nature du sol (géolo
 altitude (IGN) et indice de pousse par champignon, en cases de 18 km, puis en carrés de 4,5 km et de
 500 m quand on zoome ; zones protégées et forêts publiques (droit de cueillir). **Toute la France métropolitaine** :
 ne rien coder pour une région en particulier.
-Avertissement bloquant à l'ouverture (3 s) et page « À propos » (conditions, mentions légales,
+Accueil à l'ouverture : un avertissement bloquant (3 s, moins de 100 mots) puis, au premier accord,
+« La carte en 3 gestes » ; page « À propos » (conseils, conditions, mentions légales,
 confidentialité). Interface inspirée du panneau « Légendes » de cartes.gouv.fr
 (thème sombre bleu nuit, icônes lavande, légende sur carte blanche). Une page privée (serveur
 Cloudflare, `worker/`) suit la consommation des API.
+
+Deux vues dans la même page, choisies par un îlot noir en haut au centre : « Carte » (tout ce qui
+précède) et « Analytics » (comment le produit est piloté : pari en cours, analyses, paris tranchés),
+à l'adresse `#vue=analytics`. Voir « Deux vues : Carte et Analytics ».
 
 Usage visé : repérer les coins favorables aux champignons (cèpes, girolles, trompettes, chanterelles
 en tube, morilles) partout en France. La carte sert aussi sur téléphone, en forêt : le mobile compte
@@ -30,9 +35,15 @@ https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
 - `npm ci` puis `npm run dev` : serveur Vite sur http://localhost:5173 (versions figées par
   `package-lock.json` ; `npm install <paquet>` pour en ajouter un, puis committer le lockfile)
 - `npm run typecheck` : TypeScript strict, sans émission
-- `npm run build` : build statique dans `dist/` ; `npm run check` = typecheck + build
+- `npm run build` : build statique dans `dist/` ; `npm run check` = typecheck + build + contrôle du
+  build (`tests/build.mjs`, aussi `npm run test:build` : la page d'entrée et la vue Analytics
+  n'embarquent pas MapLibre, le code de la carte est préchargé, ordre des feuilles de style, contenu
+  de `src/analyticsData.ts` relu)
 - `npm run test:e2e` : test de bout en bout (Playwright + vrai MapLibre, services simulés ; avertissement,
-  À propos et zones compris). Première fois : `npx playwright install chromium`. Captures dans `tests/e2e/shots/`.
+  À propos et zones compris ; îlot et vue Analytics dans `tests/e2e/views.mjs`). Première fois :
+  `npx playwright install chromium`. Captures dans `tests/e2e/shots/`. La suite entière prend une
+  dizaine de minutes ; pour mettre un test au point, `E2E_SEULS=cache,vide npm run test:e2e` ne joue
+  que ces groupes (`avertissement`, `bureau`, `secours`, `cache`, `vide`, `telephone`, `vues`).
 - `cd worker && npm ci && npm test` : serveur de mesure (26 vérifications, Durable Object simulé sur
   `node:sqlite`, Node ≥ 22.18 qui lit le TypeScript directement) ; aperçus HTML dans `worker/test/apercus/`.
   `npm run typecheck` (types Cloudflare), `npm run dev` (wrangler, secrets dans `worker/.dev.vars`).
@@ -50,10 +61,17 @@ https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
   cases, de leur point de relevé et de l'altitude de leurs 16 carrés de 4,5 km), seulement si la
   taille des cases change ; les points de relevé existants sont gardés. Pas de CORS ni d'accès depuis
   le bac à sable : à lancer en local ou dans une tâche GitHub.
+- `node scripts/foret/parts.mjs` : refait `public/foret/parts.json` (part de chaque type de forêt et
+  part bâtie de chacun des 29 483 carrés de 4,5 km), seulement si la grille change ou si l'IGN publie
+  une nouvelle BD Forêt. 889 tuiles vectorielles du zoom 10 de la BD Forêt (≈ 320 Mo, gardées dans
+  `.cache/foret/`) et autant du Plan IGN (≈ 85 Mo, `.cache/plan/`), une à deux minutes, sans
+  dépendance ; tourne en local (il traduit `src/meteoGrid.ts` lui-même).
 - `npm run test:donnees` : `test:meteo` (mise à jour de la météo commune rejouée sur plusieurs jours
   avec des séries simulées : budgets, jours manquants, journée provisoire, publication) + `test:geologie` (règles des sols
-  sur la table de toutes les descriptions de France, `tests/donnees/`). `node tests/geologie.mjs non`
-  liste les formations encore sans sol, `sol <id>` et `grep <motif>` servent à régler les règles.
+  sur la table de toutes les descriptions de France, `tests/donnees/`) + `test:foret` (géométrie du
+  calcul des parts de forêt, lecteur de tuiles, fichier versionné ; lui seul tourne en local).
+  `node tests/geologie.mjs non` liste les formations encore sans sol, `sol <id>` et `grep <motif>`
+  servent à régler les règles.
 
 Après chaque modification : `npm run check` puis `npm run test:e2e` (`npm run test:donnees` si
 `scripts/`, `src/meteoGrid.ts` ou `src/metricsSchema.ts` changent ; `npm test` dans `worker/` si le
@@ -63,16 +81,22 @@ branche et lancer `verification.yml` (`gh workflow run verification.yml --ref <b
 ## Pile
 
 Vite + TypeScript strict + MapLibre GL JS 5, sans framework. Une seule autre dépendance : `pmtiles`
-(lecture des archives de tuiles du site, protocole `pmtiles://` enregistré dans `main.ts`). Pas de
+(lecture des archives de tuiles du site, protocole `pmtiles://` enregistré dans `mapView.ts`). Pas de
 nouvelle dépendance sans raison.
 
 ## Architecture (`src/`)
 
 | Fichier | Rôle |
 |---|---|
-| `main.ts` | Point d'entrée : avertissement, protocole `pmtiles://`, carte (France entière puis dernière vue gardée), modules, état → carte, clic → bilan du coin, comptages |
-| `disclaimer.ts` | Avertissement bloquant (`<dialog>` modal, ni Échap ni clic à côté) : bouton actif 3 s après le premier affichage (horloge, pas minuteries), mémorisé par version des conditions, 30 jours au plus |
-| `legal.ts` | Version des conditions (`TERMS_VERSION`), adresse de « À propos », données gardées dans le navigateur, effacement |
+| `main.ts` | Point d'entrée (petit) : feuilles de style, îlot, avertissement, et chaque vue chargée par `import()` à sa première ouverture |
+| `view.ts` | Les deux vues : lecture et écriture de `#vue=analytics` dans l'adresse, historique, îlot, annonce aux lecteurs d'écran |
+| `mapView.ts` | La vue Carte (chargée à la demande) : protocole `pmtiles://`, carte (France entière puis dernière vue gardée), modules, état → carte, clic → bilan du coin, comptages |
+| `analyticsView.ts`, `analytics.css` | La vue Analytics (chargée à la demande, sans rien de la carte) : en-tête, entonnoir (emplacement vide), pari en cours, analyses, paris tranchés, états vides |
+| `analyticsData.ts` | **Le** fichier de contenu de la vue Analytics, modifié à la main (guide en tête du fichier) |
+| `analyticsTypes.ts`, `analyticsCheck.ts` | Format de ce contenu (types stricts : dates, adresse https) et relecture de ce que les types ne voient pas (date impossible, texte vide, valeur négative) |
+| `disclaimer.ts` | Avertissement bloquant (`<dialog>` modal, ni Échap ni clic à côté), moins de 100 mots : bouton actif 3 s après le premier affichage (horloge, pas minuteries ; il attend aussi la fin du texte si la fenêtre défile), mémorisé par version des conditions, 30 jours au plus ; dit si c'est un premier accord |
+| `tour.ts` | « La carte en 3 gestes » : fenêtre libre montrée après un premier accord et depuis la légende, schéma de l'écran dessiné en HTML/CSS (grand écran et téléphone) ; chargé avec l'entrée, n'importe rien de la carte |
+| `legal.ts` | Version des conditions (`TERMS_VERSION`), jour de la refonte (`TOUR_SINCE`), adresse de « À propos », données gardées dans le navigateur, effacement |
 | `apropos.ts`, `apropos.css` | Page `a-propos.html` (conseils, règles, conditions, mentions légales, confidentialité) : état de la mesure, « Effacer mes données » |
 | `zones.ts` | Zones protégées et forêt publique sous un point, hachures, `info.json` (sans lui : statut inconnu) |
 | `config.ts` | URLs des services, archives de tuiles (`archiveTiles`, zooms de `GEOLOGY` et `ZONES`), emprise de la France (`FRANCE_BOUNDS` : données et première vue), réglages de la météo, clé localStorage |
@@ -80,20 +104,22 @@ nouvelle dépendance sans raison.
 | `mapStyle.ts` | Style MapLibre (sources + couches), expressions couleur/filtre/motif, fonctions `apply*()` |
 | `state.ts` | Store observable (sélection, opacité, fond, champignon, météo, sol) + persistance localStorage |
 | `legend.ts` | Panneau « Légendes » : forêts (cases, groupes, préréglages, comptages), opacité, fond |
-| `legendExtras.ts` | Sections « Je cherche… », « Où cueillir », « Nature du sol », « Météo des 30 derniers jours » |
-| `ui.ts` | Section repliable, interrupteur, titre avec icône (partagés par les panneaux) |
-| `mushrooms.ts` | Profils des 5 champignons (hôtes, sols, saison, températures, délai après pluie, précautions) et indice |
+| `legendExtras.ts` | Sections « Je cherche… » (fiche, lien MycoDB), « Météo », « Nature du sol », « Droit de cueillir » |
+| `ui.ts` | Section repliable (chevron = bouton, titre cliquable aussi), interrupteur, titre avec icône (partagés par les panneaux) |
+| `mushrooms.ts` | Profils des 5 champignons (hôtes, sols, saison, températures, délai après pluie, précautions, fiche MycoDB) et indice (raisons, ce qui l'annule) |
+| `forestShare.ts` | Arbres hôtes et part bâtie de chaque carré de 4,5 km, lus dans `public/foret/parts.json` : part de surface et qualité moyenne des hôtes par champignon, et la règle d'allumage d'un carré (`isLit`) |
 | `soils.ts` | 8 natures de sol, champignons associés, motifs dessinés au canevas |
 | `geology.ts` | Motifs fournis à MapLibre (`styleimagemissing`), forêt et sol sous un point |
 | `meteoGrid.ts` | Grille météo commune (cases de 0,16° × 0,224°, blocs de 8 × 8, 16 carrés de 4,5 km par case : `subBox`, `subIndexAt`), format des fichiers, dates ; lu aussi par Node (scripts) : aucun import |
 | `weather.ts` | Fichiers météo communs (index, blocs), résumé de 30 jours daté (épisodes de pluie, gel, `rain20` pour l'humidité, jour estimé), `atAltitude`, `summaryAtAltitude`, Open-Meteo en secours (cache du jour), altitude IGN |
-| `meteoLayer.ts` | Grille météo sur la vue, à tous les zooms (toute la France d'un coup en vue d'ensemble) : pluie cumulée ou indice du champignon choisi, détaillé par carrés de 4,5 km à partir du zoom 8 ; carrés fins en mode indice |
-| `fineGrid.ts` | Carrés de 500 m : découpage, relevé forêt/sol (index spatial sur `queryRenderedFeatures`), altitudes en cache permanent, indice par carré |
+| `meteoLayer.ts` | Grille météo sur la vue, à tous les zooms (toute la France d'un coup en vue d'ensemble) : pluie cumulée ou indice du champignon choisi : cases de 18 km et pastilles sous le zoom 10, carrés de 4,5 km à partir du zoom 10, allumés à la mesure de leurs arbres hôtes, hors des villes ; carrés fins en mode indice ; rien pour un champignon hors saison. Règles de fluidité en tête de classe |
+| `fineGrid.ts` | Carrés de 500 m : découpage, relevé forêt/sol (index spatial sur `queryRenderedFeatures`), gardé d'une visite à l'autre (`foret-explorer:releves`), altitudes en cache permanent, choix des carrés à dessiner (`fineCellsToDraw` : plus sévère en ville), indice par carré |
 | `metrics.ts` | Compteurs de consommation des API (en mémoire) et envoi groupé au serveur de mesure |
 | `metricsSchema.ts` | Liste des compteurs, partagée avec `worker/` (un compteur absent est refusé par le serveur) |
-| `spot.ts` | Bilan d'un coin au clic : forêt, sol, altitude, droit de cueillir, histogramme de pluie, verdicts expliqués |
+| `spot.ts` | Bilan d'un coin au clic, la réponse d'abord : zone protégée, terrain (forêt, sol, altitude, statut), une ligne par champignon, bouton « ? », pluie, règles repliées |
 | `search.ts` | Recherche de lieu (autocomplétion de la Géoplateforme) |
 | `toolbar.ts` | Boutons : légende, fond de carte, géolocalisation, plein écran, zoom |
+| `gridLoader.ts` | Calcul des carrés en cours : champignon qui se remplit (`#grid-loader`) et zoom en pause, pilotés par `MeteoLayer.onBusy` ; puis, si la vue n'a rien à 50 % ou plus, le bandeau « risque de chou blanc » (`#grid-verdict`, `MeteoLayer.onVerdict`) |
 | `counts.ts` | Nombre de polygones par type dans les tuiles affichées |
 | `dom.ts`, `icons.ts` | Utilitaires DOM (`h()`, `toast()`…), icônes SVG |
 
@@ -104,15 +130,18 @@ PMTiles), `regles.mjs` (règles de classement des descriptions géologiques en n
 `scripts/meteo/` : `mettre-a-jour.mjs` (fichiers météo communs, voir « Météo commune »), `cases.mjs`
 (liste des cases qui touchent la France, d'après ADMIN EXPRESS, et altitude IGN de leurs carrés de
 4,5 km), `cases-france.json` (versionné).
+`scripts/foret/` : `parts.mjs` (parts de forêt par carré de 4,5 km → `public/foret/parts.json`,
+versionné), `mvt.mjs` (lecteur de tuiles vectorielles sans dépendance), `geometrie.mjs` (aires,
+découpage d'un anneau par un rectangle, tuiles XYZ).
 `scripts/zones/` : `telecharger.mjs` (WFS → GeoJSONSeq Lambert-93, noms nettoyés, `resume.json`),
 `construire.sh` (GPKG simplifié à 5 m → archive PMTiles, couches `protection`, `protection_nom` (un point par zone,
 pour n'afficher son nom qu'une fois : les sites des conservatoires sont faits de dizaines de parcelles)
 et `foret_publique`, `info.json`).
 
-Flux : l'interface ne touche jamais la carte. Elle appelle `store.update()` ; `main.ts` est abonné au
+Flux : l'interface ne touche jamais la carte. Elle appelle `store.update()` ; `mapView.ts` est abonné au
 store et appelle `applySelection` / `applyOpacity` / `applyBasemap` / `applyGeology` /
 `meteo.applyMode()`. Pour ajouter une option : champ dans `AppState` (+ persistance dans `state.ts`),
-contrôle dans `legend.ts` ou `legendExtras.ts`, effet dans `mapStyle.ts`, abonnement dans `main.ts`,
+contrôle dans `legend.ts` ou `legendExtras.ts`, effet dans `mapStyle.ts`, abonnement dans `mapView.ts`,
 vérification dans `tests/e2e/run.mjs`.
 
 Couches (ordre) : `base-plan`, `base-ortho`, `bdforet-overview` (raster, zoom < 10), `bdforet-fill`
@@ -124,23 +153,449 @@ statut sous un clic, zoom ≥ 10), `meteo-cellules`, `meteo-contours`, `meteo-fi
 `meteo-fin-etiquettes`, `zones-protegees-contours`, `zones-protegees-etiquettes` (au-dessus de
 l'indice), `bdforet-highlight-casing`, `bdforet-highlight`.
 
-Carrés de 4,5 km (`meteoLayer.ts`, zoom ≥ `WEATHER_SUB_MIN_ZOOM` = 8, mode indice) : chaque case
+Carrés de 4,5 km (`meteoLayer.ts`, zoom ≥ `WEATHER_SUB_MIN_ZOOM` = 10, mode indice) : chaque case
 commune est dessinée en 16 carrés (id « I:J/k », propriété `sub` = 1), même pluie, températures
 ramenées à l'altitude de chaque carré (`a` dans les fichiers, `summaryAtAltitude`) ; un carré sans
-terre française n'est pas dessiné. En deçà du zoom 8, et en mode pluie, cases entières (`sub` = 0, à
-l'altitude médiane de leurs carrés). Étiquettes des carrés à partir du zoom 10 (une expression de
-zoom dans une propriété `layout` n'est évaluée qu'aux zooms entiers).
+terre française n'est pas dessiné. En deçà du zoom 10, et en mode pluie, cases entières (`sub` = 0 ;
+indice : voir « Pastilles »), sans quadrillage en mode indice (`setLayerZoomRange`). Seuls
+les carrés (`sub` = 1) portent une étiquette, dès leur arrivée au zoom 10 (une expression de zoom
+dans une propriété `layout` n'est évaluée qu'aux zooms entiers : garder un seuil entier) ; une case
+entière encore dans la source au passage du zoom 10 n'affiche donc rien. Avant le 14/11/2026 les
+carrés arrivaient au zoom 8 (demande de Clément : à l'échelle 20 km leur couleur ne se lit pas ; ils
+font 17 à 26 pixels de large quand la règle affiche 20 km). La règle d'échelle (120 px au plus)
+affiche 30 km du zoom 7,0 à 7,8, 20 km jusqu'à 8,35, 10 km jusqu'à 9,35, 5 km jusqu'à 10,35 (à 46°
+de latitude) : entre 9,35 et 10 elle dit déjà 5 km et les cases restent de 18 km, écart assumé pour
+n'avoir qu'un seuil (carrés, étiquettes et forêts détaillées arrivent ensemble).
+
+Pastilles (`meteo-points`, zoom < 10, mode indice ; `pickHotspots`, `bestSquare`) : une par case où
+la chance estimée atteint `HOTSPOT_MIN_CHANCE` (70 %, le niveau « favorable » ; 50 % avant le
+14/11/2026), 12 au plus, espacées d'un septième de la vue. Leur chiffre est celui du **meilleur carré
+de 4,5 km allumé de la case** (à son altitude, pour ses arbres hôtes), où elles sont posées : celui
+que son étiquette affichera au zoom 10 (un test compare les deux). **La teinte de la case (`l`, `p`)
+est celle de ce même carré** : calculée pour la case entière, à son altitude médiane (Annecy : 447 à
+2 351 m dans une case), elle pâlissait là où une vallée est favorable, ou fonçait là où aucun carré
+boisé ne l'est. Les seize carrés sont calculés par `squareScore` (part commune à la case
+`weatherCeiling` = saison × pluie, × température à l'altitude du carré `temperaturesAt`, × qualité
+des hôtes) : mêmes facteurs et même ordre que `scoreMushroom`, donc le même indice au dernier chiffre
+(un test le vérifie sur 360 cas), sans phrases ni copie des trente jours. En mode pluie, en secours
+(pas d'altitudes de carrés) ou sans le fichier des parts, la case reste calculée d'un bloc, à son
+altitude médiane. « Meilleure chance estimée dans la vue » (légende) lit les mêmes candidats, au
+seuil de 50 % (`CHANCE_THRESHOLD`), et précise « (pastilles à partir de 70 %) » quand aucune n'est
+posée ; à partir du zoom 10 elle ne regarde que les carrés dont une partie est à l'écran, et la
+source des pastilles est vidée une fois pour toutes.
+
+Arbres hôtes (`forestShare.ts`, `public/foret/parts.json`, mode indice) : avant le 14/11/2026, cases
+et carrés ne regardaient que la météo (Paris affichait « 78 % · favorable », le bilan au même point
+« ≈ 0 % »). Désormais un carré n'est coloré (`isLit`) que si les arbres hôtes du champignon y couvrent
+au moins `HOST_MIN_COVER` (10 %) de la surface et si moins de `BUILT_MAX_COVER` (15 %) est bâti, et
+d'autant plus qu'ils en couvrent (teinte pleine à `HOST_FULL_COVER`, 50 %) ; son indice est multiplié
+par la qualité moyenne de ces hôtes (pas par le sol, inconnu à cette échelle : le bilan, qui regarde
+la forêt et le sol du point, peut différer dans les deux sens). Seuils du 14/11/2026 : à 5 % d'hôtes
+et sans regarder le bâti, 85 % des carrés de France s'allumaient pour les cèpes (25 154 sur 29 483),
+dont 1 624 bâtis à 15 % ou plus : toutes les villes étaient colorées (Nancy : 80 à 84 % sur le
+centre). Avec 10 % et 15 % : 20 025 carrés (68 %). Les parts s'additionnent en pour cent entiers
+(`forestShare.ts`) : 0,07 + 0,01 + 0,01 + 0,01 fait 0,0999… et laisserait éteints 450 carrés à 10 % pile. Un carré éteint n'est pas envoyé à la carte, un carré défavorable (moins de 35 %) non plus (voir « Sans carré ») : ni
+teinte, ni quadrillage, ni étiquette, ni pastille. Propriétés d'un carré : celles du champignon
+montré seulement, sous des noms fixes (`l` niveau, `p` chance estimée, `c` part d'hôtes de 0 à 1 ;
+`c` = −1 si le fichier manque : la grille se dessine alors comme avant et la légende le dit). Les
+cases du mode pluie n'en portent aucune. Case entière (zoom < 10) :
+moyenne de ses carrés (pastille : voir ci-dessus). Aux zooms des carrés de 500 m, la grille des
+cases reste en fond sans étiquette dès que le relevé fin est fait (`fineDone`), même s'il n'a trouvé
+aucun arbre hôte. Fichier : par case commune, 16 carrés `[rang du code, part en %, …]` (null : pas de
+terre française) dans `cases`, et leur part bâtie en % dans `bati` (champ ajouté le 14/11/2026, même
+format `v: 1` : un fichier sans lui se lit encore, rien n'est alors tenu pour bâti) ; 993 ko, 236 ko
+compressé ; aux limites de départements des polygones de la BD Forêt se recouvrent (99 carrés ramenés
+à 100 %). Part bâtie : zones bâties et zones d'activité du Plan IGN (voir « Données et API ») ;
+3 544 carrés bâtis à 10 % ou plus, 2 067 à 15 %, 1 025 à 25 %, 303 à 50 %, 8 397 à 0 %. Les identifiants de texte des cases (« I:J/k ») ne
+survivent pas aux tuiles de MapLibre : dans les tests, un carré se reconnaît à son centre (`x`, `y`).
+Simulé dans les tests e2e (`forestShare()` de `mocks.mjs`). Le fichier est chargé dans tous les modes ; un échec
+de réseau se retente au plus toutes les 30 secondes, un fichier d'un autre format jamais. Une case
+entière est allumée dès qu'un de ses carrés l'est (sa teinte suit la moyenne). La police des
+étiquettes est vide dans les tests : aucune étiquette n'y est dessinée, on y évalue donc les
+expressions de MapLibre carré par carré (`map.style.getLayer(…).paint.get(…).evaluate(…)`). Le mois
+est figé en octobre dans les tests de bureau (saison des champignons).
+
+## Fluidité : ce que coûte un changement sur la carte
+
+Mesuré le 14/11/2026 (Chromium sans carte graphique, comme une machine virtuelle ou un vieux
+téléphone ; vraies données, 1280 × 800 ; fil principal occupé et images redessinées, relevés par le
+profileur du navigateur et l'événement `render` de MapLibre). Un clic sur un champignon :
+
+| Vue | Avant | Après |
+|---|---|---|
+| France entière (zoom 5) | 1,2 à 1,4 s, 20 à 22 images | 0,4 à 0,5 s, 4 images |
+| Lyon (zoom 9) | 1,1 à 1,3 s, 12 à 15 images | 0,4 à 0,5 s, 4 à 5 images |
+| Annecy (zoom 11) | 1,8 s, 6 à 8 images | 1,2 à 1,5 s, 4 à 6 images |
+| Forêt (zoom 13, carrés de 500 m) | 1,0 s, 9 à 10 images | 0,5 s, 3 images |
+
+Le code du site n'y pèse presque rien (5 à 100 ms) : le temps part dans MapLibre. Deux faits à
+garder en tête avant de toucher à la grille (`meteoLayer.ts`, `mapStyle.ts`) :
+- chaque arrivée de tuiles fait redessiner la carte, et sans carte graphique chacune de ces images
+  occupe le fil principal 0,1 à 0,3 s (0,1 s à Lyon au zoom 9, 0,26 s à Annecy au zoom 11) ;
+- MapLibre refait toutes les tuiles d'une source dès qu'on change son contenu (`setData`), un filtre,
+  ou une propriété de dessin dont l'expression lit une propriété des objets (`['get', …]`). Une
+  propriété constante (opacité fixe) ne refait rien.
+
+D'où les règles : les carrés ne portent que les valeurs du champignon montré sous des noms fixes
+(`l`, `p`, `c` : changer de champignon ne change plus aucune expression, un test le vérifie), et rien
+de tout cela en mode pluie ; un carré éteint n'est pas envoyé ; un contenu identique au précédent
+n'est pas renvoyé (`setSource`) ; au changement de mode ou de champignon, la grille et les carrés de
+500 m sont redessinés dans l'instant à partir du dernier relevé gardé (`redraw()`, `data`,
+`fineData`), sans attendre le réseau ni le repos de la carte (sinon ils montrent les valeurs de
+l'ancien champignon sous le nom du nouveau ; les 0,5 s d'attente ne servent qu'aux déplacements) ;
+les carrés de 500 m sont redessinés au plus toutes les 1,2 s pendant
+que leurs altitudes arrivent ; pas de fondu des étiquettes (`fadeDuration: 0`) ni de transition de
+0,3 s (`transition` du style) ; sources de la grille avec un `maxzoom` bas (une ou deux tuiles pour
+la vue au lieu de douze, au prix d'un arrondi de ± 7 m sur les carrés de 4,5 km).
+
+Se déplacer et zoomer (second retour de Clément, le 14/11/2026 : « ça manque encore de fluidité ») :
+sa machine virtuelle dessine au processeur (rendu « llvmpipe », vérifié dans le navigateur intégré),
+comme le Chromium des mesures. Trompettes choisies, autour de Lyon (`parcours.mjs`, fil principal
+occupé et images redessinées) :
+
+| Geste | Avant | Après |
+|---|---|---|
+| Zoom de 7,2 à 8,2 (règle : 30 → 20 km) | 5,5 s, 69 images | 2,5 s, 32 images |
+| Déplacement d'un demi-écran au zoom 8,2 | 1,8 s, 22 images | 1,1 s, 19 images |
+| Zoom de 8,2 à 9,2 (règle : 10 km) | 5,9 s, 53 images | 2,6 s, 26 images |
+| Déplacement au zoom 9,2 | 2,5 s, 20 images | 1,7 s, 15 images |
+| Zoom de 9,8 à 10,5 (forêts détaillées) | 9,1 s, 43 images | 4,4 s, 24 images |
+| Déplacement au zoom 10,5 | 4,6 s, 17 images | 2,8 s, 12 images |
+
+Ces deux colonnes ont été mesurées à une heure d'écart, machine au calme. Une passe diffère d'une
+autre de 30 % (arrivée des tuiles), et la machine elle-même varie du simple au double selon ce que
+fait le bureau (le soir du 14/11, `gnome-shell` occupait la moitié d'un processeur : chaque image
+coûtait deux fois plus cher, ancien code compris). Ne comparer deux réglages qu'en alternance, dans
+la même fenêtre de temps (`essais.mjs` ; pour deux versions du code : l'ancienne servie sur un second
+port par `git worktree`, puis `parcours.mjs` sur l'une et l'autre tour à tour). Ainsi mesuré, deux
+passes par version, machine chargée : zoom de 7,2 à 8,2, 6,1 et 7,2 s avant, 3,9 et 3,9 s après ;
+déplacement au zoom 8,2, 3,9 et 3,5 s → 2,8 et 1,9 s ; au zoom 9,2, 8,1 et 4,3 s → 3,0 et 3,5 s ; au
+zoom 10,5, 10,9 et 11,9 s → 6,2 et 6,5 s ; grille visible à l'ouverture, 3,6 et 2,6 s → 2,6 et 2,1 s.
+Le zoom de 9,8 à 10,5 remplissait la fenêtre de mesure de 9 s dans les deux versions : non concluant
+ce soir-là. Le clic sur un champignon redessine toujours 3 à 6 images (tableau du haut). Ce que coûte **une image** (`images.mjs`,
+`forets.mjs` : la carte forcée à se redessiner 3 s, couches allumées puis éteintes) : au zoom 8,2,
+68 ms dont 34 pour la grille en carrés de 4,5 km (19 pour son seul quadrillage) → 51 ms dont 4 pour
+la grille en cases de 18 km ; au zoom 10,5, 176 ms dont 123 pour `bdforet-fill` → 125 ms. Trois causes,
+trois corrections (`mapStyle.ts`, `meteoLayer.ts`, `config.ts`) :
+- **fondu des tuiles d'images** (`raster-fade-duration`, 0,3 s d'office) : la carte se redessinait en
+  continu tant que des tuiles arrivaient. Sans lui, en alternance sur huit zooms : 23 à 28 images et
+  1,2 à 1,5 s au lieu de 46 à 76 images et 3,2 à 5,0 s. C'est le plus gros gain ;
+- **lissage des bords** (`fill-antialias`) : une seconde passe qui trace le contour de chaque polygone.
+  Retiré des forêts (des milliers de polygones par vue), des motifs (sols, zones) et des carrés de la
+  grille, rectangles pour lesquels il ne sert à rien ;
+- **carrés de 4,5 km trop tôt** : cases de 18 km jusqu'au zoom 10 (voir « Carrés de 4,5 km »), et le
+  quadrillage n'existe plus sous ce zoom en mode indice (son opacité lit une propriété des carrés :
+  MapLibre traçait la couche même invisible ; hors de sa plage de zoom, il ne la trace pas).
+Essayé puis abandonné : ne plus renvoyer la grille à chaque déplacement sous le zoom 10 (cases gardées
+par blocs météo). En alternance au zoom 9,2, aucun écart mesurable (12 à 19 images sans renvoi, 15 à
+20 avec) : la complexité d'un cache de plus n'était pas payée.
+
+**Calcul en cours : champignon et pause du zoom** (demande de Clément du 14/11/2026, `gridLoader.ts`,
+`MeteoLayer.begin` / `settle` / `onBusy`). Aux échelles de 2 km et moins, entre un zoom et l'arrivée
+des carrés la carte ne montrait rien de neuf, et chaque cran de zoom donné en plus relançait tout le
+travail. Relevé (`trou.mjs`) : en revenant du zoom 13 au zoom 11,6, les carrés de 500 m disparaissent
+à 0,7 s et les carrés de 4,5 km de la nouvelle vue n'arrivent qu'à 1,6 s ; en zoomant de 11,3 à 12,3,
+les carrés de 500 m arrivent à 2,6 s (sans carte graphique ; plusieurs secondes de plus chez Clément).
+Depuis : à partir du zoom `GRID_BUSY_MIN_ZOOM` (11), en mode indice et pour un champignon de saison,
+`MeteoLayer` annonce « calcul en cours » de la fin d'un déplacement (`moveend`), ou d'un changement
+de mode ou de champignon, jusqu'à l'arrivée des tuiles des carrés et des forêts détaillées (premier
+dessin des carrés de 500 m : on n'attend ni leurs altitudes, ni le fond de carte, ni les zones). Un
+seul travail a le droit d'annoncer la fin : le dernier lancé (`work`). Pendant ce temps, un champignon
+se remplit à la place du bandeau « Zoomez… » (jamais ensemble : l'un sous le zoom 10, l'autre à partir
+du zoom 11 ; affiché seulement si le calcul dure plus d'un quart de seconde) et le zoom ne répond
+plus : molette, pincement, double clic, cadre de zoom, touches + et −, boutons + et −. Se déplacer
+reste possible ; la recherche de lieu et la géolocalisation aussi.
+- **Bornes** : la pause dure `GRID_BUSY_MAX_MS` (8 s) au plus depuis son début (un déplacement ne
+  relance pas le compte) ; ce plafond atteint, plus de pause tant qu'un calcul ne s'est pas terminé
+  (`capped`) : sur un réseau lent, on ne zoomerait sinon que d'un cran toutes les 8 s. Pas de pause
+  quand c'est le suivi de la position (GPS, `geolocateSource`) qui déplace la carte : elle
+  reviendrait à chaque position, c'est-à-dire tout le temps en marchant.
+- **Gestes arrêtés avant MapLibre, pas coupés dedans** (écouteurs en capture sur le conteneur de la
+  carte ; MapLibre écoute sur `getCanvasContainer()`). Trois pièges vérifiés dans son code :
+  `scrollZoom.disable()` en plein zoom le laisse « en train de zoomer » (la carte ne retrouve plus
+  son repos, la molette ne répond plus) ; molette coupée, il n'annule plus l'événement, et un
+  pincement au pavé tactile (une molette avec Ctrl) agrandit toute la page ; `touchZoomRotate.disable()`
+  rend le pincement au navigateur (`touch-action`), qui zoome la page. Les touches se reconnaissent à
+  leur code (`keyCode`, comme MapLibre), pas à leur caractère (Maj + « + » d'un clavier allemand
+  vaut « * »). Seul `doubleClickZoom` est coupé dans MapLibre : il n'a pas d'état en cours.
+- **Accessibilité** : le champignon est décoratif (`aria-hidden` : l'annoncer à chaque déplacement
+  serait un bavardage) ; les boutons de zoom passent en `aria-disabled` (ils gardent le clavier) et
+  sont décrits par « Zoom en pause pendant le calcul des carrés. ». Animations réduites : champignon
+  à demi plein, sans monter.
+Ni en mode pluie, ni pour un champignon hors saison, ni sous le zoom 11, ni sur une vue dont les
+carrés de 500 m sont déjà relevés (voir « Relevés gardés »). La classe `zoom-paused` du
+conteneur de la carte dit si la pause est en cours (tests).
+
+**Relevés gardés, grille démarrée plus tôt** (idée de Clément du 14/11/2026 : « une mise en cache » ;
+`fineGrid.ts`, `MeteoLayer.updateFine` / `knownView`, `mapView.ts`). Entre un zoom et l'arrivée des
+carrés de 500 m, le temps part à attendre les tuiles détaillées des forêts : le relevé lit les
+polygones affichés (`queryRenderedFeatures`), donc rien ne se calcule avant elles. Or le relevé d'un
+carré vu en entier ne change pas (BD Forêt et sols sont des données fixes) :
+- **Gardé d'une visite à l'autre** : `localStorage`, clé `foret-explorer:releves`, 20 000 carrés au
+  plus (les plus anciens sont oubliés), écrit 3 s après un relevé (et à la fermeture de la page).
+  Mesuré sur de vraies données : 448 carrés et 14 055 caractères pour une vue des Alpes au zoom 12,3
+  (1280 × 800), 924 carrés et 27 916 caractères avec une seconde vue, soit ≈ 30 caractères par carré
+  et 600 000 au plus.
+  Format `{ v, d, c, g, s }` : `c` et `g` listent les codes de forêt et les sols cités, `s` donne par
+  carré ses neuf points en 18 caractères (rang du code, rang du sol ; « - » : rien), ou 2 caractères
+  si les neuf se valent. Oublié en bloc 30 jours après sa première écriture (`SURVEY_MAX_DAYS`), et
+  dès que `SURVEY_VERSION` change : **la changer quand les règles des sols ou la nomenclature des
+  forêts changent.**
+- **Vue déjà relevée** (`isSurveyed` : tous ses carrés entièrement visibles sont gardés ; ceux du
+  bord de l'écran, relevés en partie, ne le sont jamais) : carrés dessinés tout de suite à partir du
+  cache, sans attendre les tuiles ; **pas de pause du zoom** ni de champignon, et la mise à jour part
+  120 ms après le geste au lieu de 500 (`KNOWN_VIEW_DELAY_MS`). Les tuiles arrivées, le relevé est
+  complété par les carrés du bord. Vue en partie connue : on attend comme avant (dessiner quelques
+  carrés connus ferait refaire deux fois les tuiles des carrés, pour rien de visible).
+- **Tuile en panne** : un carré sous une tuile de forêt ou de sol qui n'a pas pu être lue est relevé
+  mais pas gardé (`noteSurveyTile`, renseigné par `mapView.ts` sur les événements `error` et
+  `sourcedata` de MapLibre, qui portent la tuile) : sans elle il paraîtrait sans forêt, et le
+  resterait des semaines. Une tuile absente (404 de l'IGN : pas de forêt) n'est pas une panne.
+- **Grille démarrée à la lecture du style** (`startGrid`, premier `styledata`), et plus à `load` :
+  MapLibre n'émet `load` qu'une fois toutes les tuiles de la vue arrivées, fond et forêts compris,
+  alors que la grille n'attend que les fichiers météo. À `load`, le mode n'est réappliqué que si le
+  champignon ou le mode a changé entre-temps (sinon les altitudes seraient demandées deux fois).
+
+Mesuré le 14/11/2026 (vraies données, Chromium sans carte graphique, ancienne et nouvelle version en
+alternance, deux passes ; `revisite.mjs`, `ouverture.mjs`), arrivée des carrés de 500 m :
+
+| Cas | Avant | Après |
+|---|---|---|
+| Page ouverte sur une vue relevée à la visite d'avant | 2,8 à 3,8 s (4 relevés) | 1,3 à 1,5 s |
+| Page rechargée, puis zoom de 11,3 à 12,3 sur une vue relevée à la visite d'avant | 2,8 et 3,0 s | 1,6 et 1,7 s |
+| Même zoom sur une vue relevée dans la même visite | 1,6 et 1,8 s | 1,7 et 1,7 s |
+| Même zoom, vue jamais relevée | 2,5 et 2,8 s | 3,8 et 2,8 s |
+| Page ouverte sur la France entière (cases de 18 km) | 1,8 et 1,8 s | 1,6 et 1,0 s |
+
+Dans la même visite, pas de gain de temps : MapLibre a encore les tuiles en mémoire, et le reste
+(animation du zoom, tuiles des carrés refaites, dessin) ne dépend pas du cache ; seule la pause du
+zoom disparaît. Vue jamais relevée : inchangée, l'écart entre les passes est celui du réseau. Le
+cache n'allège pas le dessin : une image coûte toujours autant.
+
+**Sans carré, et bandeau « risque de chou blanc »** (retours de Clément du 14/11/2026 : « j'ai un
+chargement et une fois fini, rien », « il y a des carrés vides, qu'est-ce que c'est ? » ;
+`MeteoLayer.drawGrid` / `renderFine` / `updateVerdict` / `bestOther`, `gridLoader.ts`). Le niveau
+défavorable était dessiné à 4 % d'opacité pour les carrés de 4,5 km (invisible) et en contour seul
+pour ceux de 500 m, et rien ne disait que le calcul était fini. Une seule règle désormais : **un
+carré, c'est une chance estimée d'au moins 35 %**.
+- **Défavorable : pas envoyé à la carte**, ni case, ni carré de 4,5 km, ni carré de 500 m. La légende
+  dit « Sans carré : moins de 35 %, ou pas d'arbres hôtes » (pastille vide en tirets) ; son état
+  compte « N carrés de 500 m avec arbres hôtes, dont M à 35 % ou plus ».
+- **Plafond météo** (`MeteoLayer.reach`, `weatherCeiling`) : saison × pluie d'une case borne l'indice
+  de tous ses carrés (température, arbres et sol valent 1 au plus, et l'altitude ne joue que sur la
+  température). Une case dont le plafond est sous le niveau montré n'est ni calculée carré par carré,
+  ni l'objet d'une demande d'altitude : autour de Bourges le 14/11/2026 (pluie trop ancienne), une vue
+  à l'échelle 1 km ne demande plus aucune altitude.
+- **Bandeau** (`#grid-verdict`, à la place du champignon de chargement, jamais avec lui ; à partir du
+  zoom 10, mode indice, champignon de saison, arbres hôtes connus) quand la vue n'a aucun carré à
+  50 % ou plus **à l'échelle affichée** (carrés de 500 m si leur relevé est fait, de 4,5 km sinon) :
+  « Cèpes : risque de chou blanc ici en ce moment. Meilleure chance estimée : [Trompettes (possible)] »,
+  ou, si aucun champignon de saison n'atteint 50 % : « …, comme pour les autres champignons de saison.
+  Qui ne tente rien n'a rien ! » (textes arrêtés avec Clément : « risque de », jamais « chou blanc »
+  affirmé ; le niveau en mot, pas de pourcentage). Le nom proposé est un bouton qui choisit ce
+  champignon. Icône : champignon barré, pas une croix (la croix est le bouton de fermeture, au bout) ;
+  fermé, il ne revient que pour un autre champignon. `role="status"` sur le texte : annoncé quand il
+  change, pas à chaque déplacement.
+- **La proposition tient parole** : elle est calculée comme la carte dessinerait l'autre champignon
+  (mêmes carrés, mêmes règles : `fineToDraw`, `scoreFineCell`, `squareScore`), sur les données déjà
+  chargées. Aucun fichier en plus : météo, parts de forêt et relevés sont communs aux cinq espèces.
+  Mesuré le 14/11/2026 sur de vraies données : 0,1 à 0,9 ms à Bourges et dans les Alpes, aux échelles
+  2 km et 1 km ; elle n'est calculée que si le champignon choisi n'a rien à 50 %. Pendant le relevé
+  des carrés de 500 m, le bandeau ne s'affiche que si le plafond météo de toutes les cases de la vue
+  est sous 50 % (certitude) ; sinon il attend le relevé.
+- **Recherche de lieu** : choisir un lieu ferme le bilan ouvert (il parlait d'un autre coin, et les
+  deux épingles se ressemblent).
+Mesuré le 14/11/2026 sur une vue où tout est défavorable (Bourges, cèpes, échelle 1 km, écran de
+1850 × 940, ancienne et nouvelle version en alternance, `vide.mjs`) : carrés envoyés à la carte, 19 de
+4,5 km et 104 de 500 m → aucun ; altitudes demandées, 45 → aucune. **Le coût d'une image, lui, ne
+change pas de façon mesurable** (156 à 282 ms avant, 143 à 321 ms après, machine chargée : les forêts
+pèsent bien plus que cent petits carrés). Le gain est dans les appels et dans la lisibilité, pas dans
+la fluidité.
+
+**Le relevé n'attend que les forêts et les sols** (`waitForSurveyTiles`, 14/11/2026). Il attendait
+le repos de toute la carte (`idle`), donc aussi le fond de carte et les zones protégées, qu'il ne lit
+pas : une image du fond en retard retenait tous les carrés de 500 m (vu une fois sur quatre captures,
+les carrés absents plus de 40 s, sans que la cause de ce cas-là soit établie ; le mécanisme, lui,
+l'est par un test : fond retardé de 8 s, carrés à plus de 5 s avant, 0,7 s après). Trois temps,
+parce que MapLibre ne demande les tuiles d'une nouvelle vue qu'en la dessinant : une image (sinon
+`isSourceLoaded` parle encore de la vue d'avant et le relevé lirait des forêts absentes, qu'il
+garderait 30 jours), l'arrivée des tuiles des deux sources (`sourcedata`, et `error` : une tuile en
+panne n'émet pas `sourcedata`), une image encore pour qu'elles soient à l'écran. Mesuré sur de
+vraies données, réseau normal, en alternance : zoom de 11,3 à 12,3 sur une vue jamais vue, 3,0 et
+3,4 s → 2,6 et 2,2 s ; déplacement d'un demi-écran, 1,9 et 1,8 s → 1,9 et 2,0 s (inchangé). Même
+nombre de carrés avant et après (347, 389).
+
+Ce qui reste : à partir du zoom 10, une image coûte encore 125 ms, dont 68 pour les forêts ; choisir
+un champignon y change aussi le filtre des forêts, et MapLibre refait alors toutes les tuiles de la
+BD Forêt (≈ 1 s à lui seul au zoom 11 sans carte graphique). Au zoom 9,2 les zones protégées et les
+couches invisibles coûtent 21 ms par image, pas encore regardés. Voir « Pistes ».
+
+## Bilan et légende : la réponse d'abord
+
+Refonte du 14/11/2026 (mesures du 13/11 : sur téléphone, aucun pourcentage visible à l'ouverture du
+bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
+
+- **Bilan** (`spot.ts`), dans l'ordre : alerte de zone protégée s'il y en a une (en tête, que la
+  météo réponde ou non) ; terrain (Forêt, Sol, Altitude, **Statut**) ; « Champignons · chance
+  estimée » ; météo ; « Droit de cueillir : les règles », replié ; actions ; une ligne de note.
+- **Statut** : toujours visible, un fait et ce qu'il implique (« Forêt sans doute privée : il faut
+  l'accord du propriétaire », « X : forêt publique »), jamais « autorisé ». C'est le garde-fou qui
+  permet de replier les règles : ne pas le déplacer sous les champignons. Un test e2e vérifie qu'il se
+  voit sans rien déplier.
+- **Champignons** : du plus probable au moins probable (tri sur l'indice, sans exception parmi les
+  champignons de saison ; ceux qui sont hors saison de plus d'un mois viennent ensuite, grisés et sans
+  pourcentage, voir « Hors saison ») ; le
+  champignon recherché est signalé à son rang (liseré, « recherché ») et sa ligne dépliée, sinon la
+  première si elle atteint 50 % ; les raisons sont dans un `<details>` par champignon ; écarté par la
+  saison, la forêt ou le secteur (`SpotPanel.exclusion`) : une ligne avec la raison, sans calcul
+  (`scoreMushroom` n'est appelé que pour les champignons qu'on peut estimer). Le bilan ouvert suit le
+  champignon recherché (`SpotPanel.refresh()`). Il est redessiné jusqu'à trois fois par clic : tout ce
+  qui se déplie garde son état dans un champ de `SpotPanel`, remis à zéro à chaque nouveau coin.
+- **« ? »** (un seul, près du titre « Champignons ») : un bouton `aria-expanded` qui déplie un encart
+  sur place, au clic, au toucher et au clavier (Échap le replie) ; pas d'infobulle au survol (rien de
+  tel sur téléphone, et le panneau la rognerait). Il dit « estimation, pas une probabilité mesurée ».
+- Sous le zoom 10, ou tant que les tuiles de la BD Forêt ne sont pas arrivées (clic juste après un
+  zoom), la forêt est **inconnue**, pas absente (`forestUnknown` : `'zoom'` ou `'loading'`). Le bilan
+  applique alors la règle de la carte au carré de 4,5 km qui contient le point (`View.sector`,
+  `hostCover`, `isLit`) : sans arbres hôtes dans le secteur, aucune chance annoncée (« peu d'arbres
+  hôtes dans ce secteur ») ; secteur bâti à 15 % ou plus, de même (« secteur urbanisé », jamais
+  « surtout bâti » : à 16 % ce serait faux), mais seulement sous le zoom 12 : au-delà la carte montre
+  des carrés de 500 m jusque dans les massifs en ville, et le bilan les contredirait ; sinon celle
+  de ses forêts hôtes, et la raison le dit. Fichier des parts absent :
+  météo seule. Sans cela, le bilan annonçait « favorable » en pleine ville dès qu'on dézoomait.
+  (Sous le zoom 10 la carte ne montre plus que des cases de 18 km, allumées dès qu'un de leurs carrés
+  l'est : le bilan, au carré de 4,5 km, y est plus précis qu'elle, c'est voulu.)
+- **Pas d'appel là où rien n'est à estimer** (demande de Clément du 14/11/2026 : « pas besoin d'appel
+  pour les villes ou les parcs »). `SpotPanel.open` décide une fois par clic, avant tout appel, ce qui
+  écarte chaque champignon (`exclusion`, gardé dans `View.excluded`), dans cet ordre : la saison
+  (`noEstimate`) ; la forêt sous le point quand elle est connue (« pas de forêt cartographiée sous ce
+  point », « pas un arbre hôte ici ») ; puis le secteur. Ville, forêt connue : sous le zoom 12,
+  « secteur urbanisé : zoomez pour juger ce bois » (la carte n'y allume rien non plus) ; à partir du
+  zoom 12, le bilan suit le relevé des carrés de 500 m de la carte (`MeteoLayer.townSquareKept`, passé
+  à `SpotPanel` par `mapView.ts`) : « secteur urbanisé, trop peu de bois autour du point » si la carte
+  n'y dessinerait pas de carré, estimation si elle en dessine un ; relevé absent ou incomplet (grille
+  éteinte, mode pluie, bord de l'écran) : on estime, quitte à demander une altitude de trop. Si les
+  cinq champignons sont écartés : **ni altitude IGN, ni Open-Meteo de secours**
+  (`weatherAt(…, sharedOnly)`) ; les lignes s'affichent tout de suite, l'altitude est celle de la
+  grille météo (« ≈ N m (d'après la grille météo) », ou « non demandée (rien à estimer ici) » sans
+  fichiers météo), terrain, statut, pluie et règles restent. Le fichier des parts n'est attendu que
+  s'il peut changer la décision, et 2,5 s au plus (`SPOT_ALTITUDE_WAIT_MS`, un seul délai compté
+  depuis le clic, qui vaut aussi pour l'altitude) : s'il ne répond pas, on estime sans lui, et s'il
+  arrive ensuite la décision est revue et le bilan redessiné (sinon il resterait « favorable » en
+  pleine ville ; l'altitude a alors été demandée pour rien). Une ligne écartée garde « ≈ 0 % » quand
+  l'indice vaut zéro par construction (saison au poids nul, pas de forêt, pas d'arbre hôte) ; pour une
+  ville (`Exclusion.zero` à faux) elle n'affiche pas de pourcentage : rien n'y a été estimé, et un
+  « 0 % » contredirait « zoomez pour juger ce bois ».
+- En secteur urbanisé (carré de 4,5 km bâti à 15 % ou plus, que le bilan estime ou non), sous la
+  liste : « cueillez loin des routes, des zones industrielles et des décharges, les champignons
+  absorbent les polluants », avec un lien vers `a-propos.html#identifier`, qui porte déjà ce conseil
+  (Anses ; relu le 14/11/2026 sur service-public.gouv.fr, fiche A15186 du 14/10/2026). Le bilan ne
+  fait pas partie des conditions : `TERMS_VERSION` ne change pas.
+- La phrase de pluie d'un champignon commente la pluie la plus récente dont le délai n'est pas
+  dépassé, plutôt qu'une vieille pluie « dépassée » qui pèse plus dans l'indice (sinon elle contredit
+  le bloc météo) ; une pluie modeste encore fraîche ne promet rien (« pousse incertaine »).
+  « pousse attendue d'ici N jours » est en gras dans sa raison (`reasonItem` de `spot.ts`, repérée par
+  `AWAITED` de `mushrooms.ts` : garder les deux textes identiques) : c'est la seule qui dit quand revenir.
+- Un `<details>` créé ouvert émet lui aussi « toggle » : ne retenir dans `SpotPanel.cards` que ce qui
+  s'écarte de l'état d'office, sinon l'ancienne ligne reste dépliée quand le champignon recherché
+  change. Le clavier retrouve sa place après un redessin par la clé `data-focus` de l'élément.
+- **Légende** (`legend.ts`), dans l'ordre : « Je cherche… » (seule dépliée à la première visite),
+  « Météo », « Types de forêt » (repliée, rappel « 15 / 32 » dans l'en-tête), « Nature du sol »,
+  « Droit de cueillir », « Fond de carte : … », puis « Comment ça marche ? » et les liens. À la
+  première visite le panneau tient sans défiler (test e2e). Une section à interrupteur se déplie
+  quand sa couche est allumée, au chargement aussi.
+- **Fiche d'un champignon** : résumé, lien « Photos et description : *espèce* sur MycoDB (site
+  tiers) », conditions repliées, encadré de précaution en dernier. Les entrées sont des groupes : le
+  lien nomme l'espèce visée ; adresses en dur dans `mushrooms.ts` (MycoDB répond 200 pour une fiche
+  absente). Libellé neutre : ni « identifier », ni « comestible » (la fiche tierce, elle, l'écrit).
+  **MycoDB interdit les robots d'IA dans son `robots.txt` et bloque les rafales : ne jamais
+  l'interroger par script ni l'ajouter à `surveillance.yml`** ; une fiche se vérifie à la main.
 
 Grille fine (`fineGrid.ts`, zoom ≥ `FINE_MIN_ZOOM` = 12, mode indice) : chaque case de base de 4,5 km
 (0,04° × 0,056°) est découpée en 9 × 9 carrés (id « I:J ») ; une case météo commune en contient
 exactement 36 × 36 (parent : `cellOfBase`). Forêt et sol relevés sur 3 × 3 points par
 carré, en une seule requête `queryRenderedFeatures` sur toute la vue puis test point-dans-polygone (un
-appel par point serait bien plus lent) ; relevés gardés pour la visite. Altitude IGN au centre, gardée
-dans `localStorage` (`foret-explorer:altitudes`, 40 000 carrés au plus), demandée seulement pour les
-carrés boisés, par lots de 200 points (service en panne : altitude du carré de 4,5 km). Températures
-de la case commune corrigées de −0,65 °C par 100 m ; la pluie reste celle de la case. Carré dessiné seulement s'il contient un arbre hôte ; opacité
-selon la part d'arbres hôtes ; défavorable = contour seul. Les forêts s'estompent (45 %) à ces zooms.
+appel par point serait bien plus lent), dès que les tuiles des forêts et des sols sont à l'écran, sans
+attendre le fond de carte ; relevés gardés d'une visite à l'autre (voir « Relevés gardés »). Altitude IGN au centre, gardée
+dans `localStorage` (`foret-explorer:altitudes`, 40 000 carrés au plus, écrit une fois par relevé),
+demandée seulement pour les carrés **à dessiner pour le champignon montré** (`fineToDraw` ; avant le
+14/11/2026 : pour tout carré boisé, lande ou parc de ville compris), par lots de 200 points. Un carré
+dont l'altitude n'est pas encore arrivée est dessiné tout de suite à celle de son carré de 4,5 km,
+puis corrigé (de même si le service est en panne) : au changement de champignon les carrés ne
+disparaissent pas, et `fineDone` ne bascule pas. Températures
+de la case commune corrigées de −0,65 °C par 100 m ; la pluie reste celle de la case. Carré dessiné
+seulement si trois de ses neuf points au moins sont sous un arbre hôte du champignon montré
+(`FINE_MIN_HOST_SHARE`) ; en ville (son carré de 4,5 km est bâti à 15 % ou plus), il en faut cinq et
+deux carrés voisins boisés sur huit (`fineCellsToDraw` : un parc isolé n'en pose plus). Un carré à
+cheval sur le bord de l'écran, relevé en partie, est quand même compté sur neuf points, et seuls les
+voisins connus comptent : au bord, un carré apparaît quand il est assez visible, il ne disparaît pas
+après coup. Opacité
+selon la part d'arbres hôtes ; un carré défavorable n'est pas dessiné (avant le 14/11/2026 : en
+contour seul, des « carrés vides » illisibles). Les forêts s'estompent (45 %) à ces zooms.
+Chaque carré de 500 m dessiné porte son pourcentage dès le zoom 12 (`meteo-fin-etiquettes`, texte de
+10 px au zoom 12 à 18 px au zoom 16). Avant le 14/11/2026 il n'arrivait qu'au zoom 14, et seulement à
+50 % ou plus : aux échelles 1 km à 300 m il ne restait que la nuance de couleur (retour de Clément :
+« un irritant »). Coût mesuré, étiquettes allumées puis éteintes en alternance, sans carte graphique :
+446 étiquettes au zoom 12,4, 221 et 247 ms par image avec, 225 et 230 sans ; 157 au zoom 13,2, 130 et
+135 ms avec, 125 et 126 sans. Rien de sensible.
 ⚠ Zoom MapLibre = zoom « 512 px » : au zoom 13, ≈ 5 m/pixel (pas 10).
+
+## Deux vues : Carte et Analytics
+
+- **Adresse** : `#vue=analytics` à côté de la position que MapLibre tient à jour (`hash: 'carte'`),
+  par exemple `#carte=11.5/45.92/6.19&vue=analytics` ; sans `vue=analytics`, c'est la carte.
+  `view.ts` découpe le fragment à la main (jamais `URLSearchParams` : il encoderait les « / » de
+  `carte=`, que MapLibre ne relirait plus) et passe toujours une adresse complète à `pushState`
+  (une chaîne vide y est ignorée : l'adresse garderait `vue=analytics`).
+- **Historique** : un clic sur l'îlot ajoute une entrée sans émettre `hashchange`, donc MapLibre ne
+  déplace pas la carte ; Précédent et Suivant rendent à chaque entrée sa vue et, par MapLibre, sa
+  position. En quittant la carte par l'îlot, `map.stop()` arrête le déplacement en cours : la
+  position exacte est écrite dans l'entrée quittée. Pas de lien `href="#…"` dans la vue Analytics :
+  il remplacerait tout le fragment, `vue=analytics` compris.
+- **Chargement** : `main.ts` (≈ 4 ko) charge chaque vue à sa première ouverture. Arriver sur
+  `#vue=analytics` ne demande ni MapLibre, ni tuile, ni fichier météo. Toutes les feuilles de style
+  sont dans l'entrée, MapLibre d'abord (`style.css` corrige `.maplibregl-ctrl-bottom-right` et
+  `.maplibregl-ctrl-scale`, de même poids), `analytics.css` compris : pas d'éclair au premier
+  affichage, et un module chargé à la demande ne porte aucune feuille de style. Ses sélecteurs
+  commencent tous par `#analytics`, `.analytics` ou `html[data-view='analytics']` : la carte n'en
+  est pas changée.
+- **En-tête d'`index.html`** : un script pose `data-view="analytics"` sur `<html>` avant le premier
+  affichage (même règle que `view.ts`) ; sinon il précharge le code de la carte, dont
+  `vite.config.ts` écrit le nom au build à la place de `__MAP_CHUNK__`. Mesuré le 13/11/2026 (build
+  servi en gzip, réseau bridé) : la carte arrive comme avant le découpage (4G lente : 2,2 s ; 3G :
+  7,9 s, soit +0,07 et +0,1 s) ; sans ce préchargement, +0,2 et +0,5 s. L'avertissement, lui,
+  s'affiche 1,6 à 6 s plus tôt qu'avant (il n'attend plus MapLibre).
+- **Carte masquée** : en vue Analytics, `#app` et tous ses descendants sont en `visibility: hidden`
+  (`#app *` est nécessaire : MapLibre force `visibility: visible` sur ses crédits dépliés). Pas de
+  `display: none` : la carte garde sa taille, sa position, sa légende et son bilan, et rien n'est
+  rechargé au retour. `#app` est alors figé à `100vw` × `100svh` (ni la barre de défilement ni la
+  barre d'adresse du téléphone ne le redimensionnent). `view.ts` reprend le clavier resté dans la vue
+  masquée.
+- **Avertissement** : c'est `main.ts` qui l'appelle, avec la vue Carte seulement ; quitter la carte
+  sans l'avoir accepté le retire (`withdrawDisclaimer()`), y revenir le remontre, compte à rebours
+  repris de zéro. Tant qu'il est à l'écran, l'îlot est inerte (fenêtre modale) : l'adresse à donner
+  pour montrer la vue Analytics est `…/#vue=analytics`.
+- **Îlot** : `nav` de deux liens (`aria-current="page"`), avant `#app` dans la page (premier arrêt de
+  la touche Tab). 208 px × 46 px (`--island-width`, `--btn`), liens pleine hauteur, fond clair du
+  segment actif en `::before` (glissement de 300 ms, bord meneur en premier ; rien si les animations
+  sont réduites). Placé en `vw`, sans `transform`. Ce qu'il a déplacé :
+  - ≤ 640 px : îlot sur la première rangée, entre le bouton légende et les boutons de droite ; la
+    recherche passe à la deuxième rangée (`.topbar` en `flex-wrap`, `pointer-events: none` sur le
+    vide), le bandeau « Zoomez… » à la troisième, arrêté avant la colonne de boutons ;
+  - de 641 à 1187 px : îlot à droite de la recherche (décentré) ; sous 760 px la recherche se
+    resserre ; de 641 à 1127 px le bilan s'ouvre une rangée plus bas, et le bandeau « Zoomez… »
+    aussi (il reste sous l'en-tête du bilan, par-dessus son contenu, comme avant) ;
+  - à partir de 1188 px : centré, rien ne bouge.
+- **Contenu de la vue Analytics** : tout vient de `src/analyticsData.ts` ("" , `null` ou `[]` : état
+  vide). Guillemets doubles dans ce fichier (les apostrophes du français y sont sans danger), modèles
+  en commentaire dont chaque champ vaut `A_REMPLIR` (un oubli fait échouer `npm run check`). Les
+  types refusent une date à la française, une adresse sans https, un champ mal nommé ;
+  `analyticsCheck.ts` relit le reste (date qui n'existe pas, texte vide, valeur négative), affiché
+  en tête de vue en développement et vérifié par `npm run check` et par les tests e2e. Le rendu ne casse jamais (date impossible montrée telle quelle, graphique sans barre
+  omis). Graphique : barres horizontales, une série, échelle à zéro, aucune valeur calculée.
+  N'y écrire que des chiffres mesurés ; « Entonnoir en direct » reste un emplacement vide tant
+  qu'aucune mesure n'est branchée. Jamais de modification directe sur `main` : une erreur y
+  bloquerait `npm run check`, donc la publication quotidienne de la météo.
 
 ## Données et API
 
@@ -224,6 +679,18 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   passée en 30 secondes, les fichiers étant déjà connus). Tests e2e : `pmtilesArchive()` de
   `tests/e2e/mocks.mjs` fabrique une archive minimale (une entrée de répertoire qui rend la même tuile
   pour tous les z/x/y) servie par morceaux.
+- **Plan IGN en tuiles vectorielles** (vérifié le 14/11/2026 ; seulement pour calculer la part bâtie,
+  `scripts/foret/parts.mjs` ; la carte, elle, affiche le Plan IGN en images WMTS) :
+  `https://data.geopf.fr/tms/1.0.0/PLAN.IGN/{z}/{x}/{y}.pbf`, numérotation XYZ comme la BD Forêt.
+  Au zoom 10, couche `bati_zone_surf`, champ `symbo` : `ZONE_BATI` (zones d'habitat) et
+  `ZONE_INDUS_ACTI` (zones industrielles et d'activité), polygones généralisés ; les deux peuvent se
+  recouvrir (part ramenée à 100 %). Autres couches du même niveau : `ocs_vegetation_surf`,
+  `hydro_surf`, `routier_route`, `oro_courbe` (la plus lourde)… 889 tuiles, ≈ 100 ko chacune.
+  ⚠ Le côté de la couche (`extent`) n'est pas toujours de 4 096 unités : 9 tuiles des Alpes du Nord
+  (Grenoble, Chambéry, Albertville) en ont 256 à 2 048 pour `bati_zone_surf`. Compter les aires en
+  fraction de tuile, jamais en unités (sinon Grenoble ressort bâtie à 1 % au lieu de 89 %). Et une
+  tuile peut revenir vide une fois puis pleine (Loiret, le 14/11/2026) : le script retente, ne garde
+  pas une tuile vide et le signale.
 - **WFS BD Forêt** (pas utilisé, utile pour un export) : `https://data.geopf.fr/wfs`,
   `TYPENAMES=LANDCOVER.FORESTINVENTORY.V2:formation_vegetale`, `OUTPUTFORMAT=application/json`,
   `CQL_FILTER` et `PROPERTYNAME` acceptés. Avec GeoServer, `BBOX=` et `CQL_FILTER=` ne se combinent
@@ -246,7 +713,8 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   fichiers, champ `a`) : RGE ALTI au centre du carré, ou au point du territoire le plus proche du
   centre (5 × 5 points essayés) ; null sans terre française ; 29 483 carrés, de −3 à 4 489 m. La mesure
   ci-dessus suppose les températures ramenées à l'altitude de chaque point de 4,5 km : c'est ce que
-  fait la grille à partir du zoom 8, et le bilan d'un coin avec l'altitude exacte.
+  fait la grille à partir du zoom 10 (en deçà, la case et sa pastille prennent l'indice de son meilleur
+  carré, à l'altitude de ce carré), et le bilan d'un coin avec l'altitude exacte.
 - Fichiers servis par GitHub Pages : `data/meteo/index.json` (grille, blocs, date de mise à jour `maj`,
   `dernierJour` = dernier jour définitif de la plupart des cases) et `data/meteo/b/<bi>_<bj>.json`
   (blocs de 8 × 8 cases : `dates` = 30 jours complets + la journée du passage, par case `p` pluie,
@@ -303,14 +771,77 @@ carte (`continue-on-error`). Vérifié le 01/11/2026 en CI : `wrangler deploy --
 dev` (wrangler 4.156, `@cloudflare/workers-types` 5). GitHub Pages ne doit pas recevoir de mot de
 passe : la page privée est servie par le Worker.
 
+Constaté le 14/11/2026 : le serveur de mesure n'est pas branché (`gh secret list` ne montre aucun
+secret au dépôt, et le code en ligne ne contient aucune adresse de collecte) : la carte n'envoie donc
+aucun compteur. Avant de le brancher, voir « Montée en charge » : chaque envoi écrit une ligne par
+compteur, et l'offre gratuite de Cloudflare plafonne les lignes écrites par jour.
+
+## Montée en charge : qui appelle quoi
+
+Le site n'a pas de serveur à lui : chaque navigateur va chercher des fichiers et des tuiles, rien
+n'est calculé ailleurs. Appels d'une visite (relevés le 14/11/2026 sur les vrais services, scénario
+joué par un script : ouvrir la France, choisir un champignon, chercher un lieu, zoomer au niveau
+10,5, déplacer la carte, zoomer au niveau 13, deux bilans ; téléphone 390 × 844, puis écran
+1280 × 800) :
+
+| Hôte | Quoi | Téléphone | Grand écran | Limite connue |
+|---|---|---|---|---|
+| GitHub Pages (le site) | code et styles (350 ko compressés), `foret/parts.json` (236 ko), 46 fichiers météo (343 ko : toute la France à l'ouverture), archives des sols et des zones lues par morceaux, `info.json` | ≈ 1,7 Mo, 70 requêtes | ≈ 1,8 Mo, 75 requêtes | limite souple de 100 Go par mois, soit de l'ordre de 55 000 visites de ce genre par mois ; « rate limits may apply » sans chiffre (réponse 429) ; site de 1 Go au plus ; pas fait pour un service commercial |
+| IGN, Géoplateforme | fond de carte (images), BD Forêt (tuiles vectorielles, images en vue large), polices | ≈ 6,8 Mo, 65 requêtes | ≈ 13,5 Mo, 140 requêtes | aucune pour les tuiles (WMTS et TMS sont exclus des limites) |
+| IGN, Géoplateforme | altitude (bilan, carrés de 500 m), recherche de lieu | 4 + 1 requêtes | 4 + 1 requêtes | par adresse IP : 5 requêtes par seconde (altitude), 10 (recherche), blocage de 5 s au-delà |
+| Open-Meteo | rien en temps normal (la tâche `meteo.yml` fait ≈ 2 000 appels par jour, quel que soit le nombre de visiteurs) | 0 | 0 | secours seulement, depuis le navigateur du visiteur, si les fichiers météo ont plus de 3 jours |
+| Cloudflare (mesure) | pas branché (voir « Serveur de mesure ») | 0 | 0 | offre gratuite : 100 000 requêtes par jour, 100 000 lignes écrites par jour, remise à zéro à minuit UTC |
+
+À retenir :
+- Le nombre de visiteurs ne charge aucun serveur du projet. La première limite est le trafic de
+  GitHub Pages (souple : GitHub prévient par courriel et suggère un CDN) ; un pic soudain peut aussi
+  recevoir des réponses 429, sans seuil publié.
+- Les limites de l'IGN valent par adresse IP : chaque visiteur a la sienne. Des visiteurs derrière
+  une même adresse (entreprise, école, certains réseaux mobiles) partagent les 5 requêtes par seconde
+  de l'altitude : au-delà, les carrés de 500 m prennent l'altitude du carré de 4,5 km et le bilan
+  dit l'altitude indisponible, la carte continue.
+- Depuis le 14/11/2026 l'altitude n'est plus demandée que là où une estimation est possible : carrés
+  de 500 m à dessiner pour le champignon montré (plus toute forêt de la vue), bilan d'un coin où au
+  moins un champignon peut être estimé (pas en ville, hors forêt hôte ni hors saison). Le relevé du
+  tableau (4 requêtes d'altitude) date d'avant ; il n'a pas été refait.
+- Serveur de mesure, s'il est branché un jour : chaque envoi écrit une ligne par compteur non nul
+  (13 compteurs sur la visite du scénario, un envoi par minute). À ≈ 25 lignes par visite
+  (estimation, non mesurée), les 100 000 lignes par jour sont atteintes vers 4 000 visites par jour ;
+  ensuite les compteurs sont perdus, la carte n'en souffre pas. Regrouper les compteurs en une seule
+  ligne par envoi lèverait ce plafond.
+- Si la tâche météo s'arrête (60 jours sans activité sur le dépôt, panne), chaque navigateur
+  interroge Open-Meteo lui-même : à éviter à grande échelle (conditions d'Open-Meteo, voir « Limites
+  connues ») ; `surveillance.yml` échoue dès 36 h de retard.
+- Sources des limites, lues le 14/11/2026 : docs.github.com (GitHub Pages limits),
+  developers.cloudflare.com (Workers limits, Durable Objects pricing), cartes.gouv.fr (limites
+  d'usage de la Géoplateforme, page modifiée le 07/08/2026).
+
 ## Avertissement, conditions et droit de cueillir
 
 - Changer `TERMS_VERSION` (`src/legal.ts`) dès que le texte de l'avertissement ou des conditions
-  (`a-propos.html`) change : la carte redemande alors l'accord. Garder les deux textes cohérents.
-- Textes vérifiés le 03/11/2026 : conseils Anses (25/09/2025) et Santé.fr (06/07/2026), numéros des
-  huit centres antipoison (centres-antipoison.net, relevés le 03/11/2026 ; listés dans « À propos »,
-  l'avertissement dit seulement « le 15 ou un centre antipoison » : pas de numéro d'une région en
-  particulier), article 547 du Code civil,
+  (`a-propos.html`) change : la carte redemande alors l'accord. Garder les deux textes cohérents, et
+  regrouper les retouches de texte dans une seule version (un seul nouvel accord demandé).
+- Accueil en deux fenêtres, jamais un carrousel. (1) L'avertissement (`disclaimer.ts`) reste une
+  porte : bloquant, 3 s, un seul bouton « J'ai compris et j'accepte », accord enregistré à ce clic,
+  ni points de progression ni « Suivant ». Moins de 100 mots, lisibles sans défiler à 1280 × 860 et
+  390 × 844 (tests e2e) : les consignes de premier rang de l'Anses (connaître parfaitement, doute →
+  pharmacien ou association, pas d'application, jamais aux jeunes enfants, qui appeler), le droit de
+  cueillir, « estimation » et la responsabilité. Le reste des conseils (champignons entiers, panier,
+  espèces séparées avec leur raison, photo, cuisson, quantités, numéros) est dans « À propos ».
+  (2) « La carte en 3 gestes » (`tour.ts`) : libre (bouton, Échap, clic à côté ; fermetures ignorées
+  une demi-seconde, contre le double appui), après un premier accord seulement (aucun accord gardé,
+  ou version antérieure à `TOUR_SINCE` ; aucune clé de stockage en plus ; pas d'office si le
+  navigateur refuse de garder l'accord, sinon elle reviendrait à chaque visite), retirée quand on
+  quitte la carte, rejouable depuis la légende. Écran bas (téléphone couché) ou très étroit : le
+  schéma se retire, la liste suffit. Son texte ne fait pas partie des conditions. Un schéma dessiné,
+  pas une capture (illisible à cette taille, à refaire à chaque retouche) ; sur téléphone il n'y a ni
+  gauche ni droite : on décrit les gestes.
+- Textes vérifiés le 13/11/2026 : communiqué de l'Anses du 20/10/2026 (liste courte et bilan 2025),
+  sa liste complète (article du 04/09/2025, d'où viennent cuisson, quantités, délai des symptômes et
+  la raison de la séparation des espèces), Santé.fr ; numéro national (01 45 42 59 59) et numéros des
+  huit centres antipoison (centres-antipoison.net, relevés les 03 et 13/11/2026 ; listés dans
+  « À propos », l'avertissement dit seulement « le 15 ou un centre antipoison » : pas de numéro d'une
+  région en particulier), article 547 du Code civil,
   articles L163-11 et R163-5 du Code forestier (réponse ministérielle, JO du 25/12/2012), LCEN
   article 1-1 (II) pour l'éditeur non professionnel anonyme (loi SREN de 2024), hébergeur GitHub, Inc.
 - Wording : ne jamais écrire qu'un champignon est comestible, ni qu'un lieu est autorisé ; parler
@@ -333,8 +864,31 @@ passe : la page privée est servie par le Worker.
   volcanique) ; puis quelques corrections (pélites et siltites du socle ancien = sol acide, « Altérites
   de granite » = sol de granite). Réglé sur les 17 000 descriptions de France (`tests/geologie.mjs`) :
   99 % de la surface classée ; le reste n'est nommé que par un lieu ou un étage (« Assise des Carreaux »).
-- Saisons larges exprès (cèpes de mai à décembre, chanterelles en tube jusqu'en février…) : c'est la
-  température qui départage les régions (littoral atlantique et Midi plus tardifs que la montagne).
+- Saisons larges exprès (cèpes de mai à décembre, chanterelles en tube jusqu'en janvier ; février, au
+  poids 0,1, n'est plus estimé : voir « Hors saison »…) : c'est la température qui départage les
+  régions (littoral atlantique et Midi plus tardifs que la montagne).
+- **Hors saison** (`mushrooms.ts`, demande de Clément du 14/11/2026). Deux notions, au mois près (les
+  poids de saison sont mensuels ; le mois est lu par `currentMonth()`, donc par `getMonth`) :
+  - `isDormant` : à plus d'un mois de la saison **écrite** (`seasonText`, les mois au poids ≥ 0,5 :
+    c'est elle que le visiteur lit, « hors saison (mars à juin) »). Grisés : cèpes et girolles de
+    janvier à avril, trompettes de février à juin, chanterelles en tube de février à juillet, morilles
+    d'août à janvier. Dans la légende : puce grise à bord en tirets (pas la couleur seule), toujours
+    cliquable (sa fiche et ses forêts hôtes servent à préparer la saison), nom du bouton inchangé,
+    « hors saison (…) » en `aria-describedby`. Dans le bilan : ligne grisée, sans pourcentage, après
+    les champignons de saison.
+  - `noEstimate` : grisé, ou mois au poids nul (l'indice, saison × …, vaut alors zéro par
+    construction). **Rien n'est calculé** : la grille, les pastilles et les carrés de 500 m ne sont ni
+    chargés ni dessinés (état `offSeason` de `MeteoLayer`, « Morilles hors saison (mars à juin) : aucune
+    chance estimée en ce moment. », échelle des couleurs masquée), aucune altitude n'est demandée, et le
+    bilan n'appelle pas `scoreMushroom` pour lui. Seul poids non nul ignoré : les chanterelles en tube
+    en février (0,1). Le dernier relevé est gardé : revenir à un champignon de saison redessine dans
+    l'instant, si la carte n'a pas bougé entre-temps (`redraw()` ignore le relevé d'une autre vue : celui
+    de la France entière, découpé en carrés de 4,5 km en arrivant sur une forêt, gelait la carte).
+    Choisir un champignon sans estimation ne force pas le mode « indice » (la grille de pluie affichée
+    reste), et l'interrupteur de la grille allume alors la pluie. Sans champignon choisi, la grille montre le cèpe : de janvier à avril elle
+    dit donc « Cèpes hors saison (juin à novembre) » (choisir un champignon de saison la rallume).
+  Gain de fluidité : seulement quand un champignon hors saison est choisi ; le bilan n'y gagne rien de
+  mesurable (cinq calculs de quelques microsecondes).
 - Morilles : printemps (mars à juin, l'altitude passant par la température), hôtes `FF1-49-49`
   (frênaies…), `FP` (peupleraies), `FF1-00-00`, `FF1-00`, `FF0` (coupes, chablis), sapin-épicéa en
   montagne ; sols calcaires, alluvions, marnes. Fiche avec encadré gyromitre et cuisson.
@@ -345,10 +899,13 @@ passe : la page privée est servie par le Worker.
   retours de terrain.
 - Chance estimée en % (`chanceOf`, choix du 12/11/2026) : l'indice ramené sur une échelle calée sur
   les niveaux (0,12 → 35 %, 0,28 → 50 %, 0,5 → 70 %, 1 → 95 %, linéaire entre deux). Seuil
-  `CHANCE_THRESHOLD` = 50 % : en dessous, rien n'est mis en avant (pas d'étiquette, case presque
-  effacée). Vue d'ensemble (zoom < 10) : pastilles `meteo-points` sur les 12 meilleurs secteurs de la
-  vue, espacés ; à partir du zoom 10, pourcentage dans chaque carré ; bilan : « ≈ 62 % · possible ».
-  Toujours écrire « estimée » ou « ≈ » : ce n'est pas une probabilité mesurée.
+  `CHANCE_THRESHOLD` = 50 % : en dessous, rien n'est mis en avant (pas d'étiquette, teinte pâle) ;
+  sous 35 % (`SHOWN_MIN_SCORE`), pas de carré du tout (voir « Sans carré »). Vue d'ensemble (zoom < 10) : pastilles `meteo-points` sur les secteurs à 70 % et plus
+  (`HOTSPOT_MIN_CHANCE`), 12 au plus, espacées (voir « Pastilles ») ; à partir du zoom 10,
+  pourcentage dans chaque carré ; bilan : « ≈ 62 % · possible ».
+  Toujours écrire « estimée » ou « ≈ » : ce n'est pas une probabilité mesurée. Sur la carte, le
+  pourcentage d'un carré vaut pour ses forêts hôtes (voir « Arbres hôtes ») ; un carré éteint n'est
+  pas « sans champignon », un carré coloré n'est ni une promesse ni un droit de cueillir.
 
 ## Conventions
 
@@ -359,8 +916,10 @@ passe : la page privée est servie par le Worker.
 - `localStorage` toujours dans un try/catch (navigation privée).
 - Accessibilité : vrais `<input type="checkbox">`, interrupteurs `role="switch"`, `aria-*` à jour.
 - Mobile : légende et bilan en tiroirs bas sous 640 px (un seul ouvert à la fois), boutons de 46 px.
-- En développement, `window.map`, `window.store`, `window.spot` et `window.metrics` (totaux de la
-  visite, `flush()`) sont exposés (console, tests e2e).
+- En développement, `window.map`, `window.store`, `window.spot`, `window.meteo` (la grille) et
+  `window.metrics` (totaux de la visite, `flush()`) sont exposés (console, tests e2e) une fois la vue Carte chargée (avant, `window.map`
+  désigne la balise `<div id="map">`) ; `window.analytics` (`data`, `check()`, `render(contenu)`) une
+  fois la vue Analytics chargée.
 - Mesure : seulement des totaux par jour, jamais d'identifiant de visiteur ni de cookie ; envoi coupé
   si le navigateur signale « Global Privacy Control ». Le bilan lit la case météo commune (rien n'est
   envoyé à Open-Meteo) ; en secours seulement, coordonnées arrondies à 0,01° (vie privée). L'altitude
@@ -371,7 +930,11 @@ passe : la page privée est servie par le Worker.
   Dependabot (une fois par semaine, versions d'au moins 7 jours). Nouveau compteur : l'ajouter dans
   `metricsSchema.ts` (avec son plafond par envoi), puis `track()` au bon endroit.
 - Chaque fiche champignon rappelle que l'indice ne dit pas ce qui se mange ; une espèce ajoutée
-  prend un champ `caution` si elle a un sosie dangereux.
+  prend un champ `caution` si elle a un sosie dangereux, et un champ `sheet` (fiche MycoDB de
+  l'espèce nommée, vérifiée à la main).
+- Mots à ne pas écrire dans l'interface : « comestible », « garanti », « autorisé », « probabilité »
+  (sauf « pas une probabilité mesurée »), « trouvez ». Un même mot par chose : « chance estimée »
+  pour tout pourcentage, « Droit de cueillir » des deux côtés, « carrés ».
 
 ## Limites connues
 
@@ -395,6 +958,72 @@ passe : la page privée est servie par le Worker.
   réseau, GPC ou page fermée brutalement : pas comptés) ; l'adresse de collecte est publique.
 - Comptages des forêts sur les tuiles chargées (débordent un peu de l'écran).
 - Recherche non biaisée vers la zone affichée.
+- Deux vues : tant que l'avertissement est à l'écran, l'îlot ne répond pas (il faut l'accepter, ou
+  arriver par `#vue=analytics`). Quitter la carte par l'îlot moins de 0,3 s après un déplacement peut
+  laisser l'ancienne position dans l'entrée de l'historique (seul Précédent la retrouve). Entre 641 et
+  1187 px de large, l'îlot n'est pas centré. Graphiques de la vue Analytics : une série de barres
+  (ni courbe ni comparaison de deux séries).
+- Arbres hôtes des carrés : BD Forêt de 2007 à 2018 ; seuils (10 % d'hôtes, 15 % de bâti, 3 points
+  sur 9) choisis à l'œil sur Nancy, Annecy, Lyon, Paris, Limoges et Toulouse. Un carré de 4,5 km qui
+  contient un village reste coloré s'il est assez boisé ; un
+  vrai massif collé à une ville (Versailles, Fontainebleau-ville) s'éteint à cette échelle et ne se
+  retrouve qu'aux carrés de 500 m ; en ville, un bois de moins de trois carrés de 500 m n'est pas
+  montré. Pour les chanterelles en tube (hôtes surtout résineux) la carte se vide en plaine de
+  feuillus. Part bâtie : zones généralisées du Plan IGN au zoom 10, pas les bâtiments un à un.
+- Accueil : tant qu'une de ses deux fenêtres est ouverte, l'îlot ne répond pas ; sans stockage du
+  navigateur, l'avertissement revient à chaque visite et la présentation n'est pas montrée d'office ;
+  sur téléphone, une fois fermée, la légende reste fermée et rien à l'écran ne dit de choisir un
+  champignon. Rien n'a été essayé sur un vrai téléphone ni avec un lecteur d'écran.
+- Fluidité : sans carte graphique (machine virtuelle, vieux téléphone), choisir un champignon à partir
+  du zoom 10 prend encore plus d'une seconde, à cause du filtre des forêts, et un zoom occupe encore
+  le processeur 2,5 à 4,5 s (voir « Fluidité »). Mesures faites dans Chromium sans carte graphique
+  seulement, pas sur un vrai téléphone ni dans le navigateur de Clément. Les bords des forêts ne sont
+  plus lissés (léger crénelage sous le zoom 12, où aucun contour ne les souligne).
+- Vue d'ensemble (zoom < 10) : la teinte d'une case de 18 km est celle de son meilleur carré de
+  4,5 km : une case foncée peut n'avoir qu'un seul carré favorable (zoomer le dit). Le bilan d'un
+  clic, lui, juge le carré de 4,5 km du point : dans une case colorée il peut répondre « peu d'arbres
+  hôtes dans ce secteur » ou « secteur urbanisé ». Entre les zooms 9,35 et 10 la règle affiche déjà
+  5 km et les cases restent de 18 km. Un secteur entre 50 et 69 % n'a ni pastille ni étiquette avant
+  le zoom 10 (la légende donne la meilleure chance de la vue).
+- Sans carré : un secteur sans carré peut être sans arbres hôtes, en ville, ou à moins de 35 % ; la
+  carte ne distingue pas ces cas (le bilan d'un clic, lui, donne la raison). Les carrés de 4,5 km
+  entre 35 et 50 % restent très pâles là où la forêt couvre peu (opacité selon la part d'arbres
+  hôtes) : autour de Bourges ils ne se voient presque pas. La proposition du bandeau vaut pour la vue
+  à l'écran ; aux carrés de 500 m elle prend, pour les carrés jamais dessinés, l'altitude du carré de
+  4,5 km (l'altitude exacte, demandée après le clic, peut faire passer un carré juste sous 50 %). Sur
+  téléphone le second texte tient sur quatre lignes. Bandeau et champignon de chargement : leur
+  alternance n'a pas de test.
+- Relevés gardés : un carré relevé reste tel quel 30 jours au plus dans le navigateur, même si la
+  BD Forêt ou les sols du site changent entre-temps (changer `SURVEY_VERSION` pour l'éviter). Le
+  cache ne sert qu'aux vues déjà vues en entier : une vue neuve attend toujours ses tuiles, et entre
+  les zooms 11 et 12 (carrés de 4,5 km) rien n'est changé. La phrase « Sur votre appareil… » de la
+  confidentialité (`a-propos.html`) ne cite pas ces relevés, seule la liste « Gardé dans ce
+  navigateur » les nomme : la corriger demande une nouvelle version des conditions, à regrouper avec
+  les autres retouches en attente. Les garde-fous (30 jours, changement de version, quota du
+  navigateur dépassé) n'ont pas de test.
+- Pause du zoom pendant le calcul des carrés (à partir du zoom 11) : elle commence à la fin du geste,
+  pas pendant ; un zoom continu de la France à une forêt n'est donc pas freiné. Sur une machine lente,
+  elle peut durer jusqu'à son plafond de 8 s, et le remplissage du champignon suit le temps, pas
+  l'avancement réel. Le zoom « double toucher puis glisser » passe encore. Pas essayée sur un vrai
+  téléphone ni avec un vrai pavé tactile (les gestes sont simulés dans les tests) ; le plafond et la
+  trêve qui le suit ne sont couverts par aucun test (il faudrait attendre 8 s).
+- Hors saison : au mois près, sans tenir compte de la région (les morilles sont grisées en janvier
+  jusque dans le Midi) ; les chanterelles en tube sont grisées en février malgré un poids de 0,1.
+- Bilan sans appel : sous le zoom 12, un vrai massif pris dans un secteur bâti à 15 % ou plus reçoit
+  « secteur urbanisé : zoomez pour juger ce bois » au lieu d'une estimation ; à partir du zoom 12 la
+  règle de ville n'est connue que si la grille d'indice a relevé la vue (sinon le bilan estime et
+  demande une altitude).
+- Montée en charge : première limite, le trafic de GitHub Pages (voir « Montée en charge ») ; aucun
+  essai de charge n'a été fait, les chiffres viennent d'une visite jouée par un script.
+- Carrés de 4,5 km : pas de facteur de sol (inconnu à cette échelle), donc un pourcentage souvent
+  au-dessus de celui des carrés de 500 m et du bilan au même endroit. Non couvert par les tests : la
+  vue zoomée où le relevé fin ne trouve aucun arbre hôte (`fineDone` sans carré fin).
+- MycoDB : site tiers tenu par des bénévoles ; un renommage d'espèce casse le lien sans erreur
+  visible ; la fiche qualifie la comestibilité, ce que le site s'interdit d'écrire lui-même.
+- Mentions légales : `a-propos.html` présente l'éditeur comme un particulier non professionnel qui ne
+  publie pas son identité, alors que la vue Analytics porte un lien vers son profil LinkedIn ; et
+  Open-Meteo réserve son API gratuite aux usages non commerciaux (ses conditions rangent les
+  « promotional activities » parmi les usages commerciaux). À trancher par l'éditeur.
 
 ## Pistes pour la suite
 
@@ -414,3 +1043,18 @@ passe : la page privée est servie par le Worker.
 9. Servir les fichiers météo ailleurs que dans le site (branche de données, Worker) pour ne plus
    republier 170 Mo chaque jour.
 10. Garder une copie des tuiles géologiques dans une release du dépôt (si le miroir disparaît).
+11. Vue Analytics : brancher l'entonnoir en direct (mesure et consentement à décider), puis une
+    courbe ou une seconde série dans les graphiques quand une analyse en a besoin.
+12. Téléphone : ouvrir la légende à la fermeture de la présentation, et faire dire « Choisissez un
+    champignon » au bandeau du haut tant qu'aucun n'est choisi.
+13. Liens vers les fiches des sosies dangereux, et mesurer la part des visites qui ouvrent un bilan
+    avant et après la refonte (les compteurs `app.sessions` et `app.spots` existent déjà).
+14. Filtre des forêts sans refaire les tuiles : une couche par type de forêt, à opacité constante
+    (allumer ou éteindre un type ne changerait alors qu'une valeur, sans rien recharger). Gros
+    chantier : `bdforet-fill` est lu partout (clics, comptages, tests).
+15. Si le trafic approche la limite de GitHub Pages : un CDN devant le site, ou les archives de
+    tuiles et les fichiers météo servis ailleurs (voir aussi la piste 9) ; serveur de mesure : une
+    seule ligne écrite par envoi au lieu d'une par compteur.
+16. Carrés de 500 m prêts autour de la vue : relever aussi la marge des tuiles déjà chargées (elles
+    débordent de l'écran ; à vérifier avec `querySourceFeatures`), sans rien télécharger de plus ; et
+    faire démarrer avant `load` ce qui n'attend pas les tuiles (comptages exclus).

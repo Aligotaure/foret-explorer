@@ -14,6 +14,7 @@ const LABELS: Readonly<Record<string, string>> = {
   'foret-explorer:meteo': 'Météo du jour demandée directement à Open-Meteo (secours)',
   'foret-explorer:vue': 'Dernière vue de la carte (lieu et zoom)',
   'foret-explorer:altitudes': 'Altitudes des carrés de 500 m déjà vus',
+  'foret-explorer:releves': 'Forêts et sols des carrés de 500 m déjà vus',
 };
 
 const size = (bytes: number): string =>

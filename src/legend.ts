@@ -6,6 +6,7 @@ import { ABOUT_URL } from './legal';
 import { mushroomSection, soilSection, weatherSection, zonesSection } from './legendExtras';
 import type { MeteoLayer } from './meteoLayer';
 import type { AppState, BasemapId, Store } from './state';
+import { showTour } from './tour';
 import { collapsible, sectionTitle } from './ui';
 
 interface Row {
@@ -22,7 +23,7 @@ const BASEMAPS: readonly { id: BasemapId; label: string }[] = [
 /**
  * Panneau « Légendes » inspiré de cartes.gouv.fr : chaque type de forêt a sa case à
  * cocher. Le panneau ne touche jamais la carte : il lit et modifie le Store, et
- * main.ts répercute les changements sur MapLibre.
+ * mapView.ts répercute les changements sur MapLibre.
  */
 export class LegendPanel {
   private readonly rows = new Map<string, Row>();
@@ -48,6 +49,8 @@ export class LegendPanel {
   });
   private readonly opacityValue = h('output', {});
   private readonly basemapTitle = h('h3', { class: 'layer__title' });
+  /** Rappel du filtre en cours (« 15 / 32 ») dans l'en-tête de la section des forêts, repliée par défaut. */
+  private readonly filterBadge = h('span', { class: 'layer__badge', hidden: true });
   private counts: ReadonlyMap<string, number> | null = null;
   private readonly extras: { sync(state: AppState): void }[] = [];
 
@@ -101,18 +104,23 @@ export class LegendPanel {
     const weather = weatherSection(this.store, this.meteo);
     this.extras.push(mushrooms, zones, soils, weather);
     const link = (text: string, anchor: string): HTMLAnchorElement => h('a', { href: `${ABOUT_URL}#${anchor}` }, text);
+    // Rouvre « La carte en 3 gestes » (montrée d'office après le premier accord seulement).
+    const how = h('button', { class: 'legend-footer__btn', type: 'button' }, 'Comment ça marche ?');
+    how.addEventListener('click', () => void showTour());
     const body = h(
       'div',
       { class: 'panel__body' },
+      // Le geste d'abord (champignon), puis ce qui se lit sur la carte (météo et chances), puis les couches.
       mushrooms.el,
-      this.renderForestSection(),
-      zones.el,
-      soils.el,
       weather.el,
+      this.renderForestSection(),
+      soils.el,
+      zones.el,
       this.renderBasemapSection(),
       h(
         'footer',
         { class: 'legend-footer' },
+        how,
         link('Avant de cueillir', 'identifier'),
         link('Conditions', 'conditions'),
         link('Mentions légales', 'mentions-legales'),
@@ -225,7 +233,9 @@ export class LegendPanel {
         ),
       ),
     );
-    return collapsible(sectionTitle('Carte forestière (BD Forêt® V2)', 'tree'), content, true).el;
+    // Repliée par défaut : 39 cases à cocher dont personne n'a besoin pour chercher un champignon
+    // (en choisir un coche déjà ses forêts hôtes), et sans effet tant qu'on n'a pas zoomé.
+    return collapsible(sectionTitle('Types de forêt', 'tree'), content, false, this.filterBadge).el;
   }
 
   private renderBasemapSection(): HTMLElement {
@@ -278,7 +288,11 @@ export class LegendPanel {
     this.opacityInput.value = String(percent);
     this.opacityValue.textContent = `${percent} %`;
     for (const [id, input] of this.basemapInputs) input.checked = id === state.basemap;
-    this.basemapTitle.textContent = BASEMAPS.find((b) => b.id === state.basemap)?.label ?? 'Fond de carte';
+    this.basemapTitle.textContent = `Fond de carte : ${BASEMAPS.find((b) => b.id === state.basemap)?.label ?? ''}`;
+    const filtered = selected.size < ALL_CODES.length;
+    this.filterBadge.hidden = !filtered;
+    this.filterBadge.textContent = `${selected.size} / ${ALL_CODES.length}`;
+    this.filterBadge.title = filtered ? `${selected.size} types de forêt affichés sur ${ALL_CODES.length}` : '';
     for (const extra of this.extras) extra.sync(state);
 
     this.updateVisibility(state);

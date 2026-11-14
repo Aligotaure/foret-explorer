@@ -10,7 +10,7 @@
  */
 import type { MultiPolygon, Polygon, Position } from 'geojson';
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import { FINE_DIVISIONS, FINE_MAX_CELLS } from './config';
+import { FINE_DIVISIONS, FINE_MAX_CELLS, FINE_MIN_HOST_SHARE, FINE_TOWN_MIN_HOST_SHARE, FINE_TOWN_MIN_NEIGHBOURS } from './config';
 import { LAYERS } from './mapStyle';
 import { scoreMushroom, soilModulation, type Level, type Mushroom } from './mushrooms';
 import { BASE_STEP_LAT, BASE_STEP_LON, cellId, cellOfBase } from './meteoGrid';
@@ -144,17 +144,222 @@ class CellIndex {
 }
 
 const OFFSETS = [1 / 6, 1 / 2, 5 / 6] as const;
-/** Relevés complets (carré entièrement visible) : ils ne changent pas, on les garde pour la visite. */
-const samplesCache = new Map<string, Sample[]>();
+
+// ── Relevés gardés (mémoire, puis navigateur) ────────────────────────────────
+//
+// Le relevé d'un carré entièrement vu ne change pas : forêts de la BD Forêt et sols du BRGM sont des
+// données fixes. Il est gardé pour la visite, et depuis le 14/11/2026 d'une visite à l'autre : une
+// vue déjà relevée se redessine alors sans attendre les tuiles des forêts (2,6 s mesurées entre un
+// zoom et l'arrivée des carrés, dont l'essentiel à attendre ces tuiles).
+// Garde-fous : un carré sous une tuile de forêt ou de sol en panne n'est pas gardé (il resterait
+// « sans forêt » pendant des semaines) ; tout est oublié au bout de SURVEY_MAX_DAYS, et dès que
+// SURVEY_VERSION change (à changer avec les règles des sols ou la nomenclature des forêts).
+
+const SURVEY_KEY = 'foret-explorer:releves';
+const SURVEY_VERSION = 1;
+/**
+ * Une quarantaine d'écrans de 1280 × 800 au zoom 12,3 (448 carrés gardés pour une vue des Alpes, le
+ * 14/11/2026). ≈ 30 caractères par carré : 600 000 caractères au plus dans le navigateur.
+ */
+const SURVEY_MAX_ENTRIES = 20_000;
+const SURVEY_MAX_DAYS = 30;
+/** L'écriture attend ce délai de calme : elle récrit tout le cache, sur le fil qui dessine la carte. */
+const SURVEY_SAVE_DELAY_MS = 3000;
+const DAY_MS = 86_400_000;
+
+interface StoredSurveys {
+  v?: number;
+  /** Jour de la première écriture (AAAA-MM-JJ). */
+  d?: string;
+  /** Codes de forêt et sols cités : chaque point est écrit par leurs rangs. */
+  c?: string[];
+  g?: string[];
+  s?: Record<string, string>;
+}
+
+const DIGITS = '0123456789abcdefghijklmnopqrstuvwxyz';
+const NONE = '-';
+
+const rankOf = (value: string | null, list: string[]): string | null => {
+  if (value === null) return NONE;
+  let k = list.indexOf(value);
+  if (k < 0) k = list.push(value) - 1;
+  return DIGITS[k] ?? null;
+};
+
+/** Neuf points en 18 caractères (2 si tous les points se valent) ; null si cela ne s'écrit pas. */
+export function packSamples(samples: readonly Sample[], codes: string[], soils: string[]): string | null {
+  if (samples.length !== OFFSETS.length ** 2) return null;
+  let out = '';
+  for (const s of samples) {
+    const code = rankOf(s.code, codes);
+    const soil = rankOf(s.soil, soils);
+    if (code === null || soil === null) return null;
+    out += code + soil;
+  }
+  const first = out.slice(0, 2);
+  for (let k = 2; k < out.length; k += 2) if (out.slice(k, k + 2) !== first) return out;
+  return first;
+}
+
+export function unpackSamples(text: string, codes: readonly string[], soils: readonly string[]): Sample[] | null {
+  const points = OFFSETS.length ** 2;
+  if (text.length !== 2 && text.length !== 2 * points) return null;
+  const read = (char: string | undefined, list: readonly string[]): string | null | undefined => {
+    if (char === NONE) return null;
+    return char === undefined ? undefined : list[DIGITS.indexOf(char)];
+  };
+  const samples: Sample[] = [];
+  for (let k = 0; k < points; k++) {
+    const at = text.length === 2 ? 0 : 2 * k;
+    const code = read(text[at], codes);
+    const soil = read(text[at + 1], soils);
+    if (code === undefined || soil === undefined) return null;
+    if (soil !== null && !SOIL_BY_ID.has(soil)) return null;
+    samples.push({ code, soil: soil as SoilId | null });
+  }
+  return samples;
+}
+
+let samplesCache: Map<string, Sample[]> | null = null;
+let surveysSince: string | undefined;
+let saveTimer: number | undefined;
+
+const today = (): string => new Date().toISOString().slice(0, 10);
+
+/** Relevés complets déjà faits, ceux des visites précédentes compris. */
+function surveyCache(): Map<string, Sample[]> {
+  if (samplesCache) return samplesCache;
+  const cache = new Map<string, Sample[]>();
+  samplesCache = cache;
+  try {
+    const raw = localStorage.getItem(SURVEY_KEY);
+    const saved = raw ? (JSON.parse(raw) as StoredSurveys) : null;
+    const age = saved?.d ? (Date.now() - Date.parse(saved.d)) / DAY_MS : NaN;
+    // (Âge en valeur absolue : une horloge remise à l'heure ne doit pas faire oublier le cache.)
+    if (saved?.v === SURVEY_VERSION && saved.s && Array.isArray(saved.c) && Array.isArray(saved.g) && Math.abs(age) <= SURVEY_MAX_DAYS) {
+      surveysSince = saved.d;
+      for (const [id, text] of Object.entries(saved.s)) {
+        const samples = typeof text === 'string' ? unpackSamples(text, saved.c, saved.g) : null;
+        if (samples) cache.set(id, samples);
+      }
+    }
+  } catch {
+    /* stockage indisponible ou contenu illisible : les relevés seront refaits */
+  }
+  return cache;
+}
+
+function saveSurveys(): void {
+  window.clearTimeout(saveTimer);
+  saveTimer = undefined;
+  const cache = surveyCache();
+  // Les plus anciens d'abord dans la Map : on les oublie si le cache devient trop gros.
+  for (const key of cache.keys()) {
+    if (cache.size <= SURVEY_MAX_ENTRIES) break;
+    cache.delete(key);
+  }
+  const codes: string[] = [];
+  const soils: string[] = [];
+  const s: Record<string, string> = {};
+  for (const [id, samples] of cache) {
+    const text = packSamples(samples, codes, soils);
+    if (text) s[id] = text;
+  }
+  surveysSince ??= today();
+  try {
+    localStorage.setItem(SURVEY_KEY, JSON.stringify({ v: SURVEY_VERSION, d: surveysSince, c: codes, g: soils, s } satisfies StoredSurveys));
+  } catch {
+    /* quota dépassé ou stockage indisponible : les relevés restent en mémoire pour la visite */
+  }
+}
+
+function scheduleSave(): void {
+  if (saveTimer !== undefined) return;
+  saveTimer = window.setTimeout(saveSurveys, SURVEY_SAVE_DELAY_MS);
+}
+// (Page quittée avant le délai : on écrit tout de suite.)
+window.addEventListener('pagehide', () => {
+  if (saveTimer !== undefined) saveSurveys();
+});
+
+/** Oublie tous les relevés gardés, en mémoire et dans le navigateur (tests : repartir d'une vue jamais vue). */
+export function forgetSurveys(): void {
+  window.clearTimeout(saveTimer);
+  saveTimer = undefined;
+  samplesCache = new Map();
+  surveysSince = undefined;
+  try {
+    localStorage.removeItem(SURVEY_KEY);
+  } catch {
+    /* stockage indisponible */
+  }
+}
+
+/** Emprise des tuiles de forêt ou de sol que la carte n'a pas pu lire (réseau, service en panne). */
+const failedTiles = new Map<string, Bounds>();
+
+/**
+ * Une tuile des forêts ou des sols vient d'être lue (`ok`) ou a échoué. Tant qu'elle n'a pas été
+ * relue, les carrés qu'elle couvre sont relevés mais pas gardés : sans elle ils paraissent sans forêt.
+ */
+export function noteSurveyTile(source: string, tile: { z: number; x: number; y: number }, ok: boolean): void {
+  const key = `${source}/${tile.z}/${tile.x}/${tile.y}`;
+  if (ok) {
+    failedTiles.delete(key);
+    return;
+  }
+  const n = 2 ** tile.z;
+  const lat = (row: number): number => (Math.atan(Math.sinh(Math.PI * (1 - (2 * row) / n))) * 180) / Math.PI;
+  failedTiles.set(key, { west: (tile.x / n) * 360 - 180, east: ((tile.x + 1) / n) * 360 - 180, north: lat(tile.y), south: lat(tile.y + 1) });
+}
+
+const underFailedTile = (c: FineCell): boolean => {
+  for (const t of failedTiles.values()) if (c.west < t.east && c.east > t.west && c.south < t.north && c.north > t.south) return true;
+  return false;
+};
+
+/** Relevés déjà gardés parmi ces carrés, sans rien demander à la carte. */
+export function knownSamples(cells: readonly FineCell[]): Map<string, Sample[]> {
+  const cache = surveyCache();
+  const out = new Map<string, Sample[]>();
+  for (const c of cells) {
+    const cached = cache.get(c.id);
+    if (cached) out.set(c.id, cached);
+  }
+  return out;
+}
+
+/** Les neuf points du carré sont dans la vue : son relevé y serait complet. */
+const fullyVisible = (c: FineCell, view: Bounds): boolean => {
+  const dx = (c.east - c.west) * (OFFSETS[0] ?? 0);
+  const dy = (c.north - c.south) * (OFFSETS[0] ?? 0);
+  return c.west + dx >= view.west && c.east - dx <= view.east && c.south + dy >= view.south && c.north - dy <= view.north;
+};
+
+/**
+ * Vue déjà relevée : tous ses carrés entièrement visibles sont gardés (ceux du bord de l'écran,
+ * relevés en partie, ne le sont jamais). Elle peut être redessinée sans attendre les tuiles.
+ */
+export function isSurveyed(cells: readonly FineCell[], view: Bounds): boolean {
+  const cache = surveyCache();
+  let known = 0;
+  for (const c of cells) {
+    if (cache.has(c.id)) known++;
+    else if (fullyVisible(c, view)) return false;
+  }
+  return known > 0;
+}
 
 /**
  * Forêts et sols de chaque carré, d'après les tuiles affichées (attendre qu'elles soient chargées).
  * Un carré à cheval sur le bord de l'écran n'est relevé que sur ses points visibles.
  */
 export function sampleCells(map: MapLibreMap, cells: readonly FineCell[]): Map<string, Sample[]> {
+  const cache = surveyCache();
   const out = new Map<string, Sample[]>();
   const todo = cells.filter((c) => {
-    const cached = samplesCache.get(c.id);
+    const cached = cache.get(c.id);
     if (cached) out.set(c.id, cached);
     return !cached;
   });
@@ -163,7 +368,7 @@ export function sampleCells(map: MapLibreMap, cells: readonly FineCell[]): Map<s
   const forests = new CellIndex(map, LAYERS.forestHit, 'code_tfv');
   const soils = new CellIndex(map, LAYERS.geologyHit, 'sol');
   const view = map.getBounds();
-  if (samplesCache.size > 60_000) samplesCache.clear();
+  let kept = false;
   for (const c of todo) {
     const samples: Sample[] = [];
     let complete = true;
@@ -182,12 +387,69 @@ export function sampleCells(map: MapLibreMap, cells: readonly FineCell[]): Map<s
     }
     if (!samples.length) continue;
     out.set(c.id, samples);
-    if (complete) samplesCache.set(c.id, samples);
+    if (complete && !underFailedTile(c)) {
+      cache.set(c.id, samples);
+      kept = true;
+    }
   }
+  if (kept) scheduleSave();
   return out;
 }
 
 export const hasForest = (samples: readonly Sample[] | undefined): boolean => Boolean(samples?.some((s) => s.code));
+
+/** Points relevés dans un carré entièrement visible (3 × 3). */
+export const FINE_POINTS = OFFSETS.length ** 2;
+const POINTS = FINE_POINTS;
+
+/**
+ * Part des neuf points d'un carré qui sont sous un arbre hôte du champignon (0 à 1). Un carré à
+ * cheval sur le bord de l'écran n'est relevé qu'en partie : on compte quand même sur neuf, sinon il
+ * se dessinerait sur la foi d'un seul point visible, puis disparaîtrait une fois entier à l'écran.
+ */
+export function hostShare(m: Mushroom, samples: readonly Sample[]): number {
+  let hosts = 0;
+  for (const s of samples) if (s.code !== null && (m.hosts[s.code] ?? 0) > 0) hosts++;
+  return hosts / POINTS;
+}
+
+/** Un carré candidat au dessin : sa part d'arbres hôtes, et s'il est en ville (carré de 4,5 km d'abord bâti). */
+export interface FineCandidate {
+  id: string;
+  share: number;
+  town: boolean;
+}
+
+/**
+ * Carrés de 500 m à dessiner parmi ceux qui ont des arbres hôtes. Hors des villes : une part
+ * FINE_MIN_HOST_SHARE de points sous un arbre hôte suffit. En ville, il faut en plus que le carré
+ * soit franchement boisé et tienne à un massif (voir FINE_TOWN_MIN_*) : avant le 14/11/2026, le
+ * moindre parc urbain posait un carré coloré au milieu des rues.
+ * Seuls les voisins connus comptent : au bord de l'écran, un carré de ville n'apparaît que lorsque
+ * son massif est assez visible (le contraire ferait revenir les parcs le long des bords).
+ */
+export function fineCellsToDraw(candidates: readonly FineCandidate[]): Set<string> {
+  const wooded = new Set(candidates.filter((c) => c.share >= FINE_MIN_HOST_SHARE).map((c) => c.id));
+  const kept = new Set<string>();
+  for (const c of candidates) {
+    if (!wooded.has(c.id)) continue;
+    if (!c.town) {
+      kept.add(c.id);
+      continue;
+    }
+    if (c.share < FINE_TOWN_MIN_HOST_SHARE) continue;
+    const [i = 0, j = 0] = c.id.split(':').map(Number);
+    let neighbours = 0;
+    for (let di = -1; di <= 1; di++) {
+      for (let dj = -1; dj <= 1; dj++) {
+        if (!di && !dj) continue;
+        if (wooded.has(`${i + di}:${j + dj}`)) neighbours++;
+      }
+    }
+    if (neighbours >= FINE_TOWN_MIN_NEIGHBOURS) kept.add(c.id);
+  }
+  return kept;
+}
 
 // ── Altitudes (cache permanent dans le navigateur) ───────────────────────────
 
@@ -234,7 +496,8 @@ export interface FineScore {
 
 /**
  * Indice d'un carré pour un champignon : qualité moyenne des arbres hôtes présents et sol
- * moyen sous ces arbres. Null si aucun point du carré n'est sous un arbre hôte.
+ * moyen sous ces arbres. Null si aucun point du carré n'est sous un arbre hôte (le choix des
+ * carrés à dessiner se fait avant : `fineCellsToDraw`).
  */
 export function scoreFineCell(m: Mushroom, w: WeatherSummary, month: number, samples: readonly Sample[]): FineScore | null {
   let hosts = 0;

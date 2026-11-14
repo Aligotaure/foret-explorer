@@ -105,6 +105,9 @@ export function selectionFilter(selected: ReadonlySet<string>): FilterSpecificat
 
 const visibility = (on: boolean): 'visible' | 'none' => (on ? 'visible' : 'none');
 
+/** Tuiles d'images affichées sans fondu (voir les couches de fond dans `buildStyle`). */
+const NO_FADE = { 'raster-fade-duration': 0 } as const;
+
 export function buildStyle(state: AppState): StyleSpecification {
   const filter = selectionFilter(state.selected);
   const forestFilter = filter ? { filter } : {};
@@ -116,6 +119,9 @@ export function buildStyle(state: AppState): StyleSpecification {
   return {
     version: 8,
     glyphs: GLYPHS_URL,
+    // Pas de transition de 0,3 s sur les couleurs et les opacités : elle fait redessiner la carte en
+    // continu, plusieurs images de trop sur un appareil sans carte graphique (voir meteoLayer.ts).
+    transition: { duration: 0, delay: 0 },
     sources: {
       [SOURCES.planIgn]: {
         type: 'raster',
@@ -156,13 +162,20 @@ export function buildStyle(state: AppState): StyleSpecification {
         bounds: GEOLOGY.bounds,
         attribution: ATTRIBUTION.geologie,
       },
+      // Grille météo : `maxzoom` bas exprès. Au-delà, MapLibre agrandit les tuiles de ce niveau au
+      // lieu d'en découper de plus petites : une ou deux tuiles couvrent la vue au lieu de douze, donc
+      // moins d'images redessinées à chaque mise à jour (voir meteoLayer.ts). Prix : les coordonnées
+      // sont arrondies à l'unité de tuile (8 192 par tuile), soit ± 7 m pour les carrés de 4,5 km
+      // (un pixel au zoom 12 ; plus au-delà, où ils ne sont plus qu'un fond derrière les carrés de
+      // 500 m, eux à ± 0,4 m) : moins que la marge laissée entre deux carrés de 500 m.
       [SOURCES.meteo]: {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
         attribution: ATTRIBUTION.meteo,
+        maxzoom: 8,
       },
-      [SOURCES.meteoFine]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
-      [SOURCES.meteoTop]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+      [SOURCES.meteoFine]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 12 },
+      [SOURCES.meteoTop]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 5 },
       [SOURCES.zones]: {
         type: 'vector',
         tiles: [archiveTiles(`${ZONES_BASE}${ZONES.archive}`)],
@@ -173,21 +186,29 @@ export function buildStyle(state: AppState): StyleSpecification {
       },
     },
     layers: [
-      { id: LAYERS.basePlan, type: 'raster', source: SOURCES.planIgn, layout: { visibility: visibility(state.basemap === 'plan') } },
-      { id: LAYERS.baseOrtho, type: 'raster', source: SOURCES.ortho, layout: { visibility: visibility(state.basemap === 'ortho') } },
+      // Images de fond sans fondu (`NO_FADE`) : chaque tuile qui arrive s'affiche d'un coup. Avec le
+      // fondu d'office de 0,3 s, la carte se redessinait en continu tant que des tuiles arrivaient.
+      // Mesuré le 14/11/2026 sans carte graphique, zoom de 7,2 à 8,2 : 38 images et 2,7 s de fil
+      // principal occupé avec le fondu, 24 images et 1,4 s sans.
+      { id: LAYERS.basePlan, type: 'raster', source: SOURCES.planIgn, layout: { visibility: visibility(state.basemap === 'plan') }, paint: NO_FADE },
+      { id: LAYERS.baseOrtho, type: 'raster', source: SOURCES.ortho, layout: { visibility: visibility(state.basemap === 'ortho') }, paint: NO_FADE },
       {
         id: LAYERS.overview,
         type: 'raster',
         source: SOURCES.bdForetRaster,
         maxzoom: BDFORET.minZoom,
-        paint: { 'raster-opacity': state.opacity },
+        paint: { 'raster-opacity': state.opacity, ...NO_FADE },
       },
       {
         id: LAYERS.fill,
         type: 'fill',
         ...vector,
         minzoom: BDFORET.minZoom,
-        paint: { 'fill-color': colorExpression(), 'fill-opacity': state.opacity },
+        // Bords non lissés : le lissage redessine le contour de chaque polygone, et la BD Forêt en
+        // compte des milliers par vue. Mesuré le 14/11/2026 sans carte graphique, zoom 10,5 : une image
+        // de la carte coûte 176 ms avec le lissage, 103 ms sans (à partir du zoom 12, `bdforet-outline`
+        // trace de toute façon les contours).
+        paint: { 'fill-color': colorExpression(), 'fill-opacity': state.opacity, 'fill-antialias': false },
         ...forestFilter,
       },
       { id: LAYERS.forestHit, type: 'fill', ...vector, minzoom: BDFORET.minZoom, paint: { 'fill-opacity': 0 } },
@@ -197,7 +218,7 @@ export function buildStyle(state: AppState): StyleSpecification {
         ...geology,
         minzoom: GEOLOGY.minZoom,
         layout: { visibility: visibility(state.geology) },
-        paint: { 'fill-pattern': patternExpression(), 'fill-opacity': 0.85 },
+        paint: { 'fill-pattern': patternExpression(), 'fill-opacity': 0.85, 'fill-antialias': false },
       },
       { id: LAYERS.geologyHit, type: 'fill', ...geology, minzoom: BDFORET.minZoom, paint: { 'fill-opacity': 0 } },
       {
@@ -218,7 +239,7 @@ export function buildStyle(state: AppState): StyleSpecification {
         ...zone(ZONES.protectedLayer),
         minzoom: ZONES.minZoom,
         layout: { visibility: visibility(state.zones) },
-        paint: { 'fill-pattern': ZONE_PATTERN },
+        paint: { 'fill-pattern': ZONE_PATTERN, 'fill-antialias': false },
       },
       {
         id: LAYERS.publicForestLine,
@@ -242,7 +263,8 @@ export function buildStyle(state: AppState): StyleSpecification {
         source: SOURCES.meteo,
         minzoom: WEATHER_MIN_ZOOM,
         layout: { visibility: visibility(meteoOn) },
-        paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.45 },
+        // Des rectangles alignés sur les axes : le lissage des bords n'y sert à rien (et coûte une passe).
+        paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.45, 'fill-antialias': false },
       },
       {
         id: LAYERS.meteoLine,
@@ -259,7 +281,7 @@ export function buildStyle(state: AppState): StyleSpecification {
         source: SOURCES.meteoFine,
         minzoom: FINE_MIN_ZOOM,
         layout: { visibility: 'none' },
-        paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.5 },
+        paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.5, 'fill-antialias': false },
       },
       {
         id: LAYERS.meteoFineLine,
@@ -309,15 +331,20 @@ export function buildStyle(state: AppState): StyleSpecification {
         id: LAYERS.meteoFineLabel,
         type: 'symbol',
         source: SOURCES.meteoFine,
-        minzoom: 14,
+        // Dès l'arrivée des carrés de 500 m (retour de Clément du 14/11/2026). Avant, leur pourcentage
+        // n'apparaissait qu'au zoom 14 : du zoom 12 au zoom 14, aux échelles 1 km à 300 m, il ne restait
+        // que la nuance de couleur pour juger d'un carré. Au zoom 12 un carré fait ≈ 37 pixels de large.
+        minzoom: FINE_MIN_ZOOM,
         layout: {
           visibility: 'none',
           'text-field': '',
           'text-font': [LABEL_FONT],
-          'text-size': 11,
+          // Il grandit avec le carré : 10 px quand il fait 37 px de large, 18 px au zoom 16.
+          'text-size': ['interpolate', ['linear'], ['zoom'], FINE_MIN_ZOOM, 10, 14, 14, 16, 18],
           'text-allow-overlap': false,
+          'text-padding': 0,
         },
-        paint: { 'text-color': '#0b1f44', 'text-halo-color': 'rgba(255,255,255,0.9)', 'text-halo-width': 1.2 },
+        paint: { 'text-color': '#0b1f44', 'text-halo-color': 'rgba(255,255,255,0.95)', 'text-halo-width': 1.6 },
       },
       // Contour et nom des zones protégées par-dessus la grille de l'indice : on les voit toujours.
       {

@@ -4,8 +4,15 @@
  * Changer TERMS_VERSION quand le texte de l'avertissement ou des conditions change : la carte
  * redemande alors l'accord de chaque visiteur.
  */
-export const TERMS_VERSION = '2026-11-10';
-export const TERMS_DATE_LABEL = '10 novembre 2026';
+export const TERMS_VERSION = '2026-11-14';
+export const TERMS_DATE_LABEL = '14 novembre 2026';
+
+/**
+ * Jour de la refonte de l'interface (AAAA-MM-JJ, comme TERMS_VERSION) : qui n'a jamais accepté, ou a
+ * accepté une version plus ancienne, voit une fois « La carte en 3 gestes » après son accord
+ * (src/disclaimer.ts, src/tour.ts). Ne change pas avec les conditions suivantes.
+ */
+export const TOUR_SINCE = '2026-11-14';
 
 /** Page « À propos » (conditions, mentions légales, confidentialité), à côté de index.html. */
 export const ABOUT_URL = 'a-propos.html';

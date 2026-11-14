@@ -1,0 +1,369 @@
+/*
+ * Vue « Analytics » (src/analyticsView.ts) : même thème bleu nuit que les panneaux de la carte.
+ * Feuille chargée avec la page (et non avec le code de la vue) : la vue est en place, fond compris,
+ * dès le premier affichage.
+ */
+#analytics {
+  display: none;
+}
+
+html[data-view='analytics'] #analytics {
+  display: block;
+}
+
+/* Le fond de la page vient de <html> : sans cela, la teinte d'attente de la carte reparaît sous le
+   contenu et quand on tire la page au-delà du bord. */
+html[data-view='analytics'],
+html[data-view='analytics'] body {
+  background: var(--navy-900);
+}
+
+/* Un élément atteint au clavier ne se range pas sous l'îlot. */
+html[data-view='analytics'] {
+  scroll-padding-top: calc(var(--btn) + 3 * var(--gap) + var(--safe-top));
+}
+
+.analytics {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: calc(var(--btn) + 2 * var(--gap) + 36px + var(--safe-top)) max(16px, env(safe-area-inset-right, 0px))
+    calc(56px + var(--safe-bottom)) max(16px, env(safe-area-inset-left, 0px));
+  color: #e5e5ff;
+  font-size: 15px;
+  line-height: 1.55;
+  overflow-wrap: anywhere; /* une adresse ou un mot très long ne fait pas défiler la page en largeur */
+}
+
+.analytics a {
+  color: var(--lavender-soft);
+  text-underline-offset: 3px;
+}
+
+/* ── En-tête : phrase d'accroche et lien de contact ───────────────────────── */
+.analytics__eyebrow {
+  margin: 0 0 8px;
+  color: var(--lavender-soft);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.analytics__headline {
+  max-width: 22em;
+  margin: 0;
+  color: #fff;
+  font-size: clamp(26px, 5.4vw, 38px);
+  font-weight: 700;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.analytics a.analytics__contact {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 20px;
+  padding: 0 18px;
+  border: 1px solid var(--lavender);
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.15s;
+}
+
+.analytics a.analytics__contact:hover {
+  background: var(--navy-700);
+}
+
+/* ── Sections ─────────────────────────────────────────────────────────────── */
+.analytics__section {
+  margin-top: 44px;
+}
+
+.analytics__title {
+  margin: 0 0 14px;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+/* État vide : un cadre en pointillés à la place du contenu à venir. */
+.analytics__empty {
+  margin: 0;
+  padding: 22px 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.26);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.analytics-card {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--navy-800);
+}
+
+.analytics__label {
+  margin: 0 0 2px;
+  color: var(--lavender-soft);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.analytics__meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ── Pari en cours ────────────────────────────────────────────────────────── */
+.analytics-bet__hypothesis {
+  margin: 0 0 16px;
+  color: #fff;
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.analytics-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px 24px;
+  margin: 0;
+}
+
+.analytics-facts dd {
+  margin: 0;
+  color: #fff;
+}
+
+/* ── Analyses : une carte par analyse ─────────────────────────────────────── */
+.analytics-analyses {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 900px) {
+  .analytics-analyses {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.analytics-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.analytics-analysis__question {
+  margin: 4px 0 0;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.analytics-analysis p {
+  margin: 0;
+}
+
+/* ── Paris tranchés : une ligne par pari ──────────────────────────────────── */
+.analytics-bets {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--navy-800);
+  list-style: none;
+}
+
+.analytics-bets__row {
+  display: grid;
+  /* Première colonne de largeur fixe : les hypothèses s'alignent d'une ligne à l'autre. */
+  grid-template-columns: 9.2em minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 14px;
+  padding: 14px 18px;
+}
+
+.analytics-bets__row + .analytics-bets__row {
+  border-top: 1px solid var(--line);
+}
+
+.analytics-bets__hypothesis {
+  margin: 0;
+  color: #fff;
+}
+
+.analytics-bets__row .analytics__meta,
+.analytics-bets__decision {
+  grid-column: 2;
+}
+
+.analytics-bets__decision {
+  margin: 0;
+}
+
+.analytics-bets__decision .analytics__label {
+  margin-right: 4px;
+}
+
+.analytics-bets__date {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .analytics-bets__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .analytics-bets__date {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .analytics-bets__hypothesis,
+  .analytics-bets__row .analytics__meta,
+  .analytics-bets__decision {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Issue d'un pari : toujours un signe et un mot, jamais la couleur seule. */
+.analytics-outcome {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  padding: 2px 10px 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.analytics-outcome--validated {
+  color: #7ee08a;
+}
+
+.analytics-outcome--invalidated {
+  color: #ff9d94;
+}
+
+.analytics-outcome--inconclusive {
+  color: var(--muted);
+}
+
+/* ── En développement : ce qu'il reste à corriger dans src/analyticsData.ts ── */
+.analytics__problems {
+  margin-bottom: 28px;
+  padding: 14px 18px;
+  border-left: 4px solid #ffc46b;
+  border-radius: var(--radius);
+  background: rgba(255, 196, 107, 0.12);
+  color: #ffe2b0;
+  font-size: 14px;
+}
+
+.analytics__problems ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+/* ── Graphique d'une analyse : barres horizontales, écrites comme une liste ── */
+.analytics-figure {
+  margin: 0;
+}
+
+/* Trois colonnes alignées d'une ligne à l'autre : libellé, barre, valeur. */
+.analytics-bars {
+  display: grid;
+  grid-template-columns: fit-content(42%) minmax(60px, 1fr) max-content;
+  column-gap: 14px;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  list-style: none;
+}
+
+.analytics-bars__row {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+}
+
+/* Navigateur sans sous-grille : colonnes fixes, toujours alignées. */
+@supports not (grid-template-columns: subgrid) {
+  .analytics-bars__row {
+    grid-template-columns: 40% minmax(60px, 1fr) 5.5em;
+    column-gap: 14px;
+  }
+}
+
+.analytics-bars__label {
+  padding: 5px 0;
+  color: #e5e5ff;
+}
+
+/* La ligne de base, commune à toutes les barres, court d'une ligne à l'autre. */
+.analytics-bars__track {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 5px 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Barre fine, bout arrondi du côté de la valeur, carré sur la ligne de base. */
+.analytics-bars__bar {
+  min-width: 2px;
+  height: 14px;
+  border-radius: 0 4px 4px 0;
+  background: var(--lavender);
+}
+
+/* Couleurs forcées (contraste élevé de Windows) : les fonds d'auteur disparaissent, pas celui-ci. */
+@media (forced-colors: active) {
+  .analytics-bars__bar {
+    background: CanvasText;
+  }
+}
+
+.analytics-bars__value {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  /* Téléphone : le libellé sur sa ligne, la barre et sa valeur dessous. */
+  .analytics-bars {
+    grid-template-columns: minmax(60px, 1fr) max-content;
+  }
+
+  .analytics-bars__label {
+    grid-column: 1 / -1;
+    padding: 6px 0 0;
+  }
+
+  @supports not (grid-template-columns: subgrid) {
+    .analytics-bars__row {
+      grid-template-columns: minmax(60px, 1fr) 5.5em;
+    }
+  }
+}

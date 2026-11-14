@@ -1,196 +1,86 @@
+/**
+ * Point d'entrée : l'îlot et les deux vues de la page (carte, Analytics).
+ *
+ * Chaque vue est téléchargée à sa première ouverture. Arriver sur « Analytics » ne charge donc ni
+ * MapLibre ni aucune tuile ; la carte, une fois chargée, reste en mémoire quand on la quitte :
+ * position, légende et bilan sont intacts au retour (src/mapView.ts).
+ */
+// MapLibre d'abord : style.css corrige quelques-unes de ses règles (échelle, coin bas droit).
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
-import maplibregl from 'maplibre-gl';
-import { Protocol } from 'pmtiles';
-import { BDFORET, FRANCE_BOUNDS, MAP_MAX_ZOOM, MAP_MIN_ZOOM } from './config';
-import { countClasses } from './counts';
-import { showDisclaimer } from './disclaimer';
-import { byId, debounce, h, toast } from './dom';
-import { registerSoilPatterns } from './geology';
-import { LegendPanel } from './legend';
-import {
-  LAYERS,
-  SOURCES,
-  applyBasemap,
-  applyGeology,
-  applyOpacity,
-  applySelection,
-  applyState,
-  applyZones,
-  buildStyle,
-} from './mapStyle';
-import { MeteoLayer } from './meteoLayer';
-import { flush, sessionTotals, startMetrics, track, trackMapRequest } from './metrics';
-import { initSearch } from './search';
-import { SpotPanel } from './spot';
-import { Store, loadInitialState, persistState } from './state';
-import { STORAGE_PREFIX } from './legal';
-import { initLegendToggle, initToolbar } from './toolbar';
-import { loadZonesInfo, noteZonesError, registerZonePattern } from './zones';
+import './analytics.css';
+import { showDisclaimer, withdrawDisclaimer } from './disclaimer';
+import { byId, h } from './dom';
+import { showTour, withdrawTour } from './tour';
+import { currentView, initViewSwitch, onViewChange, type ViewId } from './view';
 
-// ── Avertissement : bloque la carte au moins 3 s tant qu'il n'est pas accepté ──
-void showDisclaimer();
-
-// ── État ──────────────────────────────────────────────────────────────────────
-const wideScreen = window.matchMedia('(min-width: 641px)').matches;
-const store = new Store(loadInitialState(wideScreen)); // légende ouverte d'office sur grand écran
-persistState(store);
-startMetrics(!wideScreen);
-void loadZonesInfo();
-
-// ── Carte ─────────────────────────────────────────────────────────────────────
-// Vue de départ : celle de l'adresse (#carte=zoom/lat/lon), sinon la dernière vue sur cet appareil,
-// sinon la France entière.
-const VIEW_KEY = `${STORAGE_PREFIX}vue`;
-function savedView(): { center: [number, number]; zoom: number } | null {
-  try {
-    const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? 'null') as { c?: unknown; z?: unknown } | null;
-    const [lng, lat] = Array.isArray(v?.c) ? (v.c as unknown[]) : [];
-    if (typeof lng === 'number' && typeof lat === 'number' && typeof v?.z === 'number' && Math.abs(lat) < 85 && Math.abs(lng) <= 180) {
-      return { center: [lng, lat], zoom: v.z };
-    }
-  } catch {
-    /* stockage indisponible */
-  }
-  return null;
-}
-const lastView = savedView();
-// Tuiles servies par le site (nature du sol, zones) : archives PMTiles lues par morceaux.
-maplibregl.addProtocol('pmtiles', new Protocol().tile);
-const map = new maplibregl.Map({
-  container: 'map',
-  style: buildStyle(store.state),
-  ...(lastView ?? { bounds: FRANCE_BOUNDS, fitBoundsOptions: { padding: 16 } }),
-  minZoom: MAP_MIN_ZOOM,
-  maxZoom: MAP_MAX_ZOOM,
-  hash: 'carte', // position dans l'URL : #carte=zoom/lat/lon
-  attributionControl: false,
-  dragRotate: false,
-  pitchWithRotate: false,
-  touchPitch: false,
-  // Compte les tuiles et polices demandées (consommation des API), sans modifier la requête.
-  transformRequest: (url, resourceType) => {
-    trackMapRequest(url, resourceType);
-    return { url };
-  },
-});
-map.touchZoomRotate.disableRotation();
-map.keyboard.disableRotation();
-map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
-map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-right');
-if (!wideScreen) {
-  // Petit écran : attribution repliée derrière le bouton ⓘ pour ne pas masquer la carte.
-  map.once('idle', () =>
-    document.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show'),
-  );
-}
-registerSoilPatterns(map);
-registerZonePattern(map);
-
-// ── Interface ─────────────────────────────────────────────────────────────────
-const app = byId('app');
-const meteo = new MeteoLayer(map, store);
-const legend = new LegendPanel(byId('legend'), store, meteo);
-const spot = new SpotPanel(byId('spot'), map, store);
-initLegendToggle(store);
-initToolbar(map, store);
-initSearch(byId<HTMLFormElement>('search'), map);
-store.subscribe((state, prev) => {
-  app.classList.toggle('legend-open', state.legendOpen);
-  // Sur mobile, un seul tiroir à la fois : ouvrir la légende ferme le bilan.
-  if (!wideScreen && state.legendOpen && !prev.legendOpen) spot.close();
-});
-app.classList.toggle('legend-open', store.state.legendOpen);
-
-// Bandeau « Zoomez pour filtrer » sous le zoom des tuiles vectorielles.
-const zoomHint = byId('zoom-hint');
-const zoomButton = h('button', { class: 'zoom-hint__btn', type: 'button' }, 'Zoomer ici');
-zoomButton.addEventListener('click', () => map.easeTo({ zoom: BDFORET.minZoom + 0.5 }));
-zoomHint.replaceChildren(h('span', {}, 'Zoomez pour filtrer les types de forêt'), zoomButton);
-const updateZoomUi = (): void => {
-  const active = map.getZoom() >= BDFORET.minZoom;
-  zoomHint.hidden = active;
-  legend.setFilteringActive(active);
+const loaders: Readonly<Record<ViewId, () => Promise<unknown>>> = {
+  map: () => import('./mapView'),
+  analytics: () => import('./analyticsView'),
 };
-map.on('zoom', updateZoomUi);
-updateZoomUi();
+const loading = new Map<ViewId, Promise<unknown>>();
 
-// ── Liaison état → carte ──────────────────────────────────────────────────────
-map.on('load', () => {
-  applyState(map, store.state); // l'état a pu changer pendant le chargement du style
-  meteo.applyMode();
-  store.subscribe((state, prev) => {
-    if (state.selected !== prev.selected) applySelection(map, state.selected);
-    if (state.opacity !== prev.opacity) applyOpacity(map, state.opacity, meteo.dimsForests);
-    if (state.basemap !== prev.basemap) applyBasemap(map, state.basemap);
-    if (state.geology !== prev.geology) applyGeology(map, state.geology);
-    if (state.zones !== prev.zones || state.publicForests !== prev.publicForests) applyZones(map, state);
-    if (state.weatherMode !== prev.weatherMode || state.mushroom !== prev.mushroom) meteo.applyMode();
-  });
-});
-map.on('moveend', () => {
-  if (store.state.weatherMode !== 'off') meteo.refresh();
-});
-// Dernière vue, reprise à la prochaine visite (sans #carte= dans l'adresse).
-map.on(
-  'moveend',
-  debounce(() => {
-    const c = map.getCenter();
-    try {
-      localStorage.setItem(VIEW_KEY, JSON.stringify({ c: [+c.lng.toFixed(5), +c.lat.toFixed(5)], z: +map.getZoom().toFixed(2) }));
-    } catch {
-      /* stockage indisponible : on repartira de la France entière */
-    }
-  }, 1000),
-);
+/** Le code d'une vue n'est pas arrivé (réseau coupé, site republié entre-temps) : on le dit. */
+function reportFailure(view: ViewId, error: unknown): void {
+  console.warn('[vue]', view, error);
+  const reload = h('button', { class: 'view-error__btn', type: 'button' }, 'Recharger');
+  reload.addEventListener('click', () => location.reload());
+  const box = byId('view-error');
+  const message = import.meta.env.DEV
+    ? `Cette vue n’a pas pu se charger : ${String(error)}. Si le contenu de la vue Analytics vient d’être modifié, « npm run check » dit où est l’erreur.`
+    : 'Cette vue n’a pas pu se charger. Vérifiez la connexion, puis rechargez la page.';
+  box.replaceChildren(h('span', {}, message), reload);
+  box.hidden = false;
+}
 
-// ── Clic sur la carte : bilan du coin (forêt, sol, altitude, météo, champignons) ─
-map.on('click', (event) => {
-  if (!wideScreen) store.update({ legendOpen: false });
-  void spot.open(event.lngLat, event.point);
-});
-map.on('mouseenter', LAYERS.fill, () => {
-  map.getCanvas().style.cursor = 'pointer';
-});
-map.on('mouseleave', LAYERS.fill, () => {
-  map.getCanvas().style.cursor = '';
-});
+/** L'alerte affichée pendant l'avertissement (fenêtre modale) n'a pas été lue : on la redit après. */
+function repeatFailure(): void {
+  const box = byId('view-error');
+  if (!box.hidden) box.replaceChildren(...box.childNodes);
+}
 
-// ── Comptage des types présents dans la zone (pastilles de la légende) ─────────
-let countsDirty = true;
-map.on('moveend', () => {
-  countsDirty = true;
-});
-map.on('sourcedata', (event) => {
-  if (event.sourceId === SOURCES.bdForet) countsDirty = true;
-});
-map.on('idle', () => {
-  if (!countsDirty) return;
-  countsDirty = false;
-  legend.setCounts(countClasses(map));
-});
+/** Présentation due : un premier accord vient d'être donné, et le visiteur ne l'a pas encore fermée (rien n'est gardé). */
+let tourDue = false;
 
-// ── Erreurs réseau ─────────────────────────────────────────────────────────────
-const shownErrors = new Set<string>();
-map.on('error', (event) => {
-  const sourceId = (event as { sourceId?: string }).sourceId;
-  // (Une tuile absente d'une archive du site, en mer ou à l'étranger, n'est pas une erreur : le
-  // protocole rend alors une tuile vide.)
-  // BD Forêt : l'IGN répond 404 pour une tuile sans forêt (ville, mer, étranger) : pas une panne.
-  const status = (event.error as { status?: number } | undefined)?.status;
-  if (status === 404 && (sourceId === SOURCES.bdForet || sourceId === SOURCES.bdForetRaster)) return;
-  console.warn('[carte]', sourceId ?? '', event.error?.message ?? event.error);
-  if (sourceId === SOURCES.geologie) track('pages.geology.errors');
-  else if (sourceId === SOURCES.zones) {
-    // Tuile des zones en panne (réseau…) : le bilan ne doit plus affirmer qu'une forêt est privée.
-    track('pages.zones.errors');
-    noteZonesError();
-  } else if (sourceId) track('ign.tiles.errors');
-  if (sourceId === SOURCES.bdForet && !shownErrors.has(sourceId)) {
-    shownErrors.add(sourceId);
-    toast('La BD Forêt ne répond pas pour le moment (réseau ou service IGN).', 5000);
+/**
+ * Accueil de la carte : l'avertissement à accepter, puis, pour un premier accord seulement, « La carte
+ * en 3 gestes ». Quittée sans avoir été fermée (passage à la vue Analytics), la présentation revient
+ * avec la carte, directement : l'accord, lui, est déjà donné.
+ */
+async function welcome(): Promise<void> {
+  if (await showDisclaimer()) tourDue = true;
+  if (tourDue && currentView() === 'map' && (await showTour())) tourDue = false;
+  repeatFailure();
+}
+
+function show(view: ViewId): void {
+  byId('view-error').hidden = true; // le message ne concernait que la vue qu'on quitte
+  if (!loading.has(view)) {
+    // Tant que le code de la vue n'est pas arrivé, les lecteurs d'écran la savent en cours de chargement.
+    const root = byId(view === 'map' ? 'app' : 'analytics');
+    root.setAttribute('aria-busy', 'true');
+    loading.set(
+      view,
+      loaders[view]()
+        .catch((error: unknown) => {
+          loading.delete(view); // nouvel essai à la prochaine ouverture de la vue
+          // Le visiteur est déjà passé à l'autre vue : le message attendra son retour (et un nouvel essai).
+          if (currentView() === view) reportFailure(view, error);
+          else console.warn('[vue]', view, error);
+        })
+        .finally(() => root.removeAttribute('aria-busy')),
+    );
   }
-});
+  // L'avertissement ne concerne que la carte : il s'affiche avec elle, sans attendre qu'elle soit
+  // téléchargée, et se retire si le visiteur passe à la vue Analytics avant de l'avoir accepté.
+  if (view === 'map') void welcome();
+  else {
+    // Une fenêtre modale restée ouverte couvrirait la vue Analytics et la figerait.
+    withdrawDisclaimer();
+    withdrawTour();
+  }
+}
 
-// En développement, `map`, `store`, `spot` et `metrics.totals()` sont accessibles depuis la console.
-if (import.meta.env.DEV) Object.assign(window, { map, store, spot, metrics: { totals: sessionTotals, flush } });
+initViewSwitch();
+onViewChange(show);
+show(currentView());

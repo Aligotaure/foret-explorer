@@ -56,7 +56,7 @@ function kindLabel(s: Suggestion): string {
 const isAbort = (error: unknown): boolean => error instanceof DOMException && error.name === 'AbortError';
 
 /** Barre « Rechercher un lieu… » avec suggestions au clavier et à la souris. */
-export function initSearch(form: HTMLFormElement, map: MapLibreMap): void {
+export function initSearch(form: HTMLFormElement, map: MapLibreMap, onChoose: () => void = () => {}): void {
   const input = form.querySelector<HTMLInputElement>('.search__input');
   const list = form.querySelector<HTMLUListElement>('.search__results');
   const submit = form.querySelector<HTMLButtonElement>('.search__submit');
@@ -103,6 +103,7 @@ export function initSearch(form: HTMLFormElement, map: MapLibreMap): void {
     reset();
     input.value = s.fulltext;
     input.blur(); // referme le clavier sur mobile
+    onChoose();
     map.flyTo({ center: [s.x, s.y], zoom: zoomFor(s), essential: true });
     marker ??= new maplibregl.Marker({ color: '#6a6af4' });
     marker.setLngLat([s.x, s.y]).addTo(map);

@@ -68,6 +68,38 @@ export const METEO_BASE = import.meta.env.DEV
   ? 'https://aligotaure.github.io/foret-explorer/data/meteo/'
   : new URL('data/meteo/', document.baseURI).href;
 
+/**
+ * Parts de forêt de chaque carré de 4,5 km (scripts/foret/parts.mjs ; fichier versionné, servi avec le
+ * site, en développement aussi). Un carré d'indice n'est coloré que si les arbres hôtes du champignon
+ * y couvrent au moins HOST_MIN_COVER de la surface, et d'autant plus qu'ils en couvrent (teinte
+ * pleine à HOST_FULL_COVER) : centres-villes, mer et plaines sans arbres restent éteints.
+ *
+ * Seuil relevé de 5 à 10 % le 14/11/2026 : à 5 %, 85 % des carrés de France s'allumaient pour les
+ * cèpes, donc presque toutes les villes et tous les villages (72 % à 10 %).
+ */
+export const FOREST_SHARE_URL = new URL('foret/parts.json', document.baseURI).href;
+export const HOST_MIN_COVER = 0.1;
+export const HOST_FULL_COVER = 0.5;
+/**
+ * Part bâtie d'un carré de 4,5 km (zones bâties et zones d'activité du Plan IGN, même fichier) à
+ * partir de laquelle il reste éteint : c'est d'abord une ville, même s'il contient un bois. Les
+ * carrés de 500 m, eux, montrent ce bois quand on zoome.
+ */
+export const BUILT_MAX_COVER = 0.15;
+/**
+ * Carrés de 500 m : part des points relevés (9 par carré) qui doivent être sous un arbre hôte pour
+ * que le carré soit dessiné. Trois points sur neuf : un bosquet ou un parc en ville n'en pose plus.
+ */
+export const FINE_MIN_HOST_SHARE = 0.3;
+/**
+ * En ville (carré de 4,5 km bâti à BUILT_MAX_COVER ou plus), un carré de 500 m n'est dessiné que
+ * s'il est franchement boisé en hôtes (cinq points sur neuf) et tient à un massif (au moins deux de
+ * ses huit voisins passent eux-mêmes la règle des trois points) : un parc ou un square isolé n'en
+ * pose plus.
+ */
+export const FINE_TOWN_MIN_HOST_SHARE = 0.5;
+export const FINE_TOWN_MIN_NEIGHBOURS = 2;
+
 /** Météo de secours : Open-Meteo en direct (gratuit, sans clé, usage non commercial). */
 export const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
 /**
@@ -96,10 +128,18 @@ export const SPOT_ALTITUDE_TIMEOUT_MS = 12_000;
 
 /**
  * Indice de pousse : à partir de ce zoom, chaque case est détaillée en carrés de 4,5 km (même pluie,
- * températures ramenées à l'altitude de chaque carré) ; leurs étiquettes attendent qu'ils soient
- * assez grands.
+ * températures ramenées à l'altitude de chaque carré), avec leur pourcentage.
+ *
+ * Avant le 14/11/2026 les carrés arrivaient dès le zoom 8, sans étiquette jusqu'au zoom 10 : quand la
+ * règle de la carte affiche 20 km (zooms 7,8 à 8,35 à 46° de latitude), ils faisaient 17 à 26 pixels
+ * de large, leur couleur ne se lisait pas, et ils coûtaient la moitié du temps de dessin d'une image
+ * (34 ms sur 68 au zoom 8,2, sans carte graphique ; 4 ms sur 51 avec des cases entières). Les cases
+ * de 18 km restent donc jusqu'au zoom 10 (la règle affiche alors 30, 20, 10 puis 5 km), où les
+ * pastilles disent où aller voir ; les carrés de 4,5 km arrivent avec leurs étiquettes et avec les
+ * forêts détaillées. Une expression de zoom dans une propriété `layout` (le texte des étiquettes)
+ * n'est évaluée qu'aux zooms entiers : garder un seuil entier.
  */
-export const WEATHER_SUB_MIN_ZOOM = 8;
+export const WEATHER_SUB_MIN_ZOOM = 10;
 export const WEATHER_SUB_LABEL_MIN_ZOOM = 10;
 
 /**
@@ -109,6 +149,19 @@ export const WEATHER_SUB_LABEL_MIN_ZOOM = 10;
 export const FINE_MIN_ZOOM = 12;
 export const FINE_DIVISIONS = 9;
 export const FINE_MAX_CELLS = 1600;
+
+/**
+ * Calcul des carrés en cours (mode indice) : à partir de ce zoom (la règle de la carte affiche alors
+ * 2 km ou moins), un petit champignon se remplit et le zoom est mis en pause tant que les carrés de la
+ * nouvelle vue ne sont pas dessinés (demande de Clément du 14/11/2026). C'est là qu'on attend le plus :
+ * tuiles détaillées des forêts, puis relevé des carrés de 500 m. Relevé le 14/11/2026 : en revenant du
+ * zoom 13 au zoom 11,6, les carrés de 500 m disparaissent tout de suite et ceux de 4,5 km de la
+ * nouvelle vue n'arrivent que 0,8 s plus tard (sans carte graphique, plusieurs secondes) ; et chaque
+ * cran de zoom donné pendant ce temps relance tout le travail.
+ * La pause ne dure jamais plus de GRID_BUSY_MAX_MS : un réseau lent ne doit pas coincer le visiteur.
+ */
+export const GRID_BUSY_MIN_ZOOM = 11;
+export const GRID_BUSY_MAX_MS = 8000;
 
 /**
  * Altitude IGN : points par requête et délai entre deux requêtes. La Géoplateforme limite le calcul
@@ -136,7 +189,7 @@ export const FRANCE_BOUNDS: [number, number, number, number] = [-5.3, 41.3, 9.7,
 /**
  * Adresse de tuiles MapLibre pour une archive PMTiles : toutes les tuiles d'une couche dans un seul
  * fichier, lu par morceaux (requêtes HTTP partielles) grâce au protocole `pmtiles://` enregistré
- * dans main.ts. GitHub Pages ne sait pas publier des dizaines de milliers de petits fichiers.
+ * dans mapView.ts. GitHub Pages ne sait pas publier des dizaines de milliers de petits fichiers.
  */
 export const archiveTiles = (url: string): string => `pmtiles://${url}/{z}/{x}/{y}`;
 

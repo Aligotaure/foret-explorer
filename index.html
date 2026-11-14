@@ -14,8 +14,26 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Forêts" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <script>
+      // Vue demandée par l'adresse (#vue=analytics), posée avant le premier affichage : la carte
+      // n'apparaît pas un instant derrière la vue Analytics. Même règle que src/view.ts.
+      if (/(?:^#|&)vue=analytics(?:&|$)/.test(location.hash)) document.documentElement.dataset.view = 'analytics';
+      // Sinon la page s'ouvre sur la carte : son code est demandé tout de suite, sans attendre la
+      // feuille de style (nom du fichier écrit au build par vite.config.ts ; vide en développement).
+      else if ('__MAP_CHUNK__') {
+        document.head.append(Object.assign(document.createElement('link'), { rel: 'modulepreload', href: '__MAP_CHUNK__' }));
+      }
+    </script>
   </head>
   <body>
+    <!-- Îlot : bascule entre la carte et la vue Analytics (src/view.ts) -->
+    <nav id="view-switch" class="island" aria-label="Vues">
+      <a class="island__link" href="./" data-view="map" aria-current="page">Carte</a>
+      <a class="island__link" href="#vue=analytics" data-view="analytics">Analytics</a>
+    </nav>
+    <p id="view-status" class="visually-hidden" role="status"></p>
+    <div id="view-error" class="view-error" role="alert" hidden></div>
+
     <div id="app">
       <div id="map" role="region" aria-label="Carte"></div>
 
@@ -50,8 +68,14 @@
       <div id="toolbar-bottom" class="toolbar toolbar--bottom"></div>
 
       <div id="zoom-hint" class="zoom-hint" hidden></div>
+      <!-- Calcul des carrés en cours : champignon qui se remplit (rempli par src/gridLoader.ts) -->
+      <div id="grid-loader" class="grid-loader" aria-hidden="true" hidden></div>
+      <div id="grid-verdict" class="grid-verdict" hidden></div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
     </div>
+
+    <!-- Vue Analytics (remplie par src/analyticsView.ts, chargé à la première ouverture) -->
+    <main id="analytics" class="analytics"></main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

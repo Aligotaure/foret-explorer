@@ -19,6 +19,8 @@
   --btn: 46px;
   --gap: 8px;
   --panel-width: 360px;
+  --search-width: 420px;
+  --island-width: 208px; /* îlot « Carte / Analytics » */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
@@ -135,7 +137,8 @@ button {
 .search {
   position: relative;
   display: flex;
-  width: 420px;
+  /* Sous 760 px de large, la recherche se resserre : l'îlot se loge entre elle et les boutons de droite. */
+  width: min(var(--search-width), calc(100vw - 5 * var(--gap) - 2 * var(--btn) - var(--island-width)));
   min-width: 0;
   height: var(--btn);
   border-radius: var(--radius);
@@ -387,7 +390,7 @@ button {
   max-height: max(200px, calc(100vh - 480px));
   padding: 6px 12px 10px;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* pas de overscroll-behavior ici : arrivée en butée, la molette doit faire défiler le panneau */
   border-radius: 2px;
   background: #fff;
   color: var(--france);
@@ -496,6 +499,13 @@ li.is-off .swatch {
   border-radius: 2px;
   background: var(--swatch, #999);
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+/* « Sans carré » : rien n'est dessiné sur la carte pour ce niveau. */
+.swatch--none {
+  background: transparent;
+  box-shadow: none;
+  border: 1px dashed #8f8fb0;
 }
 
 /* Cases à cocher personnalisées */
@@ -675,6 +685,103 @@ li.is-off .swatch {
   transform: translateX(-50%);
 }
 
+/* ── Calcul des carrés en cours : champignon qui se remplit (gridLoader.ts) ──
+   À la place du bandeau « Zoomez… » : l'un ne s'affiche que sous le zoom 10, l'autre à partir du
+   zoom 11. Il ne prend aucun geste à la carte. */
+.grid-loader {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px 5px 9px;
+  border-radius: 999px;
+  background: var(--navy-800);
+  box-shadow: var(--shadow);
+  color: var(--lavender-soft);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  /* (Un calcul de moins d'un quart de seconde ne l'affiche pas du tout : voir gridLoader.ts.) */
+  animation: grid-loader-in 0.15s both;
+}
+
+.grid-loader__icon {
+  position: relative;
+  display: block;
+  width: 26px;
+  height: 26px;
+  color: #8f8fb8;
+}
+
+.grid-loader__icon .icon,
+.grid-loader__icon svg {
+  display: block;
+  width: 26px;
+  height: 26px;
+}
+
+/* Le même champignon, plein, dans un cache ancré en bas dont la hauteur monte. */
+.grid-loader__fill {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 10%;
+  overflow: hidden;
+  color: #e9a04a;
+  animation: grid-loader-fill 4s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.grid-loader__fill .icon {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+}
+
+.grid-loader__fill svg path {
+  fill: currentColor;
+}
+
+.grid-loader.is-full .grid-loader__fill {
+  height: 100%;
+  animation: none;
+}
+
+@keyframes grid-loader-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* Il monte vite puis ralentit, sans jamais se dire plein avant que les carrés soient là. */
+@keyframes grid-loader-fill {
+  from {
+    height: 10%;
+  }
+
+  to {
+    height: 88%;
+  }
+}
+
+/* Zoom en pause pendant le calcul : les boutons le montrent, sans perdre le clavier. */
+.btn-square[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: progress;
+}
+
+.btn-square[aria-disabled='true']:hover {
+  background: var(--navy-800);
+}
+
 .zoom-hint__btn {
   padding: 6px 12px;
   border: 0;
@@ -780,21 +887,121 @@ li.is-off .swatch {
   background: var(--france-soft);
 }
 
+/* ── Rien à mettre en avant dans la vue : bandeau « risque de chou blanc » (gridLoader.ts) ──
+   Même emplacement que le champignon de chargement, jamais en même temps. L'élément couvre la
+   place libre entre les panneaux (il ne prend aucun geste à la carte) ; la boîte s'y centre. */
+.grid-verdict {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
+  right: calc(var(--btn) + 2 * var(--gap));
+  left: calc(var(--btn) + 2 * var(--gap));
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.grid-verdict[hidden] {
+  display: none;
+}
+
+.grid-verdict__box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 440px;
+  padding: 7px 6px 7px 10px;
+  border-radius: var(--radius);
+  background: var(--navy-800);
+  box-shadow: var(--shadow);
+  color: var(--lavender-soft);
+  font-size: 13px;
+  line-height: 1.45;
+  pointer-events: auto;
+  animation: grid-loader-in 0.15s both;
+}
+
+.grid-verdict__icon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--lavender);
+}
+
+.grid-verdict__text {
+  margin: 2px 0;
+}
+
+.grid-verdict__text strong {
+  color: #fff;
+}
+
+.grid-verdict__pick {
+  margin: 1px 0;
+  padding: 5px 12px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.grid-verdict__pick:hover {
+  background: var(--accent);
+  filter: brightness(1.12);
+}
+
+.grid-verdict__close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--lavender);
+  cursor: pointer;
+}
+
+.grid-verdict__close:hover {
+  background: var(--navy-700);
+}
+
 /* ── Grand écran : le bandeau de zoom évite la légende ouverte ───────────── */
 @media (min-width: 641px) {
   #app.legend-open .zoom-hint {
     left: max(50%, calc(var(--panel-width) + 2 * var(--gap) + 200px));
   }
+
+  #app.legend-open .grid-loader {
+    left: max(50%, calc(var(--panel-width) + 2 * var(--gap) + 110px));
+  }
+
+  /* Le bandeau se centre dans la place libre : à droite de la légende, à gauche du bilan. */
+  #app.legend-open .grid-verdict {
+    left: calc(var(--panel-width) + 2 * var(--gap));
+  }
+
+  #app:has(#spot:not([hidden])) .grid-verdict {
+    right: calc(var(--panel-width) + var(--btn) + 3 * var(--gap));
+  }
 }
 
-/* ── Mobile : recherche pleine largeur, légende en tiroir bas ────────────── */
+/* ── Mobile : recherche pleine largeur sous l'îlot, légende en tiroir bas ── */
 @media (max-width: 640px) {
+  /* Première rangée : bouton légende, îlot (centré), boutons de droite. La recherche passe à la
+     rangée suivante ; le vide de la première rangée laisse passer les gestes vers la carte. */
   .topbar {
     right: calc(var(--btn) + 2 * var(--gap));
+    flex-wrap: wrap;
+    pointer-events: none;
+  }
+
+  .topbar > * {
+    pointer-events: auto;
   }
 
   .search {
-    flex: 1;
+    flex: 1 0 100%;
     width: auto;
   }
 
@@ -823,12 +1030,35 @@ li.is-off .swatch {
     display: none;
   }
 
+  /* Sous la recherche, et arrêté avant la colonne de boutons (qui cachait « Zoomer ici »). */
+  .grid-loader {
+    top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
+  }
+
+  .grid-verdict {
+    top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
+    left: var(--gap);
+    justify-content: flex-start;
+  }
+
   .zoom-hint {
-    right: var(--gap);
+    top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
+    right: calc(var(--btn) + 2 * var(--gap));
     left: var(--gap);
     justify-content: space-between;
     white-space: normal;
     transform: none;
+  }
+
+  .zoom-hint__btn {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  /* Petit écran (moins de 620 px de haut) : tant que le bandeau est affiché, les tiroirs s'arrêtent
+     sous lui. Sans `:has()`, ils peuvent le recouvrir en partie, sans rien empêcher. */
+  #app:has(#zoom-hint:not([hidden])) .panel {
+    max-height: min(62%, calc(100% - 3 * var(--btn) - 6 * var(--gap) - var(--safe-top)));
   }
 }
 
@@ -846,6 +1076,35 @@ li.is-off .swatch {
 
 .layer__header .switch {
   flex: none;
+}
+
+/* Le titre déplie la section, comme le chevron (qui reste le bouton du clavier). */
+.layer__title--toggle {
+  cursor: pointer;
+}
+
+/* Rappel du filtre en cours dans l'en-tête d'une section repliée (« 15 / 32 »). */
+.layer__badge {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--navy-700);
+  color: var(--lavender-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Téléphone : le chevron à la taille du doigt. */
+@media (max-width: 640px) {
+  .layer__toggle {
+    width: 44px;
+    height: 44px;
+  }
+
+  .layer__header {
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
 }
 
 /* Interrupteur (case à cocher en bascule) */
@@ -890,6 +1149,20 @@ li.is-off .swatch {
   border-color: #b45309;
 }
 
+/* Hors saison de plus d'un mois : grisé et en tirets (pas la couleur seule), toujours cliquable. */
+.chip--dormant {
+  border-style: dashed;
+  border-color: #8a8aa6;
+  color: #a4a4bd;
+}
+
+.chip--dormant[aria-pressed='true'] {
+  border-style: dashed;
+  border-color: var(--muted);
+  background: #4a4a68;
+  color: #e4e4f2;
+}
+
 .legend-hint {
   margin: 10px 0 0;
   color: var(--muted);
@@ -923,6 +1196,26 @@ li.is-off .swatch {
 .mushroom-card__facts dd {
   margin: 0;
   color: #fff;
+}
+
+/* Lien vers la fiche de l'espèce (site tiers), puis ses conditions, repliées. */
+.mushroom-card__link {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.mushroom-card__more {
+  margin: 0 0 10px;
+}
+
+.mushroom-card__more .mushroom-card__facts {
+  margin-top: 8px;
+}
+
+/* Ce que vaut le chiffre : toujours sous l'échelle, un peu plus présent qu'une note. */
+.legend-hint--caveat {
+  color: #e5e5ff;
 }
 
 .mushroom-card__season {
@@ -1022,6 +1315,28 @@ li.is-off .swatch {
   right: calc(var(--btn) + 2 * var(--gap));
   left: auto;
   max-height: calc(100% - 2 * var(--gap) - 40px - var(--safe-top));
+}
+
+/* Entre 641 et 1127 px, la première rangée ne peut pas porter la recherche, l'îlot et le bilan :
+   le bilan s'ouvre une rangée plus bas, comme la légende. Le bandeau « Zoomez… » descend d'une
+   rangée lui aussi : il passe sous l'en-tête du bilan, comme avant, sans lui prendre sa place. */
+@media (min-width: 641px) and (max-width: 1127px) {
+  .panel--spot {
+    top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
+    max-height: calc(100% - var(--btn) - 3 * var(--gap) - 40px - var(--safe-top));
+  }
+
+  .zoom-hint,
+  .grid-loader,
+  .grid-verdict {
+    top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
+  }
+
+  /* Bilan ouvert : le champignon se centre dans la place libre à sa gauche, au lieu de passer
+     par-dessus sa première ligne. */
+  #app:has(#spot:not([hidden])) .grid-loader {
+    left: max(100px, calc((100% - var(--panel-width) - var(--btn) - 3 * var(--gap)) / 2));
+  }
 }
 
 .spot__heading {
@@ -1148,8 +1463,8 @@ li.is-off .swatch {
   list-style: none;
 }
 
+/* Une ligne par champignon : nom et pastille ; les raisons se déplient au clic. */
 .verdict {
-  padding: 10px 12px;
   border-radius: var(--radius);
   background: #fff;
   color: var(--france);
@@ -1160,7 +1475,89 @@ li.is-off .swatch {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-height: 40px;
+  padding: 6px 12px;
   font-size: 14px;
+}
+
+summary.verdict__head {
+  list-style: none;
+  cursor: pointer;
+}
+
+summary.verdict__head::-webkit-details-marker {
+  display: none;
+}
+
+/* Chevron : vers la droite replié, vers le bas déplié. */
+summary.verdict__head::before {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-right: 2px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  content: '';
+  transform: rotate(-45deg);
+}
+
+.verdict__card[open] > summary.verdict__head::before {
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.verdict__name {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+/* Le champignon recherché dans la légende : un liseré et le mot, pas la couleur seule. */
+.verdict--chosen {
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.verdict__tag {
+  padding: 1px 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Exclu par la saison ou par la forêt : une ligne, avec ce qui l'exclut. */
+.verdict--off {
+  background: #e6e6f5;
+}
+
+.verdict--off .verdict__head {
+  min-height: 34px;
+  padding-left: 23px;
+}
+
+.verdict__why {
+  color: #3a3a6a;
+  font-size: 12px;
+}
+
+/* Hors saison de plus d'un mois : nom grisé, pas de pourcentage (rien n'est calculé). */
+.verdict--dormant {
+  background: #ededf5;
+}
+
+.verdict--dormant .verdict__name strong {
+  color: #5c5c78;
+  font-weight: 600;
+}
+
+.verdict--dormant .verdict__why {
+  color: #5c5c78;
+}
+
+.spot__urban {
+  margin-top: 8px;
 }
 
 .level-pill {
@@ -1173,17 +1570,26 @@ li.is-off .swatch {
   white-space: nowrap;
 }
 
+/* Texte sombre sur les trois niveaux clairs : blanc sur l'orange « possible » ne faisait que 3 pour 1. */
 .verdict--0 .level-pill,
-.verdict--1 .level-pill {
+.verdict--1 .level-pill,
+.verdict--2 .level-pill {
   color: #1b1b35;
 }
 
 .verdict__reasons {
-  margin: 6px 0 0;
-  padding-left: 16px;
+  margin: 0;
+  padding: 0 12px 10px 39px;
+  list-style: disc;
   color: #3a3a6a;
   font-size: 12px;
   line-height: 1.4;
+}
+
+/* « pousse attendue d'ici N jours » : quand revenir. */
+.verdict__reasons strong {
+  color: var(--navy-900);
+  font-weight: 700;
 }
 
 .spot__actions {
@@ -1200,12 +1606,151 @@ li.is-off .swatch {
   line-height: 1.45;
 }
 
+/* Zones protégées : en tête du bilan, avant tout pourcentage, que la météo réponde ou non. */
+.spot__alerts {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.spot__alerts .spot__alert {
+  margin: 0;
+}
+
+.spot__status-value {
+  line-height: 1.4;
+}
+
+/* Titre de bloc avec le bouton d'aide « ? » à sa droite. */
+.spot__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.spot__title-row .spot__title {
+  margin: 0;
+}
+
+.help-btn {
+  position: relative;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1.5px solid var(--lavender-soft);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--lavender-soft);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Zone tactile de 44 px autour d'un rond de 24 px. */
+.help-btn::after {
+  position: absolute;
+  inset: -10px;
+  content: '';
+}
+
+.help-btn:hover,
+.help-btn[aria-expanded='true'] {
+  background: var(--lavender-soft);
+  color: var(--navy-900);
+}
+
+.help-note {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--lavender);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--navy-800);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.help-note p {
+  margin: 0 0 6px;
+}
+
+.help-note p:last-child {
+  margin: 0;
+}
+
+/* « Droit de cueillir : les règles », replié : le statut du terrain est déjà dit plus haut. */
+.spot__fold {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  margin: 0;
+  list-style: none;
+  cursor: pointer;
+}
+
+.spot__fold::-webkit-details-marker {
+  display: none;
+}
+
+.spot__fold::after {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  content: '';
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.spot__rules[open] > .spot__fold {
+  margin-bottom: 8px;
+}
+
+.spot__rules[open] > .spot__fold::after {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+/* Téléphone : cibles tactiles de 44 px pour ce qui se déplie et pour les deux actions du bilan. */
+@media (max-width: 640px) {
+  .verdict__head {
+    min-height: 44px;
+  }
+
+  .verdict--off .verdict__head {
+    min-height: 40px;
+  }
+
+  .spot__fold {
+    min-height: 44px;
+  }
+
+  .spot__actions .popup-btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+}
+
 @media (max-width: 640px) {
   .panel--spot {
     top: auto;
     right: 0;
     left: 0;
-    max-height: 70%;
+    /* 70 % de l'écran, sans jamais monter sur la recherche (téléphone couché) */
+    max-height: min(70%, calc(100% - 2 * var(--btn) - 4 * var(--gap) - var(--safe-top)));
+  }
+
+  #app:has(#zoom-hint:not([hidden])) .panel--spot {
+    max-height: min(70%, calc(100% - 3 * var(--btn) - 6 * var(--gap) - var(--safe-top)));
   }
 }
 
@@ -1219,8 +1764,9 @@ a.btn-square {
   text-decoration: none;
 }
 
-/* ── Avertissement à l'ouverture (fenêtre bloquante) ──────────────────────── */
-.disclaimer {
+/* ── Accueil : avertissement à accepter (fenêtre bloquante), puis présentation de la carte ── */
+.disclaimer,
+.tour {
   width: min(560px, calc(100% - 24px));
   max-height: min(780px, calc(100% - 24px));
   max-height: min(780px, calc(100dvh - 24px));
@@ -1234,17 +1780,20 @@ a.btn-square {
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
 }
 
-.disclaimer[open] {
+.disclaimer[open],
+.tour[open] {
   display: flex;
   flex-direction: column;
 }
 
-.disclaimer::backdrop {
+.disclaimer::backdrop,
+.tour::backdrop {
   background: rgba(8, 8, 26, 0.74);
   backdrop-filter: blur(2px);
 }
 
-.disclaimer__head {
+.disclaimer__head,
+.tour__head {
   display: flex;
   flex: none;
   align-items: center;
@@ -1258,17 +1807,28 @@ a.btn-square {
   color: #ffc46b;
 }
 
-.disclaimer__heading {
+.tour__icon {
+  display: inline-flex;
+  color: var(--lavender);
+}
+
+.disclaimer__heading,
+.tour__heading {
   margin: 0;
   color: var(--lavender-soft);
   font-size: 18px;
   font-weight: 600;
 }
 
-.disclaimer__body {
+.tour__heading:focus {
+  outline: none;
+}
+
+.disclaimer__body,
+.tour__body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 14px 18px 10px;
+  padding: 14px 18px 12px;
   overflow-y: auto;
   overscroll-behavior: contain;
   font-size: 14px;
@@ -1287,27 +1847,41 @@ a.btn-square {
   color: #fff;
 }
 
-.disclaimer__intro {
+/* Une phrase qui se lit pendant le compte à rebours, puis trois réflexes et ce que vaut la carte. */
+.disclaimer__lead {
+  color: var(--lavender-soft);
   font-size: 15px;
 }
 
-.disclaimer__title {
-  margin: 16px 0 6px;
-  color: var(--lavender-soft);
-  font-size: 12.5px;
+.disclaimer__key {
+  margin-top: 2px;
+  color: #fff;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  line-height: 1.35;
 }
 
-.disclaimer__list {
+.disclaimer__rules {
   display: grid;
-  gap: 6px;
-  margin: 0;
-  padding-left: 18px;
+  gap: 8px;
+  margin: 14px 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 14.5px;
 }
 
-.disclaimer__foot {
+.disclaimer__rules li {
+  padding-left: 12px;
+  border-left: 3px solid var(--accent);
+}
+
+.disclaimer__own {
+  color: #fff;
+  font-weight: 600;
+}
+
+.disclaimer__foot,
+.tour__foot {
   display: grid;
   flex: none;
   gap: 10px;
@@ -1316,31 +1890,50 @@ a.btn-square {
   background: var(--navy-800);
 }
 
-.disclaimer__terms {
+.disclaimer__terms,
+.tour__again {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.45;
 }
 
-.disclaimer__terms a {
-  color: var(--lavender-soft);
+.disclaimer__terms p {
+  margin: 0;
 }
 
-.disclaimer__accept {
+/* Deux liens à la taille du doigt, sur leur propre ligne. */
+.disclaimer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 22px;
+}
+
+.disclaimer__links a {
+  display: inline-block;
+  padding: 8px 0 4px;
+  color: var(--lavender-soft);
+  font-size: 13px;
+}
+
+/* Bleu un peu plus soutenu que --accent : texte blanc à 5,5 pour 1. La bordure transparente devient
+   visible en contraste élevé, où le fond disparaît. */
+.disclaimer__accept,
+.tour__close {
   min-height: var(--btn);
   padding: 0 18px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: var(--radius);
-  background: var(--accent);
+  background: #5555e6;
   color: #fff;
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
 }
 
-.disclaimer__accept:not(:disabled):hover {
-  background: #7d7df6;
+.disclaimer__accept:not(:disabled):hover,
+.tour__close:hover {
+  background: #4b4bd8;
 }
 
 .disclaimer__accept:disabled {
@@ -1349,22 +1942,385 @@ a.btn-square {
   cursor: wait;
 }
 
+/* Présentation : le schéma de l'écran (décoratif) et ses trois gestes, numérotés pareil. */
+.tour__screen {
+  --tour-a: #49e08a;
+  --tour-b: #63dfe0;
+  --tour-c: #f39a78;
+  --tour-map: #eeece4;
+
+  position: relative;
+  display: grid;
+  grid-template-columns: 30% 1fr 28%;
+  height: 172px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--tour-map);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.tour__screen--phone {
+  display: none;
+}
+
+.tour-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px;
+  padding-bottom: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--navy-900);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  color: var(--lavender-soft);
+}
+
+.tour-panel__head {
+  min-height: 24px;
+  padding: 5px 6px 4px 34px;
+  background: var(--navy-700);
+  font-weight: 600;
+}
+
+.tour-panel__body {
+  display: grid;
+  gap: 6px;
+  padding: 0 6px;
+}
+
+.tour-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.tour-chip {
+  width: 30px;
+  height: 9px;
+  border: 1px solid var(--accent);
+  border-radius: 99px;
+}
+
+.tour-chip--on {
+  border-color: #b45309;
+  background: #b45309;
+}
+
+.tour-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tour-line::before {
+  flex: none;
+  width: 34%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--lavender-soft);
+  content: '';
+  opacity: 0.55;
+}
+
+.tour-line::after {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--navy-600);
+  content: '';
+}
+
+.tour-line--switch::after {
+  flex: none;
+  width: 13px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+.tour-map {
+  position: relative;
+  overflow: hidden;
+}
+
+.tour-map__blob {
+  position: absolute;
+  border-radius: 46% 54% 58% 42% / 48% 44% 56% 52%;
+  opacity: 0.9;
+}
+
+.tour-map__square {
+  position: absolute;
+  border-radius: 2px;
+}
+
+.tour-map__chance,
+.tour-chance {
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: #fff;
+  color: #5b1e02;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.tour-map__chance {
+  position: absolute;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.tour-chance {
+  justify-self: start;
+  background: #e07a1f;
+  color: #1a0c02;
+}
+
+.tour-map__pin {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  background: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  transform: rotate(-45deg);
+}
+
+.tour-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 22px;
+  border-bottom: 1px solid var(--navy-600);
+}
+
+.tour-bars i {
+  flex: 1;
+  border-radius: 1px 1px 0 0;
+  background: #8fc3e0;
+}
+
+/* Repère numéroté : même pastille dans le schéma et devant chaque geste. Double anneau, pour qu'elle
+   se détache sur la carte claire comme sur un volet sombre. */
+.tour-num {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 0 4px var(--navy-900);
+  color: var(--france);
+  font-size: 13.5px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.tour__screen .tour-num {
+  position: absolute;
+  z-index: 2;
+}
+
+.tour__steps {
+  display: grid;
+  grid-template-columns: 30% 1fr 28%;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tour__steps li {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 0 10px;
+  align-content: start;
+  padding: 0 8px 0 6px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.tour__steps strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #fff;
+  font-size: 14.5px;
+  line-height: 1.3;
+}
+
+.tour__phone {
+  display: none;
+}
+
+.tour__note {
+  margin: 12px 0 0;
+  color: #e5e5ff;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
 @media (min-width: 641px) {
-  .disclaimer__foot {
+  .disclaimer__foot,
+  .tour__foot {
     grid-template-columns: 1fr auto;
     align-items: center;
   }
 }
 
+/* Téléphone : ni gauche ni droite. Le schéma devient un téléphone, les gestes passent à sa droite. */
 @media (max-width: 640px) {
-  .disclaimer {
+  .disclaimer,
+  .tour {
     width: calc(100% - 16px);
+    /* sans cela, la largeur maximale que le navigateur donne à une fenêtre modale reprend 22 px */
+    max-width: calc(100% - 16px);
     max-height: calc(100% - 16px);
     max-height: calc(100dvh - 16px - var(--safe-top));
   }
 
-  .disclaimer__body {
+  .disclaimer__body,
+  .tour__body {
     font-size: 13.5px;
+  }
+
+  .disclaimer__key {
+    font-size: 16.5px;
+  }
+
+  .tour__wide {
+    display: none;
+  }
+
+  .tour__phone {
+    display: inline;
+  }
+
+  .tour__layout {
+    display: grid;
+    grid-template-columns: 112px 1fr;
+    gap: 0 14px;
+  }
+
+  .tour__screen--wide {
+    display: none;
+  }
+
+  .tour__screen--phone {
+    display: block;
+    height: min(232px, 34dvh);
+    border: 2px solid var(--navy-600);
+    border-radius: 14px;
+  }
+
+  .tour-phone__menu {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    background: var(--accent);
+  }
+
+  .tour-phone__island {
+    position: absolute;
+    top: 7px;
+    right: 26px;
+    left: 34px;
+    height: 18px;
+    border-radius: 9px;
+    background: #000;
+  }
+
+  .tour-phone__island::before {
+    position: absolute;
+    inset: 3px 50% 3px 3px;
+    border-radius: 7px;
+    background: #fff;
+    content: '';
+  }
+
+  .tour-phone__sheet {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: grid;
+    align-content: start;
+    gap: 5px;
+    height: 40%;
+    padding: 0 7px 6px;
+    border-radius: 8px 8px 0 0;
+    background: var(--navy-900);
+    color: var(--lavender-soft);
+  }
+
+  .tour-phone__sheet .tour-panel__head {
+    margin: 0 -7px;
+    border-radius: 8px 8px 0 0;
+  }
+
+  .tour__steps {
+    grid-template-columns: 1fr;
+    align-content: space-between;
+    gap: 10px;
+    margin: 0;
+  }
+
+  .tour__steps li {
+    padding: 0;
+  }
+}
+
+/* Contraste élevé : un schéma fait de couleurs de fond s'y vide ; la liste dit tout. */
+@media (forced-colors: active) {
+  .tour__screen {
+    display: none;
+  }
+
+  .tour__layout {
+    display: block;
+  }
+}
+
+/* Écran bas (téléphone couché) ou très étroit : le schéma, décoratif, repousserait les trois gestes
+   et la mise en garde sous le bas de la fenêtre. On le retire, la liste dit tout. */
+@media (max-height: 520px), (max-width: 340px) {
+  .tour__screen--wide,
+  .tour__screen--phone {
+    display: none;
+  }
+
+  .tour__layout {
+    display: block;
+  }
+}
+
+/* Téléphone : ce qui se touche dans la légende et au pied de l'avertissement fait 44 px de haut. */
+@media (max-width: 640px) {
+  .legend-footer__btn {
+    min-height: 44px;
+  }
+
+  .legend-help > summary {
+    padding: 13px 0;
+  }
+
+  .disclaimer__links a {
+    padding: 12px 0;
+  }
+
+  .mushroom-card__link a {
+    display: inline-block;
+    padding: 12px 0;
   }
 }
 
@@ -1441,6 +2397,20 @@ a.btn-square {
   color: var(--muted);
 }
 
+/* « Comment ça marche ? » : rouvre la présentation de la carte. */
+.legend-footer__btn {
+  flex-basis: 100%;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--lavender-soft);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .legend-footer a:hover {
   color: #fff;
 }
@@ -1494,12 +2464,183 @@ a.btn-square {
   font-size: 12px;
 }
 
-.spot__warning {
-  margin: 0 0 8px;
-  padding: 6px 10px;
+
+/* ── Deux vues dans la page : la carte et « Analytics » (src/view.ts) ─────── */
+/* Vue Analytics : la carte reste chargée, mais disparaît entièrement. `#app *` est nécessaire :
+   MapLibre force `visibility: visible` sur ses crédits dépliés. Pas de `display: none` : la carte
+   garde sa taille, donc sa position, et n'a rien à recalculer au retour. */
+html[data-view='analytics'] #app,
+html[data-view='analytics'] #app * {
+  visibility: hidden;
+}
+
+/* Masquée, la carte ne suit ni la barre de défilement de la vue Analytics ni la barre d'adresse du
+   téléphone qui se replie : elle n'est pas redessinée pour rien. */
+html[data-view='analytics'] #app {
+  right: auto;
+  width: 100vw;
+}
+
+@supports (height: 100svh) {
+  html[data-view='analytics'] #app {
+    bottom: auto;
+    height: 100svh;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── Îlot « Carte / Analytics » ───────────────────────────────────────────── */
+.island {
+  position: fixed;
+  z-index: 6;
+  top: calc(var(--gap) + var(--safe-top));
+  /* Centré, sauf si la recherche (à gauche) ou les boutons (à droite) occupent la place. En vw et
+     sans `transform` : l'îlot ne bouge pas quand la vue Analytics fait apparaître une barre de
+     défilement, et reste net aux largeurs impaires. */
+  left: min(
+    max(50vw - var(--island-width) / 2, 3 * var(--gap) + var(--btn) + var(--search-width)),
+    100vw - 2 * var(--gap) - var(--btn) - var(--island-width)
+  );
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: var(--island-width);
+  height: var(--btn);
+  border-radius: 999px;
+  background: #000;
+  /* Liseré clair : la pilule reste dessinée sur fond sombre (vue Analytics, photos aériennes). */
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.36),
+    var(--shadow);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Fond clair du segment actif. Le bord qui mène part le premier, l'autre le suit 25 ms plus tard :
+   le fond s'étire un peu en glissant (un cinquième de plus au plus large, 300 ms en tout). */
+.island::before {
+  position: absolute;
+  z-index: -1;
+  top: 4px;
+  right: calc(50% + 4px);
+  bottom: 4px;
+  left: 4px;
+  border-radius: 999px;
+  background: #fff;
+  content: '';
+  transition:
+    left 0.275s cubic-bezier(0.4, 0, 0.2, 1),
+    right 0.275s cubic-bezier(0.4, 0, 0.2, 1) 0.025s;
+}
+
+html[data-view='analytics'] .island::before {
+  right: 4px;
+  left: calc(50% + 4px);
+  transition-delay: 0.025s, 0s;
+}
+
+/* Les liens remplissent la pilule : 46 px de haut, 76 px de large au moins. */
+.island__link {
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html:not([data-view='analytics']) .island__link[data-view='map'],
+html[data-view='analytics'] .island__link[data-view='analytics'] {
+  color: #000;
+}
+
+/* Anneau de focus dans la bande noire de la pilule : visible aussi par-dessus une carte claire. */
+.island__link:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Animations réduites : le champignon s'affiche à demi plein, sans monter. */
+@media (prefers-reduced-motion: reduce) {
+  .grid-loader,
+  .grid-verdict__box {
+    animation: none;
+  }
+
+  .grid-loader__fill {
+    height: 55%;
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .island::before,
+  html[data-view='analytics'] .island::before,
+  .island__link {
+    transition: none;
+  }
+}
+
+/* Couleurs forcées (contraste élevé de Windows) : le fond clair disparaît, un soulignement le remplace. */
+@media (forced-colors: active) {
+  .island {
+    border: 1px solid CanvasText;
+  }
+
+  .island__link[aria-current] {
+    text-decoration: underline;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Entre le bouton légende et les boutons de droite, 8 px de marge de chaque côté jusqu'à 276 px. */
+  :root {
+    --island-width: clamp(152px, 100vw - 2 * var(--btn) - 4 * var(--gap), 208px);
+  }
+
+  .island {
+    left: calc(50vw - var(--island-width) / 2);
+    font-size: clamp(13px, 4.6vw, 15px);
+  }
+}
+
+/* Une vue n'a pas pu être téléchargée (src/main.ts). */
+.view-error {
+  position: fixed;
+  z-index: 7;
+  top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
+  right: var(--gap);
+  left: var(--gap);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 8px 8px 8px 14px;
   border-radius: var(--radius);
-  background: rgba(239, 83, 80, 0.14);
-  color: #ffcdd2;
-  font-size: 12.5px;
+  background: var(--navy-800);
+  box-shadow: var(--shadow);
+  font-size: 14px;
   line-height: 1.4;
+}
+
+.view-error__btn {
+  flex: none;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--radius);
+  background: #fff; /* bleu France sur blanc : contraste de 15 pour 1 */
+  color: var(--france);
+  font-weight: 600;
+  cursor: pointer;
 }

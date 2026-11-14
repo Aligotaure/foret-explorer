@@ -37,7 +37,18 @@ export interface Mushroom {
   trees?: string;
   /** Confusion dangereuse ou précaution propre à l'espèce (affichée en encadré dans la fiche). */
   caution?: string;
+  /**
+   * Fiche de l'espèce type sur MycoDB (photos, description). L'entrée est souvent un groupe d'espèces :
+   * le lien nomme donc l'espèce visée. Adresses écrites en dur et vérifiées à la main le 13/11/2026 :
+   * MycoDB répond 200 même pour une fiche qui n'existe pas, et interdit les robots (voir CLAUDE.md).
+   */
+  sheet: { species: string; url: string };
 }
+
+const mycodb = (genus: string, species: string): Mushroom['sheet'] => ({
+  species: `${genus} ${species}`,
+  url: `https://www.mycodb.fr/fiche.php?genre=${genus}&espece=${species}`,
+});
 
 /** Rappel affiché dans chaque fiche : l'indice ne dit rien de la comestibilité. */
 export const GENERAL_CAUTION =
@@ -65,6 +76,7 @@ export const MUSHROOMS: readonly Mushroom[] = [
       'Sous chênes, hêtres, châtaigniers, sapins et épicéas adultes, plutôt sur sol acide et drainant. ' +
       'Pousse 1 à 2 semaines après une grosse pluie, par temps doux.',
     caution: 'Ne pas confondre avec le bolet de Satan (pores et pied rouges, toxique).',
+    sheet: mycodb('Boletus', 'edulis'),
   },
   {
     id: 'girolle',
@@ -83,6 +95,7 @@ export const MUSHROOMS: readonly Mushroom[] = [
       '1 à 3 semaines après la pluie, et la pousse dure longtemps.',
     caution:
       'Ne pas confondre avec la fausse girolle ni le clitocybe de l’olivier (toxique), qui ont de vraies lames sous le chapeau.',
+    sheet: mycodb('Cantharellus', 'cibarius'),
   },
   {
     id: 'trompette',
@@ -99,6 +112,7 @@ export const MUSHROOMS: readonly Mushroom[] = [
     summary:
       'Trompettes de la mort, en troupes sous les hêtres et les chênes, sur sol calcaire ou argileux ' +
       'riche. Champignon d’arrière-saison, après des pluies répétées.',
+    sheet: mycodb('Craterellus', 'cornucopioides'),
   },
   {
     id: 'chanterelle',
@@ -117,6 +131,7 @@ export const MUSHROOMS: readonly Mushroom[] = [
       'Les plus tardives : supportent le froid et les petites gelées.',
     caution:
       'Vérifier les plis sous le chapeau : de petits champignons bruns à vraies lames poussent au même endroit, et certains sont mortels.',
+    sheet: mycodb('Craterellus', 'tubaeformis'),
   },
   {
     id: 'morille',
@@ -151,10 +166,66 @@ export const MUSHROOMS: readonly Mushroom[] = [
     caution:
       'La gyromitre, mortelle, pousse en même temps sous les conifères : chapeau plissé en cervelle, pas creusé d’alvéoles. ' +
       'Les morilles se mangent toujours cuites, au moins 20 minutes, jamais crues.',
+    sheet: mycodb('Morchella', 'esculenta'),
   },
 ];
 
 export const MUSHROOM_BY_ID: ReadonlyMap<MushroomId, Mushroom> = new Map(MUSHROOMS.map((m) => [m.id, m]));
+
+const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+/** Mois de pleine saison (poids d'au moins 0,5), dans l'ordre : ceux que la saison écrite annonce. */
+export function seasonMonths(m: Mushroom): number[] {
+  return Object.entries(m.season)
+    .filter(([, w]) => (w ?? 0) >= 0.5)
+    .map(([k]) => Number(k))
+    .sort((a, b) => a - b);
+}
+
+/** Saison en clair (« juin à novembre ») : les mois où le poids de saison atteint 0,5. */
+export function seasonText(m: Mushroom): string {
+  const months = seasonMonths(m);
+  const first = months[0];
+  const last = months[months.length - 1];
+  return first && last ? `${MONTHS[first - 1]} à ${MONTHS[last - 1]}` : '—';
+}
+
+/** Mois du moment (1 à 12). Lu par `getMonth` seulement : les tests e2e le figent en octobre. */
+export const currentMonth = (): number => new Date().getMonth() + 1;
+
+/**
+ * À combien de mois de sa saison est un champignon : 0 pendant la saison écrite (`seasonText`), sinon
+ * la distance au mois de saison le plus proche, l'année formant une boucle (janvier suit décembre).
+ * Comptée depuis la saison que le visiteur lit (« mars à juin »), pas depuis les mois de début et de
+ * fin au poids faible : sinon « hors saison (septembre à décembre) » resterait actif en mars.
+ */
+export function monthsOutOfSeason(m: Mushroom, month: number): number {
+  let nearest = 6;
+  for (const k of seasonMonths(m)) {
+    const gap = Math.abs(k - month);
+    nearest = Math.min(nearest, gap, 12 - gap);
+  }
+  return nearest;
+}
+
+/**
+ * Hors saison de plus d'un mois : ni dans la saison écrite, ni le mois d'avant, ni le mois d'après.
+ * Le champignon est alors grisé dans la légende et dans le bilan (demande de Clément du 14/11/2026).
+ * Au mois près : les poids de saison sont mensuels. Grisés : cèpes et girolles de janvier à avril,
+ * trompettes de février à juin, chanterelles en tube de février à juillet, morilles d'août à janvier.
+ */
+export const isDormant = (m: Mushroom, month: number): boolean => monthsOutOfSeason(m, month) > 1;
+
+/**
+ * Rien à estimer ce mois-ci : champignon grisé, ou mois au poids nul (l'indice, saison × …, vaut alors
+ * zéro par construction). Rien n'est calculé pour lui : ni grille, ni carrés de 500 m, ni altitudes
+ * demandées, ni indice dans le bilan. Seul cas où un poids non nul est ignoré : les chanterelles en
+ * tube en février (poids 0,1, soit « défavorable » au mieux).
+ */
+export const noEstimate = (m: Mushroom, month: number): boolean => isDormant(m, month) || !m.season[month];
+
+/** « hors saison (mars à juin) » : ce qui écarte un champignon, dans le bilan et la légende. */
+export const offSeasonText = (m: Mushroom): string => `hors saison (${seasonText(m)})`;
 
 /** Types BD Forêt à afficher pour un champignon (hôtes assez typiques). */
 export function hostCodes(m: Mushroom, minWeight = 0.5): string[] {
@@ -171,10 +242,17 @@ export const LEVELS: readonly { label: string; color: string; range: string }[] 
   { label: 'Favorable', color: '#a33b0b', range: '70 % et plus' },
 ];
 
+/**
+ * Indice à partir duquel un secteur est montré sur la carte (niveau « peu probable », 35 %), et à
+ * partir duquel il est mis en avant (« possible », 50 % : étiquette, CHANCE_THRESHOLD).
+ */
+export const SHOWN_MIN_SCORE = 0.12;
+export const NOTED_MIN_SCORE = 0.28;
+
 export function levelOf(score: number): Level {
   if (score >= 0.5) return 3;
-  if (score >= 0.28) return 2;
-  if (score >= 0.12) return 1;
+  if (score >= NOTED_MIN_SCORE) return 2;
+  if (score >= SHOWN_MIN_SCORE) return 1;
   return 0;
 }
 
@@ -200,6 +278,12 @@ export function chanceOf(score: number): number {
  * met en avant (étiquettes, pastilles de la vue d'ensemble) que les secteurs au-dessus.
  */
 export const CHANCE_THRESHOLD = 50;
+/**
+ * Pastilles de la vue d'ensemble : seulement les secteurs « favorables » (70 % et plus). Demande de
+ * Clément du 14/11/2026 : sous le zoom des carrés de 4,5 km, la couleur des cases dit peu ; ce sont
+ * les pastilles qui montrent où aller voir.
+ */
+export const HOTSPOT_MIN_CHANCE = 70;
 
 export interface MushroomScore {
   id: MushroomId;
@@ -208,11 +292,22 @@ export interface MushroomScore {
   chance: number;
   level: Level;
   reasons: string[];
+  /**
+   * Ce qui ramène l'indice à zéro quoi que dise la météo (« hors saison (mars à juin) », « pas un
+   * arbre hôte ici ») : le bilan le dit en une ligne au lieu de dérouler des raisons sans effet.
+   */
+  blocker?: string;
 }
 
 export interface SpotContext {
   /** Code BD Forêt au point (null : hors forêt ; undefined : inconnu). */
   forestCode?: string | null;
+  /**
+   * La forêt sous le point n'est pas connue : zoom trop petit pour ses tuiles (`zoom`), ou tuiles pas
+   * encore arrivées (`loading`). Le dire ; avec `hostQuality`, l'indice vaut alors pour les forêts
+   * hôtes du secteur (carré de 4,5 km), sinon pour la météo seule.
+   */
+  forestUnknown?: 'zoom' | 'loading';
   /** Nature du sol au point (null : hors de la zone couverte). */
   soil?: SoilId | null;
   /**
@@ -234,9 +329,13 @@ export function trapezoid(x: number, [a, b, c, d]: readonly [number, number, num
 }
 
 const days = (n: number): string => `${n} jour${n > 1 ? 's' : ''}`;
+/** « Quand revenir » : le passage d'une raison que le bilan met en gras (voir `AWAITED`). */
+const awaited = (wait: number): string => `pousse attendue d’ici ${days(wait)}`;
+/** Repère ce passage dans une raison (même texte que `awaited`). */
+export const AWAITED = /pousse attendue d’ici \d+ jours?/;
 const mm = (x: number): string => `${Math.round(x)} mm`;
 
-function rainFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
+function rainFactor(m: Mushroom, w: WeatherSummary, reasons?: string[]): number {
   let best = 0;
   let bestEvent = w.events[0];
   for (const e of w.events) {
@@ -250,38 +349,72 @@ function rainFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
   const moisture = clamp((w.rain20 - 15) / 45);
   const [, start, end] = m.lag;
 
+  if (!reasons) return clamp(0.7 * best + 0.3 * moisture);
   if (!bestEvent) {
     reasons.push(`Pas de grosse pluie depuis ${days(w.days.length)} (${mm(w.rain30)} au total).`);
   } else {
-    const e = bestEvent;
+    // La pluie qui pèse le plus dans l'indice peut être une vieille pluie dont le délai est dépassé,
+    // alors qu'une plus récente n'a pas encore fait pousser : c'est elle qu'on commente (le bloc météo
+    // du bilan la cite aussi, et « revenez dans N jours » sert plus que « le sol sèche »).
+    // « Plus récente » : la dernière dont le délai n'est pas dépassé, qu'elle soit encore trop
+    // fraîche ou déjà dans le bon délai. Une pluie modeste ne promet rien.
+    const coming = w.events.find((x) => x.daysAgo <= end);
+    const e = bestEvent.daysAgo > end && coming ? coming : bestEvent;
     const head = `Pluie de ${mm(e.amount)} il y a ${days(e.daysAgo)}`;
-    if (e.daysAgo < start) reasons.push(`${head} : encore tôt, pousse attendue d’ici ${days(start - e.daysAgo)}.`);
-    else if (e.daysAgo <= end) reasons.push(`${head} : bon délai pour ${m.singular} (${start} à ${end} jours).`);
+    const modest = clamp((e.amount - 10) / 25) < 0.5;
+    if (e.daysAgo < start) {
+      reasons.push(modest ? `${head} : encore tôt, et pluie modeste : pousse incertaine.` : `${head} : encore tôt, ${awaited(start - e.daysAgo)}.`);
+    } else if (e.daysAgo <= end) reasons.push(`${head} : bon délai pour ${m.singular} (${start} à ${end} jours).`);
     else reasons.push(`${head} : délai dépassé, le sol sèche.`);
   }
   return clamp(0.7 * best + 0.3 * moisture);
 }
 
-function tempFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
+/** Ce que l'indice lit des températures : moyenne sur 7 jours, minimum sur 5 jours, gel, altitude. */
+export type Temperatures = Pick<WeatherSummary, 'tmean7' | 'tmin5' | 'frost' | 'elevation'>;
+
+function tempFactor(m: Mushroom, w: Temperatures, reasons?: string[]): number {
   if (w.tmean7 === null) return 0.5;
   const [lo, hi] = m.temp;
   let f = trapezoid(w.tmean7, [lo - m.tempRamp, lo, hi, hi + m.tempRamp]);
-  const where = w.elevation ? ` à ${Math.round(w.elevation)} m` : '';
-  const verdict = w.tmean7 < lo - m.tempRamp ? 'trop froid' : w.tmean7 < lo ? 'un peu froid' : w.tmean7 <= hi ? 'idéal' : 'trop chaud';
-  reasons.push(
-    `${Math.round(w.tmean7)} °C en moyenne sur 7 jours${where} : ${verdict} (idéal ${lo} à ${hi} °C).`,
-  );
+  if (reasons) {
+    const where = w.elevation ? ` à ${Math.round(w.elevation)} m` : '';
+    const verdict = w.tmean7 < lo - m.tempRamp ? 'trop froid' : w.tmean7 < lo ? 'un peu froid' : w.tmean7 <= hi ? 'idéal' : 'trop chaud';
+    reasons.push(
+      `${Math.round(w.tmean7)} °C en moyenne sur 7 jours${where} : ${verdict} (${verdict === 'idéal' ? '' : 'idéal '}${lo} à ${hi} °C).`,
+    );
+  }
   if (w.frost && w.tmin5 !== null) {
     f *= m.frost;
-    reasons.push(`Gel récent (${Math.round(w.tmin5)} °C)${m.frost >= 0.8 ? ', supporté' : ' : pousse freinée'}.`);
+    reasons?.push(`Gel récent (${Math.round(w.tmin5)} °C)${m.frost >= 0.8 ? ', supporté' : ' : pousse freinée'}.`);
   }
   return f;
+}
+
+/**
+ * Part de l'indice commune à toute une case météo : saison × pluie (la pluie est la même dans toute la
+ * case). Avec `squareScore`, elle donne l'indice de chacun de ses carrés sans refaire tout le calcul.
+ */
+export function weatherCeiling(m: Mushroom, w: WeatherSummary, month: number): number {
+  return (m.season[month] ?? 0) * rainFactor(m, w);
+}
+
+/**
+ * Indice d'un carré de 4,5 km, sans les phrases d'explication : la part commune à sa case
+ * (`weatherCeiling`) × température à son altitude × qualité de ses arbres hôtes. Mêmes facteurs,
+ * multipliés dans le même ordre que `scoreMushroom` : le résultat est le même au dernier chiffre
+ * (un test le vérifie), pour un calcul bien plus léger (seize carrés par case en vue d'ensemble).
+ */
+export function squareScore(m: Mushroom, ceiling: number, temperatures: Temperatures, hostQuality: number): number {
+  return clamp(ceiling * tempFactor(m, temperatures) * hostQuality);
 }
 
 /** Indice de pousse d'un champignon pour une météo, et si possible un coin précis. */
 export function scoreMushroom(m: Mushroom, w: WeatherSummary, month: number, ctx: SpotContext = {}): MushroomScore {
   const reasons: string[] = [];
+  let blocker: string | undefined;
   const season = m.season[month] ?? 0;
+  if (season === 0) blocker = offSeasonText(m);
   if (season < 0.5) reasons.push(season === 0 ? 'Hors saison.' : 'Tout début ou fin de saison.');
 
   let score = season * rainFactor(m, w, reasons) * tempFactor(m, w, reasons);
@@ -293,7 +426,13 @@ export function scoreMushroom(m: Mushroom, w: WeatherSummary, month: number, ctx
     else if (host >= 0.8) reasons.push(`Forêt hôte : ${forest?.toLowerCase()}.`);
     else if (host > 0) reasons.push(`Forêt peu typique (${forest?.toLowerCase()}).`);
     else reasons.push(`Pas un arbre hôte (${forest?.toLowerCase()}).`);
+    // Mêmes mots que la ligne « Forêt » du bilan : sous le point, pas alentour (un chemin, une clairière).
+    if (host === 0) blocker ??= ctx.forestCode ? 'pas un arbre hôte ici' : 'pas de forêt cartographiée sous ce point';
     score *= host;
+  } else if (ctx.forestUnknown) {
+    const why = ctx.forestUnknown === 'zoom' ? 'Forêt inconnue à ce zoom' : 'Forêt pas encore chargée';
+    const then = ctx.forestUnknown === 'zoom' ? 'Zoomez pour un point précis.' : 'Touchez à nouveau dans un instant.';
+    reasons.push(ctx.hostQuality !== undefined ? `${why} : chance des forêts hôtes du secteur. ${then}` : `${why} : météo seule. ${then}`);
   }
   if (ctx.soil) {
     const pref = m.soils[ctx.soil];
@@ -306,7 +445,7 @@ export function scoreMushroom(m: Mushroom, w: WeatherSummary, month: number, ctx
   if (ctx.soilFactor !== undefined) score *= ctx.soilFactor;
 
   score = clamp(score);
-  return { id: m.id, score, chance: chanceOf(score), level: levelOf(score), reasons };
+  return { id: m.id, score, chance: chanceOf(score), level: levelOf(score), reasons, ...(blocker ? { blocker } : {}) };
 }
 
 /** Le sol module sans exclure : la géologie n'est qu'une tendance. */

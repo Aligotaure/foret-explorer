@@ -282,14 +282,15 @@ function meteoIndex(late = 0) {
   const day = addDays(parisToday(), -late);
   return { v: 1, pasLat: STEP_LAT, pasLon: STEP_LON, bloc: BLOCK, jours: 30, dernierJour: addDays(day, -1), maj: `${day}T01:40:00.000Z`, cases: blocs.length * 64, aJour: blocs.length * 64, blocs, source: 'essai' };
 }
-function meteoBlock(id, late = 0) {
+function meteoBlock(id, late = 0, sec = false) {
   const [bi, bj] = id.split('_').map(Number);
   // Comme les écrit scripts/meteo/mettre-a-jour.mjs : 30 jours complets, puis le jour du passage,
   // provisoire (`c` : dernier jour connu, `f` : dernier jour définitif, `m` : jour de la demande).
   const day = addDays(parisToday(), -late);
   const dates = Array.from({ length: 31 }, (_, k) => addDays(day, k - 30));
   // Passage de la veille : sa journée, estimée, était pluvieuse (une barre à part dans le bilan).
-  const rain = late ? [...DAILY.rain.slice(0, 30), 6.5] : DAILY.rain;
+  // `sec` : pas une goutte en 30 jours (rien de favorable nulle part).
+  const rain = sec ? DAILY.rain.map(() => 0) : late ? [...DAILY.rain.slice(0, 30), 6.5] : DAILY.rain;
   const cells = {};
   for (let i = bi * BLOCK; i < (bi + 1) * BLOCK; i++) {
     for (let j = bj * BLOCK; j < (bj + 1) * BLOCK; j++) {
@@ -331,14 +332,61 @@ const COMPLETION = {
   ],
 };
 
+/** Case commune et carrés particuliers du fichier simulé des parts de forêt (voir `forestShare`). */
+export const SHARE_CELL = '287:27';
+export const SHARE_BARE = 1; // carré sans aucun arbre
+export const SHARE_THIN = 2; // 3 % de hêtres : sous le seuil
+export const SHARE_OTHER = 5; // 80 % de robiniers : pas un hôte du cèpe
+// (le carré 6 est celui que touche le test du bilan sous le zoom 10 : ne pas le prendre)
+export const SHARE_BUILT = 10; // 60 % de hêtres, mais 40 % de bâti : une ville avec un bois
+
+/**
+ * Parts de forêt simulées : partout 60 % de hêtraie (hôte du cèpe) et rien de bâti, sauf quatre
+ * carrés de la case `SHARE_CELL`, au centre de la vue des tests (Annecy), qui servent à vérifier que
+ * la carte s'éteint là où il n'y a pas d'arbres hôtes, et sur une ville même boisée.
+ */
+function forestShare() {
+  const codes = ['FF1-09-09', 'FF1-14-14'];
+  const cases = {};
+  const bati = {};
+  for (let i = 270; i <= 300; i++) {
+    for (let j = 15; j <= 40; j++) {
+      cases[`${i}:${j}`] = Array.from({ length: 16 }, () => [0, 60]);
+      bati[`${i}:${j}`] = Array.from({ length: 16 }, () => 0);
+    }
+  }
+  cases[SHARE_CELL][SHARE_BARE] = [];
+  cases[SHARE_CELL][SHARE_THIN] = [0, 3];
+  cases[SHARE_CELL][SHARE_OTHER] = [1, 80];
+  bati[SHARE_CELL][SHARE_BUILT] = 40;
+  return { v: 1, genere: '2026-11-14', source: 'essai', pasLat: 0.04, pasLon: 0.056, codes, cases, bati };
+}
+
 /**
  * Intercepte les requêtes vers les services externes et les consigne dans `log`.
  * `meteoCommune: false` : fichiers météo communs injoignables ; `'ancienne'` : en retard de 6 jours
  * (dans les deux cas, la carte se rabat sur Open-Meteo) ; `'provisoire'` : le passage du jour n'a
  * pas encore eu lieu, hier n'est connu que par l'estimation de la veille.
  */
-export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0 } = {}) {
+export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0, foret = true, mois = 10, delaiForet = () => 0, panneForet = () => false, sec = false, delaiFond = () => 0 } = {}) {
   log.meteo ??= [];
+  log.foret ??= [];
+  // Mois figé (octobre par défaut) dans toutes les pages des tests : la saison des champignons en
+  // dépend (en février les cèpes sont hors saison : plus de grille, plus de carrés), et sans cela
+  // les vérifications passeraient ou casseraient selon le jour où elles tournent. Seule la saison
+  // lit le mois (`currentMonth`) ; les dates des fichiers météo simulés restent celles du jour.
+  await page.addInitScript((m) => {
+    Date.prototype.getMonth = () => m - 1;
+  }, mois);
+  // Parts de forêt par carré de 4,5 km (public/foret/parts.json) : le vrai fichier pèse 900 ko et
+  // changerait les tests à chaque recalcul. `foret: false` : fichier absent ; `'suspendu'` : il ne
+  // répond jamais (réseau qui pend).
+  await page.route('**/foret/parts.json', (route) => {
+    log.foret.push(new URL(route.request().url()).pathname);
+    if (foret === 'suspendu') return undefined;
+    if (!foret) return route.fulfill({ status: 404, body: '' });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(forestShare()) });
+  });
   log.meteoCommune ??= [];
   log.geologie ??= [];
   log.altitude ??= [];
@@ -374,7 +422,7 @@ export async function installMocks(page, log, { meteoCommune = true, altitudeLen
     }
     const block = path.match(/\/b\/(-?\d+_-?\d+)\.json$/);
     if (!block) return route.fulfill({ status: 404, headers: CORS, body: '' });
-    return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(meteoBlock(block[1], late)) });
+    return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(meteoBlock(block[1], late, sec)) });
   });
   await page.route('https://api.open-meteo.com/**', (route) => {
     const url = new URL(route.request().url());
@@ -393,14 +441,21 @@ export async function installMocks(page, log, { meteoCommune = true, altitudeLen
     if (tms) {
       log.tms.push(tms.slice(1).join('/'));
       const [z, x, y] = tms.slice(1).map(Number);
-      return route.fulfill({ status: 200, contentType: 'application/x-protobuf', headers: CORS, body: forestTile(z, x, y) });
+      // `panneForet(z)` : la tuile échoue (service en panne) ; `delaiForet(z)` : elle met ce délai (ms).
+      if (panneForet(z)) return route.fulfill({ status: 500, headers: CORS, body: '' });
+      const tile = () => route.fulfill({ status: 200, contentType: 'application/x-protobuf', headers: CORS, body: forestTile(z, x, y) });
+      const wait = delaiForet(z);
+      return wait ? new Promise((r) => setTimeout(r, wait)).then(tile) : tile();
     }
     if (url.pathname === '/wmts') {
       const layer = url.searchParams.get('LAYER');
       log.wmts.push(`${layer}|${url.searchParams.get('TILEMATRIXSET')}|${url.searchParams.get('TILEMATRIX')}`);
       const body =
         layer === 'ORTHOIMAGERY.ORTHOPHOTOS' ? PNG.ortho : layer === 'LANDCOVER.FORESTINVENTORY.V2' ? PNG.overview : PNG.plan;
-      return route.fulfill({ status: 200, contentType: 'image/png', headers: CORS, body });
+      // `delaiFond()` : les images du fond de carte mettent ce délai (ms) à arriver.
+      const image = () => route.fulfill({ status: 200, contentType: 'image/png', headers: CORS, body });
+      const wait = layer === 'LANDCOVER.FORESTINVENTORY.V2' ? 0 : delaiFond();
+      return wait ? new Promise((r) => setTimeout(r, wait)).then(image) : image();
     }
     if (url.pathname.startsWith('/altimetrie/')) {
       log.altitude.push(url.search);
