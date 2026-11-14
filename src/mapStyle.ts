@@ -331,15 +331,20 @@ export function buildStyle(state: AppState): StyleSpecification {
         id: LAYERS.meteoFineLabel,
         type: 'symbol',
         source: SOURCES.meteoFine,
-        minzoom: 14,
+        // Dès l'arrivée des carrés de 500 m (retour de Clément du 14/11/2026). Avant, leur pourcentage
+        // n'apparaissait qu'au zoom 14 : du zoom 12 au zoom 14, aux échelles 1 km à 300 m, il ne restait
+        // que la nuance de couleur pour juger d'un carré. Au zoom 12 un carré fait ≈ 37 pixels de large.
+        minzoom: FINE_MIN_ZOOM,
         layout: {
           visibility: 'none',
           'text-field': '',
           'text-font': [LABEL_FONT],
-          'text-size': 11,
+          // Il grandit avec le carré : 10 px quand il fait 37 px de large, 18 px au zoom 16.
+          'text-size': ['interpolate', ['linear'], ['zoom'], FINE_MIN_ZOOM, 10, 14, 14, 16, 18],
           'text-allow-overlap': false,
+          'text-padding': 0,
         },
-        paint: { 'text-color': '#0b1f44', 'text-halo-color': 'rgba(255,255,255,0.9)', 'text-halo-width': 1.2 },
+        paint: { 'text-color': '#0b1f44', 'text-halo-color': 'rgba(255,255,255,0.95)', 'text-halo-width': 1.6 },
       },
       // Contour et nom des zones protégées par-dessus la grille de l'indice : on les voit toujours.
       {

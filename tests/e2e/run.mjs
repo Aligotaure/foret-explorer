@@ -1337,6 +1337,18 @@ async function desktopTests(browser, base) {
   const batches = log.altitude.slice(before);
   // Un point par carré demandé (séparés par « | », écrit %7C dans l'adresse).
   const asked = batches.reduce((n, q) => n + (/[?&]lon=([^&]*)/.exec(q)?.[1].split('%7C').length ?? 0), 0);
+  // Le pourcentage est écrit dans chaque carré de 500 m dès son apparition : avant le 14/11/2026 il
+  // n'arrivait qu'au zoom 14, et seulement à 50 % ou plus (entre les deux, la couleur seule).
+  const fineLabel = await page.evaluate(() => ({
+    minzoom: window.map.getLayer('meteo-fin-etiquettes').minzoom,
+    field: JSON.stringify(window.map.getLayoutProperty('meteo-fin-etiquettes', 'text-field')),
+    visible: window.map.getLayoutProperty('meteo-fin-etiquettes', 'visibility'),
+  }));
+  check(
+    'grille fine : le pourcentage est écrit dans tous les carrés de 500 m dessinés, dès le zoom 12',
+    fineLabel.minzoom === 12 && fineLabel.visible === 'visible' && fineLabel.field === '["concat",["to-string",["coalesce",["get","p"],0]]," %"]',
+    JSON.stringify(fineLabel),
+  );
   check('grille fine : carrés de 500 m dessinés, tous avec au moins 3 points sur 9 sous un arbre hôte', fine.count > 20 && fine.visible === 'visible' && fine.coverage, `${fine.count} carrés, ${fine.levels.join(',')}`);
   // (Un carré à arbres hôtes n'est dessiné que s'il atteint 35 % : son altitude, elle, est demandée
   // dès que la saison et la pluie de sa case le permettent.)

@@ -587,7 +587,9 @@ export class MeteoLayer {
       'line-width',
       ['interpolate', ['linear'], ['zoom'], FINE_MIN_ZOOM, ['match', level, 3, 1.2, 0.6], 16, ['match', level, 3, 2.4, 1.2]] as never,
     );
-    this.map.setLayoutProperty(LAYERS.meteoFineLabel, 'text-field', text as never);
+    // Tout carré de 500 m dessiné porte son pourcentage, « peu probable » compris : sans lui il
+    // faudrait juger à la nuance de couleur.
+    this.map.setLayoutProperty(LAYERS.meteoFineLabel, 'text-field', ['concat', ['to-string', chance], ' %'] as never);
   }
 
   /**

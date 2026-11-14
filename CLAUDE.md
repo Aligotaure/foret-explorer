@@ -518,6 +518,12 @@ voisins connus comptent : au bord, un carré apparaît quand il est assez visibl
 après coup. Opacité
 selon la part d'arbres hôtes ; un carré défavorable n'est pas dessiné (avant le 14/11/2026 : en
 contour seul, des « carrés vides » illisibles). Les forêts s'estompent (45 %) à ces zooms.
+Chaque carré de 500 m dessiné porte son pourcentage dès le zoom 12 (`meteo-fin-etiquettes`, texte de
+10 px au zoom 12 à 18 px au zoom 16). Avant le 14/11/2026 il n'arrivait qu'au zoom 14, et seulement à
+50 % ou plus : aux échelles 1 km à 300 m il ne restait que la nuance de couleur (retour de Clément :
+« un irritant »). Coût mesuré, étiquettes allumées puis éteintes en alternance, sans carte graphique :
+446 étiquettes au zoom 12,4, 221 et 247 ms par image avec, 225 et 230 sans ; 157 au zoom 13,2, 130 et
+135 ms avec, 125 et 126 sans. Rien de sensible.
 ⚠ Zoom MapLibre = zoom « 512 px » : au zoom 13, ≈ 5 m/pixel (pas 10).
 
 ## Deux vues : Carte et Analytics
