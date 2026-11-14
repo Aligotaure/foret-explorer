@@ -1,6 +1,7 @@
 import type { Feature, Polygon } from 'geojson';
 import type { GeoJSONSource, Map as MapLibreMap } from 'maplibre-gl';
 import {
+  BUILT_MAX_COVER,
   FINE_MIN_ZOOM,
   FRANCE_BOUNDS,
   HOST_FULL_COVER,
@@ -14,14 +15,15 @@ import {
   altitudeCache,
   fineCellsForBounds,
   hasForest,
-  hasHost,
+  fineCellsToDraw,
+  hostShare,
   sampleCells,
   saveAltitudes,
   scoreFineCell,
   type FineCell,
   type Sample,
 } from './fineGrid';
-import { hostCover, hostCoverOfCell, loadForestShare, type HostCover } from './forestShare';
+import { hostCover, hostCoverOfCell, isLit, loadForestShare } from './forestShare';
 import { track } from './metrics';
 import { CELL_KM, subBox, subIndexAt } from './meteoGrid';
 import { CHANCE_THRESHOLD, LEVELS, MUSHROOM_BY_ID, chanceOf, scoreMushroom, type MushroomId } from './mushrooms';
@@ -390,12 +392,13 @@ export class MeteoLayer {
       if (controller.signal.aborted) return;
       const shown = MUSHROOM_BY_ID.get(indexMushroom(state));
       const index = state.weatherMode === 'indice';
-      /** `host` : arbres hôtes du champignon montré dans ce carré (null : inconnus, météo seule). */
-      const add = (id: string, weatherOf: () => WeatherSummary, box: Box, sub: 0 | 1, host: HostCover | null, spot: Box = box): void => {
-        // Arbres hôtes connus : l'indice vaut pour eux (qualité moyenne des hôtes du carré), et sous
-        // le seuil de couverture le carré est éteint. En mode indice un carré éteint n'est pas
-        // dessiné du tout : il n'est donc ni calculé ni envoyé à la carte.
-        const lit = !host || host.cover >= HOST_MIN_COVER;
+      /**
+       * `host` : arbres hôtes du champignon montré dans ce carré (null : inconnus, météo seule) ;
+       * `lit` : le carré est allumé (assez d'arbres hôtes, pas d'abord une ville : `isLit`).
+       */
+      const add = (id: string, weatherOf: () => WeatherSummary, box: Box, sub: 0 | 1, host: { cover: number; quality: number } | null, lit: boolean, spot: Box = box): void => {
+        // Arbres hôtes connus : l'indice vaut pour eux (qualité moyenne des hôtes du carré). En mode
+        // indice un carré éteint n'est pas dessiné du tout : il n'est ni calculé ni envoyé à la carte.
         if (index && !lit) return;
         const w = weatherOf();
         const score = lit && shown ? scoreMushroom(shown, w, month, host ? { hostQuality: host.quality } : {}) : null;
@@ -409,10 +412,11 @@ export class MeteoLayer {
             // Où poser la pastille de la vue d'ensemble : au centre, ou sur le carré le plus boisé d'une case.
             x: +((spot.west + spot.east) / 2).toFixed(4),
             y: +((spot.south + spot.north) / 2).toFixed(4),
-            // Champignon montré seulement : niveau, chance estimée, part d'arbres hôtes (−1 : inconnue).
+            // Champignon montré seulement : niveau, chance estimée, part d'arbres hôtes (−1 : inconnue ;
+            // 0 : carré éteint, gardé pour le mode pluie).
             l: score?.level ?? 0,
             p: score?.chance ?? 0,
-            c: host ? round2(host.cover) : -1,
+            c: !host ? -1 : lit ? round2(host.cover) : 0,
           },
           geometry: boxPolygon(box),
         });
@@ -429,16 +433,18 @@ export class MeteoLayer {
         if (subdivide && s.subAltitudes) {
           detailed = true;
           s.subAltitudes.forEach((z, k) => {
-            if (z !== null) add(`${c.id}/${k}`, () => summaryAtAltitude(w, z), subBox(c, k), 1, hosts && shown ? hostCover(c.id, k, shown) : null);
+            if (z === null) return;
+            const host = hosts && shown ? hostCover(c.id, k, shown) : null;
+            add(`${c.id}/${k}`, () => summaryAtAltitude(w, z), subBox(c, k), 1, host, !host || isLit(host));
           });
         } else {
           const cell = hosts && shown ? hostCoverOfCell(c.id, shown) : null;
           // Allumée dès qu'un de ses carrés l'est (sa teinte suit la moyenne) : une case de plaine avec
           // une seule vraie forêt ne doit pas s'éteindre en vue d'ensemble puis réapparaître en zoomant.
-          const host: HostCover | null =
-            cell && cell.bestCover >= HOST_MIN_COVER ? { cover: Math.max(cell.cover, HOST_MIN_COVER), quality: cell.quality } : cell;
+          const lit = !cell || cell.best >= 0;
+          const host = cell && lit ? { cover: Math.max(cell.cover, HOST_MIN_COVER), quality: cell.quality } : cell;
           // Case entière : à l'altitude médiane de ses carrés plutôt qu'à celle du point de relevé.
-          add(c.id, () => summaryAtAltitude(w, medianAltitude(s)), c, 0, host, cell && cell.best >= 0 ? subBox(c, cell.best) : c);
+          add(c.id, () => summaryAtAltitude(w, medianAltitude(s)), c, 0, host, lit, cell && cell.best >= 0 ? subBox(c, cell.best) : c);
         }
       }
       this.setSource(SOURCES.meteo, features);
@@ -520,12 +526,24 @@ export class MeteoLayer {
     const today = todayKey();
     const shown = MUSHROOM_BY_ID.get(indexMushroom(this.store.state));
     const features: Feature[] = [];
+    // Seuls les carrés avec assez d'arbres hôtes du champignon montré sont dessinés (en ville, la
+    // règle est plus sévère) : les autres ne sont ni calculés ni envoyés à la carte.
+    const draw = shown
+      ? fineCellsToDraw(
+          cells.flatMap((c) => {
+            const sample = samples.get(c.id);
+            const share = sample ? hostShare(shown, sample) : 0;
+            if (!share) return [];
+            const built = hostCover(c.parentId, subIndexAt(c.lat, c.lon), shown)?.built ?? 0;
+            return [{ id: c.id, share, town: built >= BUILT_MAX_COVER }];
+          }),
+          new Set(samples.keys()),
+        )
+      : new Set<string>();
     for (const c of cells) {
       const parent = series.get(c.parentId);
       const sample = samples.get(c.id);
-      // Seuls les carrés avec des arbres hôtes du champignon montré sont dessinés : les autres ne
-      // sont ni calculés ni envoyés à la carte.
-      if (!shown || !parent || !sample || !hasHost(shown, sample)) continue;
+      if (!shown || !parent || !sample || !draw.has(c.id)) continue;
       const known = altitudes.get(c.id);
       if (known === undefined && !fallback) continue;
       // Altitude IGN indisponible : celle du carré de 4,5 km qui contient ce carré.

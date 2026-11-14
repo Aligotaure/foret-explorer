@@ -1,12 +1,12 @@
 import maplibregl, { type LngLat, type Map as MapLibreMap, type PointLike } from 'maplibre-gl';
 import { BDFORET, DIRECT_PAST_DAYS, GEOLOGY, HOST_MIN_COVER, SPOT_ALTITUDE_TIMEOUT_MS, SPOT_ALTITUDE_WAIT_MS } from './config';
 import { h, toast } from './dom';
-import { hostCover, loadForestShare } from './forestShare';
+import { hostCover, isLit, loadForestShare } from './forestShare';
 import { forestAt, soilAt, type ForestAtPoint, type SoilAtPoint } from './geology';
 import { icon } from './icons';
 import { ABOUT_URL } from './legal';
 import { track } from './metrics';
-import { CHANCE_THRESHOLD, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, scoreMushroom, type MushroomId, type MushroomScore, type SpotContext } from './mushrooms';
+import { AWAITED, CHANCE_THRESHOLD, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, scoreMushroom, type MushroomId, type MushroomScore, type SpotContext } from './mushrooms';
 import { SOURCES, setHighlight } from './mapStyle';
 import { CELL_KM, KEPT_DAYS, cellAt, cellId, subIndexAt } from './meteoGrid';
 import { patternImageId, drawPattern } from './soils';
@@ -172,6 +172,16 @@ interface View {
   shared: boolean;
   /** L'altitude exacte n'est pas encore arrivée : le bilan sera refait. */
   altitudePending: boolean;
+}
+
+/**
+ * Une raison du bilan. « pousse attendue d'ici N jours » y est en gras : c'est la seule qui dit
+ * quand revenir, et elle se perdait dans la liste.
+ */
+export function reasonItem(text: string): HTMLLIElement {
+  const hit = AWAITED.exec(text);
+  if (!hit) return h('li', {}, text);
+  return h('li', {}, text.slice(0, hit.index), h('strong', {}, hit[0]), text.slice(hit.index + hit[0].length));
 }
 
 /**
@@ -370,7 +380,7 @@ export class SpotPanel {
         'details',
         { class: 'verdict__card', open: this.cards.get(s.id) ?? s.id === opened },
         h('summary', { class: 'verdict__head', 'data-focus': `verdict:${s.id}` }, h('span', { class: 'verdict__name' }, name, tag), pill),
-        h('ul', { class: 'verdict__reasons' }, ...s.reasons.map((r) => h('li', {}, r))),
+        h('ul', { class: 'verdict__reasons' }, ...s.reasons.map(reasonItem)),
       );
       // On ne retient que ce qui s'écarte de l'état d'office : un <details> créé ouvert émet lui aussi
       // « toggle », et la ligne dépliée d'office resterait dépliée quand le champignon recherché change.
@@ -478,11 +488,15 @@ export class SpotPanel {
         this.mushroomSection(
           MUSHROOMS.map((m) => {
             if (!v.forestUnknown) return scoreMushroom(m, weather, month, context);
-            // Forêt inconnue sous le point : même règle que le carré de la carte. Sans arbres hôtes dans
-            // le secteur, pas de chance annoncée ; sinon, celle de ses forêts hôtes. Fichier absent : météo seule.
+            // Forêt inconnue sous le point : même règle que le carré de la carte. Secteur sans arbres
+            // hôtes, ou d'abord bâti : pas de chance annoncée ; sinon, celle de ses forêts hôtes.
+            // Fichier absent : météo seule.
             const host = hostCover(v.sector.cell, v.sector.k, m);
             if (!host) return scoreMushroom(m, weather, month, context);
-            if (host.cover < HOST_MIN_COVER) return { ...scoreMushroom(m, weather, month, { ...context, hostQuality: 0 }), blocker: 'peu d’arbres hôtes dans ce secteur' };
+            if (!isLit(host)) {
+              const blocker = host.cover < HOST_MIN_COVER ? 'peu d’arbres hôtes dans ce secteur' : 'secteur surtout bâti';
+              return { ...scoreMushroom(m, weather, month, { ...context, hostQuality: 0 }), blocker };
+            }
             return scoreMushroom(m, weather, month, { ...context, hostQuality: host.quality });
           }),
         ),

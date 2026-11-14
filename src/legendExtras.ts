@@ -2,7 +2,7 @@
  * Sections ajoutées au panneau « Légendes » : « Je cherche… », nature du sol, météo.
  * Comme le reste du panneau, elles ne touchent jamais la carte : elles lisent et modifient le Store.
  */
-import { FINE_MIN_ZOOM, GEOLOGY, HOST_MIN_COVER, WEATHER_SUB_MIN_ZOOM, ZONES } from './config';
+import { BUILT_MAX_COVER, FINE_MIN_ZOOM, GEOLOGY, HOST_MIN_COVER, WEATHER_SUB_MIN_ZOOM, ZONES } from './config';
 import { h } from './dom';
 import { CLASS_BY_CODE } from './forestClasses';
 import { ABOUT_URL } from './legal';
@@ -262,7 +262,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
   const caveat = h(
     'p',
     { class: 'legend-hint legend-hint--caveat' },
-    'Seuls les secteurs où poussent ses arbres hôtes sont colorés. Chances estimées, pas mesurées : ni promesse d’en trouver, ni droit de cueillir, ni avis sur ce qui se mange.',
+    'Seuls les secteurs où poussent ses arbres hôtes sont colorés, hors des villes. Chances estimées, pas mesurées : ni promesse d’en trouver, ni droit de cueillir, ni avis sur ce qui se mange.',
   );
   const content = h(
     'div',
@@ -283,7 +283,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
       h(
         'p',
         {},
-        `Un carré de 4,5 km n’est coloré que si les arbres hôtes du champignon y couvrent au moins ${Math.round(HOST_MIN_COVER * 100)} % de la surface (BD Forêt de l’IGN), et d’autant plus qu’ils en couvrent ; son pourcentage vaut pour ces forêts, sans tenir compte du sol. Le bilan d’un coin, lui, regarde la forêt et le sol du point touché : son chiffre peut différer, plus haut ou plus bas.`,
+        `Un carré de 4,5 km n’est coloré que si les arbres hôtes du champignon y couvrent au moins ${Math.round(HOST_MIN_COVER * 100)} % de la surface (BD Forêt de l’IGN) et si moins de ${Math.round(BUILT_MAX_COVER * 100)} % est bâti (Plan IGN) ; il l’est d’autant plus qu’il est boisé. Son pourcentage vaut pour ces forêts, sans tenir compte du sol. En ville, les carrés de 500 m ne montrent que les vrais massifs, pas les parcs. Le bilan d’un coin, lui, regarde la forêt et le sol du point touché : son chiffre peut différer, plus haut ou plus bas.`,
       ),
       h(
         'p',

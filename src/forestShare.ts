@@ -7,7 +7,7 @@
  * autre chose. Avec elle, un carré n'est coloré que s'il contient des arbres hôtes du champignon, et
  * son indice vaut pour ces forêts-là.
  */
-import { FOREST_SHARE_URL } from './config';
+import { BUILT_MAX_COVER, FOREST_SHARE_URL, HOST_MIN_COVER } from './config';
 import { BASE_STEP_LAT, BASE_STEP_LON, SUB_COUNT } from './meteoGrid';
 import type { Mushroom } from './mushrooms';
 
@@ -20,6 +20,8 @@ interface ShareFile {
   codes: string[];
   /** Un carré : [rang du code, part en %, rang, part, …] ; null : carré sans terre française. */
   cases: Record<string, (number[] | null)[]>;
+  /** Part bâtie de chaque carré, en %, dans le même ordre (absente d'un fichier d'avant le 14/11/2026). */
+  bati?: Record<string, (number | null)[]>;
 }
 
 export interface HostCover {
@@ -27,7 +29,16 @@ export interface HostCover {
   cover: number;
   /** Qualité moyenne de ces hôtes (poids de `Mushroom.hosts`, 0 à 1). */
   quality: number;
+  /** Part de la surface bâtie (0 à 1 ; 0 si le fichier ne la donne pas). */
+  built: number;
 }
+
+/**
+ * Un carré est-il allumé pour ce champignon ? Il lui faut assez d'arbres hôtes, et ne pas être
+ * d'abord une ville : un bois de banlieue ne colore pas 20 km² de quartiers. Même règle pour la
+ * carte (meteoLayer.ts) et pour le bilan d'un coin dont la forêt n'est pas connue (spot.ts).
+ */
+export const isLit = (host: HostCover): boolean => host.cover >= HOST_MIN_COVER && host.built < BUILT_MAX_COVER;
 
 let file: ShareFile | null = null;
 let loading: Promise<boolean> | null = null;
@@ -77,6 +88,7 @@ function coversOf(cellId: string, m: Mushroom): (HostCover | null)[] | null {
     const squares = file.cases[cellId];
     if (!squares) return null;
     const weights = file.codes.map((code) => m.hosts[code] ?? 0);
+    const builtOf = file.bati?.[cellId];
     list = Array.from({ length: SUB_COUNT }, (_, k) => {
       const parts = squares[k];
       if (!parts) return null;
@@ -89,7 +101,7 @@ function coversOf(cellId: string, m: Mushroom): (HostCover | null)[] | null {
         cover += share;
         weighted += share * weight;
       }
-      return { cover: Math.min(1, cover), quality: cover > 0 ? weighted / cover : 0 };
+      return { cover: Math.min(1, cover), quality: cover > 0 ? weighted / cover : 0, built: (builtOf?.[k] ?? 0) / 100 };
     });
     cache.set(key, list);
   }
@@ -103,15 +115,17 @@ export function hostCover(cellId: string, k: number, m: Mushroom): HostCover | n
 
 /**
  * Arbres hôtes d'une case entière : moyenne de ses carrés (ceux sans terre française ne comptent
- * pas), numéro et couverture de son carré le plus boisé en hôtes (où poser une pastille, et de quoi
- * ne pas éteindre une case dont un seul carré est une vraie forêt). null : inconnu.
+ * pas), et numéro de son carré allumé le plus boisé en hôtes (−1 : aucun carré allumé). Il dit où
+ * poser une pastille, et de quoi ne pas éteindre une case dont un seul carré est une vraie forêt.
+ * null : inconnu.
  */
-export function hostCoverOfCell(cellId: string, m: Mushroom): (HostCover & { best: number; bestCover: number }) | null {
+export function hostCoverOfCell(cellId: string, m: Mushroom): (HostCover & { best: number }) | null {
   const list = coversOf(cellId, m);
   if (!list) return null;
   let count = 0;
   let cover = 0;
   let weighted = 0;
+  let built = 0;
   let best = -1;
   let bestCover = -1;
   list.forEach((c, k) => {
@@ -119,11 +133,12 @@ export function hostCoverOfCell(cellId: string, m: Mushroom): (HostCover & { bes
     count++;
     cover += c.cover;
     weighted += c.cover * c.quality;
-    if (c.cover > bestCover) {
+    built += c.built;
+    if (isLit(c) && c.cover > bestCover) {
       bestCover = c.cover;
       best = k;
     }
   });
   if (!count) return null;
-  return { cover: cover / count, quality: cover > 0 ? weighted / cover : 0, best, bestCover };
+  return { cover: cover / count, quality: cover > 0 ? weighted / cover : 0, built: built / count, best };
 }

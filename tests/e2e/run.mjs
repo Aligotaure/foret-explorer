@@ -9,7 +9,7 @@
 import { mkdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { SHARE_BARE, SHARE_CELL, SHARE_OTHER, SHARE_THIN, installMocks } from './mocks.mjs';
+import { SHARE_BARE, SHARE_BUILT, SHARE_CELL, SHARE_OTHER, SHARE_THIN, installMocks } from './mocks.mjs';
 import { viewTests } from './views.mjs';
 
 const OUT = fileURLToPath(new URL('./shots/', import.meta.url));
@@ -672,14 +672,15 @@ async function desktopTests(browser, base) {
     filter: JSON.stringify(window.map.getFilter('bdforet-fill')),
     visible: window.map.getLayoutProperty('meteo-cellules', 'visibility'),
     fill: JSON.stringify(window.map.getPaintProperty('meteo-cellules', 'fill-color')),
-    levels: [...new Set(window.map.querySourceFeatures('meteo').map((f) => f.properties.l_cepe))].sort(),
+    levels: [...new Set(window.map.querySourceFeatures('meteo').map((f) => f.properties.l))].sort(),
     status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)),
   }));
   check('Je cherche cèpes → forêts hôtes seulement', cepes.filter.includes('FF1-09-09') && !cepes.filter.includes('FF1-14-14'), cepes.filter.slice(0, 80));
-  check('Je cherche cèpes → grille « indice » visible', cepes.mode === 'indice' && cepes.visible === 'visible' && cepes.fill.includes('l_cepe'), `${cepes.mode} ${cepes.visible}`);
+  check('Je cherche cèpes → grille « indice » visible', cepes.mode === 'indice' && cepes.visible === 'visible' && cepes.fill.includes('["get","l"]'), `${cepes.mode} ${cepes.visible}`);
   check('grille météo calculée', cepes.levels.length > 0 && cepes.levels.every((l) => l >= 0 && l <= 3), `niveaux ${cepes.levels.join(',')}`);
 
-  // Arbres hôtes : un carré n'est coloré que s'il en contient (fichier des parts de forêt, simulé ici).
+  // Arbres hôtes : un carré n'est coloré que s'il en contient assez et n'est pas d'abord une ville
+  // (fichier des parts de forêt, simulé ici). Un carré éteint n'est même pas envoyé à la carte.
   const hosts = await page.evaluate(
     ({ cell, squares }) => {
       // Un carré se reconnaît à son centre (les identifiants de texte ne survivent pas aux tuiles de MapLibre).
@@ -689,44 +690,73 @@ async function desktopTests(browser, base) {
       const by = new Map(window.map.querySourceFeatures('meteo').map((f) => [key(f.properties), f.properties]));
       const pick = (k) => {
         const p = by.get(centre(k));
-        return p ? { c: p.c_cepe, p: p.p_cepe, l: p.l_cepe } : null;
+        return p ? { c: p.c, p: p.p, l: p.l } : null;
       };
       // Ce que MapLibre applique à chaque carré : ses expressions évaluées sur les propriétés du carré
       // (compter les étiquettes dessinées ne prouverait rien, la police simulée est vide).
       const fill = window.map.style.getLayer('meteo-cellules').paint.get('fill-opacity');
       const line = window.map.style.getLayer('meteo-contours').paint.get('line-opacity');
       const label = window.map.style.getLayer('meteo-etiquettes').layout.get('text-field');
-      const drawn = (k) => {
-        const p = by.get(centre(k));
-        if (!p) return null;
+      const drawnWith = (p) => {
         const feature = { type: 'Polygon', properties: p };
         return { fill: +fill.evaluate(feature, {}).toFixed(3), line: +line.evaluate(feature, {}).toFixed(3), label: String(label.evaluate(feature, {})) };
+      };
+      const drawn = (k) => {
+        const p = by.get(centre(k));
+        return p ? drawnWith(p) : null;
       };
       return {
         unlit: squares.map(pick),
         wooded: pick(0),
+        properties: Object.keys(by.get(centre(0)) ?? {}).sort().join(),
         opacity: JSON.stringify(window.map.getPaintProperty('meteo-cellules', 'fill-opacity')),
         lines: JSON.stringify(window.map.getPaintProperty('meteo-contours', 'line-opacity')),
-        unlitDrawn: squares.map(drawn),
+        // Une case du mode pluie, éteinte, encore dans la source à l'instant où l'on passe à l'indice.
+        leftover: drawnWith({ l: 0, p: 0, c: 0, sub: 0, rain20: 40 }),
         woodedDrawn: drawn(0),
         zoom: window.map.getZoom(),
         caveat: [...document.querySelectorAll('#legend .legend-hint--caveat')].filter((p) => !p.hidden).map((p) => p.textContent).join(' '),
       };
     },
-    { cell: SHARE_CELL, squares: [SHARE_BARE, SHARE_THIN, SHARE_OTHER] },
+    { cell: SHARE_CELL, squares: [SHARE_BARE, SHARE_THIN, SHARE_OTHER, SHARE_BUILT] },
   );
   check(
-    'carrés : sans arbre hôte du champignon (aucun arbre, 3 % de hêtres, robiniers), ni chance ni niveau',
-    hosts.unlit.every((u) => u && u.p === 0 && u.l === 0) && hosts.unlit.map((u) => u?.c).join() === '0,0.03,0' && hosts.wooded?.c === 0.6 && hosts.wooded.p >= 50 && hosts.wooded.l > 0,
+    'carrés : sans arbre hôte du champignon (aucun arbre, 3 % de hêtres, robiniers) ou d’abord bâti (40 %), le carré n’est pas envoyé à la carte',
+    hosts.unlit.length === 4 && hosts.unlit.every((u) => u === null) && hosts.wooded?.c === 0.6 && hosts.wooded.p >= 50 && hosts.wooded.l > 0,
     JSON.stringify({ unlit: hosts.unlit, wooded: hosts.wooded }),
   );
   check(
-    'carrés : ni teinte, ni quadrillage, ni étiquette sous 5 % d’arbres hôtes ; teinte et étiquette sur le carré boisé',
-    hosts.opacity.includes('"c_cepe"') && hosts.lines.includes('"c_cepe"') &&
-      hosts.unlitDrawn.every((d) => d && d.fill === 0 && d.line === 0 && d.label === '') &&
-      hosts.woodedDrawn?.fill > 0 && hosts.woodedDrawn.line > 0 && (hosts.zoom < 10 || hosts.zoom >= 12 || /^\d+ %$/.test(hosts.woodedDrawn.label)),
-    JSON.stringify({ zoom: +hosts.zoom.toFixed(1), eteints: hosts.unlitDrawn, boise: hosts.woodedDrawn }),
+    'carrés : seulement les valeurs du champignon montré, sous des noms fixes (les expressions ne changent pas avec lui)',
+    hosts.properties === 'c,elevation,l,p,rain20,sub,x,y' && hosts.opacity.includes('["get","c"]') && hosts.lines.includes('["get","c"]') && !/_cepe/.test(hosts.opacity + hosts.lines),
+    hosts.properties,
   );
+  check(
+    'carrés : teinte, quadrillage et étiquette sur le carré boisé ; rien pour une case éteinte restée du mode pluie',
+    hosts.leftover.fill === 0 && hosts.leftover.line === 0 && hosts.leftover.label === '' &&
+      hosts.woodedDrawn?.fill > 0 && hosts.woodedDrawn.line > 0 && (hosts.zoom < 10 || hosts.zoom >= 12 || /^\d+ %$/.test(hosts.woodedDrawn.label)),
+    JSON.stringify({ zoom: +hosts.zoom.toFixed(1), reste: hosts.leftover, boise: hosts.woodedDrawn }),
+  );
+  // Changer de champignon ne change aucune expression de la grille : MapLibre n'a pas à refaire ses
+  // tuiles pour cela (c'était la lenteur du choix d'un champignon), seul le contenu de la source change.
+  const stable = await page.evaluate(() => {
+    const read = () =>
+      JSON.stringify([
+        window.map.getPaintProperty('meteo-cellules', 'fill-color'),
+        window.map.getPaintProperty('meteo-cellules', 'fill-opacity'),
+        window.map.getPaintProperty('meteo-contours', 'line-opacity'),
+        window.map.getLayoutProperty('meteo-etiquettes', 'text-field'),
+        window.map.getPaintProperty('meteo-fin-cellules', 'fill-color'),
+        window.map.getPaintProperty('meteo-fin-cellules', 'fill-opacity'),
+        window.map.getLayoutProperty('meteo-fin-etiquettes', 'text-field'),
+        window.map.getFilter('meteo-fin-cellules') ?? null,
+      ]);
+    const before = read();
+    window.store.update({ mushroom: 'trompette' });
+    const during = read();
+    window.store.update({ mushroom: 'cepe' });
+    return { same: before === during && before === read(), size: before.length };
+  });
+  check('changer de champignon ne change aucune expression de la grille (ni teinte, ni étiquette, ni filtre)', stable.same && stable.size > 200, `${stable.size} caractères`);
   check('légende : « seuls les secteurs où poussent ses arbres hôtes sont colorés », estimation rappelée', /arbres hôtes sont colorés/.test(hosts.caveat) && /estimées, pas mesurées/.test(hosts.caveat), hosts.caveat.slice(0, 80));
   check('parts de forêt : un seul chargement du fichier', log.foret.length === 1, `${log.foret.length} requête(s)`);
 
@@ -746,10 +776,10 @@ async function desktopTests(browser, base) {
         status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '',
       };
     },
-    { cell: SHARE_CELL, squares: [SHARE_BARE, SHARE_THIN, SHARE_OTHER] },
+    { cell: SHARE_CELL, squares: [SHARE_BARE, SHARE_THIN, SHARE_OTHER, SHARE_BUILT] },
   );
   check(
-    'vue d’ensemble : des pastilles, toutes à 50 % et plus, aucune sur un carré sans arbre hôte ; meilleure chance « estimée » annoncée',
+    'vue d’ensemble : des pastilles, toutes à 50 % et plus, aucune sur un carré sans arbre hôte ou d’abord bâti ; meilleure chance « estimée » annoncée',
     spots.chances.length > 0 && spots.chances.every((p) => p >= 50) && spots.onUnlit === 0 && /Meilleure chance estimée dans la vue : ≈ \d+ %/.test(spots.status),
     `${spots.chances.length} pastille(s) ${spots.chances.slice(0, 5).join(', ')} ; ${spots.status.slice(0, 120)}`,
   );
@@ -766,7 +796,7 @@ async function desktopTests(browser, base) {
   check(
     'bilan sous le zoom 10 : forêt « à connaître en zoomant », chance non nulle, « forêt inconnue » dans les raisons, jamais « pas de forêt »',
     /zoomez pour la connaître/.test(lowSpot.forest) && Math.max(...lowSpot.chances) > 0 && lowSpot.reasons.some((r) => /Forêt inconnue à ce zoom/.test(r)) && ![...lowSpot.reasons, ...lowSpot.off].some((r) => /pas de forêt/i.test(r)),
-    `${lowSpot.forest} ; chances ${lowSpot.chances.join(', ')}`,
+    `${lowSpot.forest} ; chances ${lowSpot.chances.join(', ')} ; ${[...lowSpot.off, ...lowSpot.reasons].join(' | ').slice(0, 200)}`,
   );
   check('bilan sous le zoom 10 : statut inconnu, accord du propriétaire rappelé, sans parenthèses imbriquées', /^Inconnu : il faut l’accord du propriétaire \(zoomez au niveau 10 ou plus pour le connaître\)$/.test(lowSpot.status.trim()), lowSpot.status);
   check('bilan sous le zoom 10 : la raison dit que la chance est celle des forêts hôtes du secteur', lowSpot.reasons.some((r) => /chance des forêts hôtes du secteur/.test(r)), lowSpot.reasons.find((r) => /Forêt inconnue/.test(r)) ?? '');
@@ -786,10 +816,71 @@ async function desktopTests(browser, base) {
     bareSpot.chances.length === 5 && bareSpot.chances.every((c) => c === 0) && bareSpot.lines.filter((l) => /peu d’arbres hôtes dans ce secteur/.test(l)).length >= 4,
     bareSpot.lines.join(' | ').slice(0, 200),
   );
+  // Même règle pour une ville avec un bois : 60 % de hêtres, mais 40 % du carré est bâti.
+  const town = await page.evaluate(({ cell, k }) => {
+    const [ci, cj] = cell.split(':').map(Number);
+    const p = window.map.project([(cj * 4 + (k % 4) + 0.5) * 0.056, (ci * 4 + Math.floor(k / 4) + 0.5) * 0.04]);
+    return { x: p.x, y: p.y };
+  }, { cell: SHARE_CELL, k: SHARE_BUILT });
+  await page.mouse.click(town.x, town.y);
+  await page.waitForFunction(() => [...document.querySelectorAll('#spot .verdict__why')].some((w) => /secteur surtout bâti/.test(w.textContent)), null, { timeout: 10000 }).catch(() => {});
+  const townSpot = await page.evaluate(() => ({
+    lines: [...document.querySelectorAll('#spot .verdict')].map((v) => `${v.querySelector('strong')?.textContent} : ${v.querySelector('.verdict__why')?.textContent ?? ''} ${v.querySelector('.level-pill')?.textContent}`),
+    chances: [...document.querySelectorAll('#spot .level-pill')].map((p) => Number(/≈ (\d+) %/.exec(p.textContent)?.[1])),
+  }));
+  check(
+    'bilan sous le zoom 10, secteur d’abord bâti (une ville avec un bois) : aucune chance annoncée, « secteur surtout bâti »',
+    townSpot.chances.length === 5 && townSpot.chances.every((c) => c === 0) && townSpot.lines.filter((l) => /secteur surtout bâti/.test(l)).length >= 3,
+    townSpot.lines.join(' | ').slice(0, 200),
+  );
   await page.locator('#spot .panel__close').click();
   await page.evaluate((v) => window.map.jumpTo({ center: [v.lng, v.lat], zoom: v.zoom }), viewBefore);
   await page.waitForTimeout(900);
   await idle(page);
+
+  // « pousse attendue d'ici N jours » en gras dans les raisons du bilan (c'est elle qui dit quand revenir).
+  const emphasis = await page.evaluate(async () => {
+    const { reasonItem } = await import('/src/spot.ts');
+    const awaited = reasonItem('Pluie de 30 mm il y a 2 jours : encore tôt, pousse attendue d’ici 5 jours.');
+    const one = reasonItem('Pluie de 30 mm il y a 3 jours : encore tôt, pousse attendue d’ici 1 jour.');
+    const plain = reasonItem('Pluie de 16 mm il y a 10 jours : bon délai pour le cèpe (4 à 14 jours).');
+    return {
+      tag: awaited.tagName,
+      strong: [...awaited.querySelectorAll('strong')].map((s) => s.textContent),
+      text: awaited.textContent,
+      one: one.querySelector('strong')?.textContent ?? '',
+      plain: plain.querySelectorAll('strong').length,
+    };
+  });
+  check(
+    'bilan : « pousse attendue d’ici 5 jours » en gras dans sa raison, le reste de la phrase inchangé, rien en gras ailleurs',
+    emphasis.tag === 'LI' && emphasis.strong.join('|') === 'pousse attendue d’ici 5 jours' && emphasis.text === 'Pluie de 30 mm il y a 2 jours : encore tôt, pousse attendue d’ici 5 jours.' && emphasis.one === 'pousse attendue d’ici 1 jour' && emphasis.plain === 0,
+    JSON.stringify(emphasis),
+  );
+
+  // Carrés de 500 m : trois points sur neuf sous un arbre hôte ; en ville, cinq, et le carré doit
+  // tenir à un massif (un parc isolé n'en pose plus).
+  const fineRule = await page.evaluate(async () => {
+    const { fineCellsToDraw } = await import('/src/fineGrid.ts');
+    const sampled = new Set();
+    for (let i = 10; i <= 14; i++) for (let j = 10; j <= 14; j++) sampled.add(`${i}:${j}`);
+    const kept = fineCellsToDraw(
+      [
+        { id: '10:10', share: 3 / 9, town: false }, // campagne, trois points : dessiné
+        { id: '10:12', share: 2 / 9, town: false }, // campagne, deux points : non
+        { id: '12:11', share: 1, town: true }, // ville, parc isolé : non
+        { id: '13:12', share: 4 / 9, town: true }, // ville, quatre points, au bord d'un massif : non
+        { id: '13:13', share: 5 / 9, town: true }, // ville, massif de quatre carrés : dessinés
+        { id: '13:14', share: 1, town: true },
+        { id: '14:13', share: 1, town: true },
+        { id: '14:14', share: 6 / 9, town: true },
+        { id: '14:10', share: 1, town: true }, // ville, au bord de l'écran : ses voisins inconnus comptent pour boisés
+      ],
+      sampled,
+    );
+    return [...kept].sort().join(' ');
+  });
+  check('carrés de 500 m : 3 points sur 9 hors des villes ; en ville, 5 points et un massif (parc isolé écarté)', fineRule === '10:10 13:13 13:14 14:10 14:13 14:14', fineRule);
 
   // Phrase de pluie : une vieille pluie « dépassée » ne masque plus la pluie récente qui va faire pousser.
   const [rainReasons, modestRain, rightTime] = await page.evaluate(async () => {
@@ -840,8 +931,8 @@ async function desktopTests(browser, base) {
   const top = await page.evaluate(() => {
     const cells = window.map.querySourceFeatures('meteo');
     return {
-      chances: cells.every((f) => f.properties.p_cepe >= 0 && f.properties.p_cepe <= 95),
-      above: cells.some((f) => f.properties.p_cepe >= 50),
+      chances: cells.every((f) => f.properties.p >= 0 && f.properties.p <= 95),
+      above: cells.some((f) => f.properties.p >= 50),
       points: window.map.querySourceFeatures('meteo-points').map((f) => f.properties.p),
       status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '',
     };
@@ -869,10 +960,9 @@ async function desktopTests(browser, base) {
     return {
       count: features.length,
       visible: window.map.getLayoutProperty('meteo-fin-cellules', 'visibility'),
-      filter: JSON.stringify(window.map.getFilter('meteo-fin-cellules')),
       altitudes: [...new Set(features.map((f) => f.properties.z))].length,
-      levels: [...new Set(features.map((f) => f.properties.l_cepe))].sort(),
-      coverage: features.every((f) => f.properties.c_cepe >= 0 && f.properties.c_cepe <= 1),
+      levels: [...new Set(features.map((f) => f.properties.l))].sort(),
+      coverage: features.every((f) => f.properties.c >= 0.3 && f.properties.c <= 1),
       coarseOpacity: JSON.stringify(window.map.getPaintProperty('meteo-cellules', 'fill-opacity')),
       status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /500 m avec/.test(t)),
       saved: (() => {
@@ -885,7 +975,7 @@ async function desktopTests(browser, base) {
     };
   });
   const batches = log.altitude.slice(before);
-  check('grille fine : carrés de 500 m dessinés', fine.count > 20 && fine.visible === 'visible' && fine.filter.includes('c_cepe'), `${fine.count} carrés, ${fine.levels.join(',')}`);
+  check('grille fine : carrés de 500 m dessinés, tous avec au moins 3 points sur 9 sous un arbre hôte', fine.count > 20 && fine.visible === 'visible' && fine.coverage, `${fine.count} carrés, ${fine.levels.join(',')}`);
   check('grille fine : altitudes IGN groupées et variées', batches.length >= 1 && batches.every((q) => q.includes('%7C')) && fine.altitudes > 5, `${batches.length} requête(s), ${fine.altitudes} altitudes`);
   check('grille fine : altitudes gardées dans le navigateur', fine.saved > 20, `${fine.saved} altitudes`);
   check(
@@ -979,7 +1069,7 @@ async function desktopTests(browser, base) {
       totals['ign.altitude.points'] > 20 &&
       totals['pages.geology'] > 0 &&
       totals['pages.zones'] > 0 &&
-      totals['app.spots'] === 6,
+      totals['app.spots'] === 7,
     JSON.stringify(totals),
   );
   await page.evaluate(() => window.metrics.flush());
@@ -1127,8 +1217,8 @@ async function fallbackTests(browser, base) {
   await page5.getByRole('button', { name: 'Cèpes', exact: true }).click();
   await page5.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 0, null, { timeout: 15000 });
   const blind = await page5.evaluate(() => ({
-    covers: [...new Set(window.map.querySourceFeatures('meteo').map((f) => f.properties.c_cepe))],
-    levels: [...new Set(window.map.querySourceFeatures('meteo').map((f) => f.properties.l_cepe))],
+    covers: [...new Set(window.map.querySourceFeatures('meteo').map((f) => f.properties.c))],
+    levels: [...new Set(window.map.querySourceFeatures('meteo').map((f) => f.properties.l))],
     status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '',
   }));
   check(

@@ -274,6 +274,10 @@ export function trapezoid(x: number, [a, b, c, d]: readonly [number, number, num
 }
 
 const days = (n: number): string => `${n} jour${n > 1 ? 's' : ''}`;
+/** « Quand revenir » : le passage d'une raison que le bilan met en gras (voir `AWAITED`). */
+const awaited = (wait: number): string => `pousse attendue d’ici ${days(wait)}`;
+/** Repère ce passage dans une raison (même texte que `awaited`). */
+export const AWAITED = /pousse attendue d’ici \d+ jours?/;
 const mm = (x: number): string => `${Math.round(x)} mm`;
 
 function rainFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
@@ -303,7 +307,7 @@ function rainFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
     const head = `Pluie de ${mm(e.amount)} il y a ${days(e.daysAgo)}`;
     const modest = clamp((e.amount - 10) / 25) < 0.5;
     if (e.daysAgo < start) {
-      reasons.push(modest ? `${head} : encore tôt, et pluie modeste : pousse incertaine.` : `${head} : encore tôt, pousse attendue d’ici ${days(start - e.daysAgo)}.`);
+      reasons.push(modest ? `${head} : encore tôt, et pluie modeste : pousse incertaine.` : `${head} : encore tôt, ${awaited(start - e.daysAgo)}.`);
     } else if (e.daysAgo <= end) reasons.push(`${head} : bon délai pour ${m.singular} (${start} à ${end} jours).`);
     else reasons.push(`${head} : délai dépassé, le sol sèche.`);
   }

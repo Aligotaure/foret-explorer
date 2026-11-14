@@ -336,22 +336,29 @@ export const SHARE_CELL = '287:27';
 export const SHARE_BARE = 1; // carré sans aucun arbre
 export const SHARE_THIN = 2; // 3 % de hêtres : sous le seuil
 export const SHARE_OTHER = 5; // 80 % de robiniers : pas un hôte du cèpe
+// (le carré 6 est celui que touche le test du bilan sous le zoom 10 : ne pas le prendre)
+export const SHARE_BUILT = 10; // 60 % de hêtres, mais 40 % de bâti : une ville avec un bois
 
 /**
- * Parts de forêt simulées : partout 60 % de hêtraie (hôte du cèpe), sauf trois carrés de la case
- * `SHARE_CELL`, au centre de la vue des tests (Annecy), qui servent à vérifier que la carte s'éteint
- * là où il n'y a pas d'arbres hôtes.
+ * Parts de forêt simulées : partout 60 % de hêtraie (hôte du cèpe) et rien de bâti, sauf quatre
+ * carrés de la case `SHARE_CELL`, au centre de la vue des tests (Annecy), qui servent à vérifier que
+ * la carte s'éteint là où il n'y a pas d'arbres hôtes, et sur une ville même boisée.
  */
 function forestShare() {
   const codes = ['FF1-09-09', 'FF1-14-14'];
   const cases = {};
+  const bati = {};
   for (let i = 270; i <= 300; i++) {
-    for (let j = 15; j <= 40; j++) cases[`${i}:${j}`] = Array.from({ length: 16 }, () => [0, 60]);
+    for (let j = 15; j <= 40; j++) {
+      cases[`${i}:${j}`] = Array.from({ length: 16 }, () => [0, 60]);
+      bati[`${i}:${j}`] = Array.from({ length: 16 }, () => 0);
+    }
   }
   cases[SHARE_CELL][SHARE_BARE] = [];
   cases[SHARE_CELL][SHARE_THIN] = [0, 3];
   cases[SHARE_CELL][SHARE_OTHER] = [1, 80];
-  return { v: 1, genere: '2026-11-13', source: 'essai', pasLat: 0.04, pasLon: 0.056, codes, cases };
+  bati[SHARE_CELL][SHARE_BUILT] = 40;
+  return { v: 1, genere: '2026-11-14', source: 'essai', pasLat: 0.04, pasLon: 0.056, codes, cases, bati };
 }
 
 /**

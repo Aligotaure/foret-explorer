@@ -10,7 +10,7 @@
  */
 import type { MultiPolygon, Polygon, Position } from 'geojson';
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import { FINE_DIVISIONS, FINE_MAX_CELLS } from './config';
+import { FINE_DIVISIONS, FINE_MAX_CELLS, FINE_MIN_HOST_SHARE, FINE_TOWN_MIN_HOST_SHARE, FINE_TOWN_MIN_NEIGHBOURS } from './config';
 import { LAYERS } from './mapStyle';
 import { scoreMushroom, soilModulation, type Level, type Mushroom } from './mushrooms';
 import { BASE_STEP_LAT, BASE_STEP_LON, cellId, cellOfBase } from './meteoGrid';
@@ -189,8 +189,51 @@ export function sampleCells(map: MapLibreMap, cells: readonly FineCell[]): Map<s
 
 export const hasForest = (samples: readonly Sample[] | undefined): boolean => Boolean(samples?.some((s) => s.code));
 
-/** Un des points du carré est-il sous un arbre hôte du champignon ? */
-export const hasHost = (m: Mushroom, samples: readonly Sample[]): boolean => samples.some((s) => s.code !== null && (m.hosts[s.code] ?? 0) > 0);
+/** Part des points relevés d'un carré qui sont sous un arbre hôte du champignon (0 à 1). */
+export function hostShare(m: Mushroom, samples: readonly Sample[]): number {
+  let hosts = 0;
+  for (const s of samples) if (s.code !== null && (m.hosts[s.code] ?? 0) > 0) hosts++;
+  return samples.length ? hosts / samples.length : 0;
+}
+
+/** Un carré candidat au dessin : sa part d'arbres hôtes, et s'il est en ville (carré de 4,5 km d'abord bâti). */
+export interface FineCandidate {
+  id: string;
+  share: number;
+  town: boolean;
+}
+
+/**
+ * Carrés de 500 m à dessiner parmi ceux qui ont des arbres hôtes. Hors des villes : une part
+ * FINE_MIN_HOST_SHARE de points sous un arbre hôte suffit. En ville, il faut en plus que le carré
+ * soit franchement boisé et tienne à un massif (voir FINE_TOWN_MIN_*) : avant le 14/11/2026, le
+ * moindre parc urbain posait un carré coloré au milieu des rues.
+ * `sampled` : carrés dont on connaît la forêt ; un voisin hors de l'écran, inconnu, compte pour boisé
+ * (sinon un carré du bord de l'écran disparaîtrait et reviendrait au gré des déplacements).
+ */
+export function fineCellsToDraw(candidates: readonly FineCandidate[], sampled: ReadonlySet<string>): Set<string> {
+  const wooded = new Set(candidates.filter((c) => c.share >= FINE_MIN_HOST_SHARE).map((c) => c.id));
+  const kept = new Set<string>();
+  for (const c of candidates) {
+    if (!wooded.has(c.id)) continue;
+    if (!c.town) {
+      kept.add(c.id);
+      continue;
+    }
+    if (c.share < FINE_TOWN_MIN_HOST_SHARE) continue;
+    const [i = 0, j = 0] = c.id.split(':').map(Number);
+    let neighbours = 0;
+    for (let di = -1; di <= 1; di++) {
+      for (let dj = -1; dj <= 1; dj++) {
+        if (!di && !dj) continue;
+        const id = `${i + di}:${j + dj}`;
+        if (wooded.has(id) || !sampled.has(id)) neighbours++;
+      }
+    }
+    if (neighbours >= FINE_TOWN_MIN_NEIGHBOURS) kept.add(c.id);
+  }
+  return kept;
+}
 
 // ── Altitudes (cache permanent dans le navigateur) ───────────────────────────
 
@@ -237,7 +280,8 @@ export interface FineScore {
 
 /**
  * Indice d'un carré pour un champignon : qualité moyenne des arbres hôtes présents et sol
- * moyen sous ces arbres. Null si aucun point du carré n'est sous un arbre hôte.
+ * moyen sous ces arbres. Null si aucun point du carré n'est sous un arbre hôte (le choix des
+ * carrés à dessiner se fait avant : `fineCellsToDraw`).
  */
 export function scoreFineCell(m: Mushroom, w: WeatherSummary, month: number, samples: readonly Sample[]): FineScore | null {
   let hosts = 0;

@@ -12,10 +12,16 @@
 // l'emprise de la tuile (les tuiles débordent de 80 unités sur leurs voisines : sans cette borne, la
 // marge serait comptée deux fois). Les aires s'additionnent d'une tuile à l'autre.
 //
+// Part bâtie (champ `bati` du fichier) : même calcul sur les zones bâties et les zones d'activité du
+// Plan IGN (tuiles vectorielles PLAN.IGN, couche `bati_zone_surf`, mêmes tuiles du zoom 10, ≈ 200 Mo,
+// gardées dans .cache/plan/). La carte s'en sert pour ne pas allumer un carré qui est surtout une
+// ville, même s'il contient un bois.
+//
 // À relancer si la grille change (src/meteoGrid.ts, scripts/meteo/cases-france.json) ou si l'IGN
 // publie une nouvelle BD Forêt. Le fichier produit est versionné (public/foret/parts.json).
 //
 // Usage : node scripts/foret/parts.mjs [--sortie public/foret/parts.json] [--cache .cache/foret]
+//         [--cache-plan .cache/plan]
 //         [--tuiles 10/529/364,10/530/364]   (essai sur quelques tuiles : les autres carrés restent vides)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -31,10 +37,15 @@ const option = (nom, defaut) => {
 };
 const SORTIE = join(RACINE, option('sortie', 'public/foret/parts.json'));
 const CACHE = join(RACINE, option('cache', '.cache/foret'));
+const CACHE_PLAN = join(RACINE, option('cache-plan', '.cache/plan'));
 const SEULEMENT = option('tuiles', '');
 const ZOOM = 10;
 const SERVICE = 'https://data.geopf.fr/tms/1.0.0/LANDCOVER-TMS.FORESTINVENTORY.V2';
 const COUCHE = 'formation_vegetale';
+const SERVICE_PLAN = 'https://data.geopf.fr/tms/1.0.0/PLAN.IGN';
+const COUCHE_BATI = 'bati_zone_surf';
+/** Symboles de la couche comptés comme bâtis : zones d'habitat et zones industrielles ou d'activité. */
+const SYMBOLES_BATIS = new Set(['ZONE_BATI', 'ZONE_INDUS_ACTI']);
 const USER_AGENT = 'foret-explorer (parts de foret par carre)';
 const DE_FRONT = 6;
 const ESSAIS = 4;
@@ -56,7 +67,7 @@ for (const [i, j, , , altitudes] of liste.cases) {
     if (Array.isArray(altitudes) && altitudes[k] === null) continue;
     const bi = i * METEO_FACTOR + Math.floor(k / METEO_FACTOR);
     const bj = j * METEO_FACTOR + (k % METEO_FACTOR);
-    carres.set(`${bi}:${bj}`, { cell: cellId(i, j), k, aires: new Map(), vu: 0, plein: 0 });
+    carres.set(`${bi}:${bj}`, { cell: cellId(i, j), k, aires: new Map(), bati: 0, vu: 0, plein: 0 });
   }
 }
 
@@ -72,17 +83,18 @@ const aLire = SEULEMENT ? SEULEMENT.split(',').map((t) => t.trim()).filter(Boole
 console.log(`${carres.size} carrés de 4,5 km, ${tuiles.size} tuiles du zoom ${ZOOM}${SEULEMENT ? ` (essai : ${aLire.length})` : ''}`);
 
 mkdirSync(CACHE, { recursive: true });
+mkdirSync(CACHE_PLAN, { recursive: true });
 let octets = 0;
 let telechargees = 0;
 let vides = 0;
 
-/** Contenu d'une tuile (cache d'abord) ; null : la tuile n'existe pas (aucune forêt). */
-async function tuile(nom) {
-  const fichier = join(CACHE, `${nom.replaceAll('/', '_')}.pbf`);
+/** Contenu d'une tuile (cache d'abord) ; vide : la tuile n'existe pas (rien à cet endroit). */
+async function tuile(service, cache, nom) {
+  const fichier = join(cache, `${nom.replaceAll('/', '_')}.pbf`);
   if (existsSync(fichier)) return readFileSync(fichier);
   for (let essai = 1; ; essai++) {
     try {
-      const reponse = await fetch(`${SERVICE}/${nom}.pbf`, { headers: { 'user-agent': USER_AGENT }, signal: AbortSignal.timeout(90_000) });
+      const reponse = await fetch(`${service}/${nom}.pbf`, { headers: { 'user-agent': USER_AGENT }, signal: AbortSignal.timeout(90_000) });
       if (reponse.status === 404 || reponse.status === 204) {
         writeFileSync(fichier, Buffer.alloc(0));
         return Buffer.alloc(0);
@@ -99,10 +111,14 @@ async function tuile(nom) {
   }
 }
 
-/** Ajoute aux carrés les aires de forêt d'une tuile. */
-function compter(nom, contenu) {
+/**
+ * Ajoute aux carrés les aires des polygones d'une couche d'une tuile : `ajoute(carré, valeur, aire)`
+ * pour chaque polygone gardé par `garde(valeur)`. `surface` : cette passe compte aussi la surface du
+ * carré vue par les tuiles (une seule passe doit le faire). Rend le nombre de polygones gardés.
+ */
+function compter(nom, contenu, nomCouche, propriete, garde, ajoute, surface) {
   const [z, x, y] = nom.split('/').map(Number);
-  const couche = contenu.length ? lireCouche(contenu, COUCHE, 'code_tfv') : null;
+  const couche = contenu.length ? lireCouche(contenu, nomCouche, propriete) : null;
   const E = couche?.extent ?? 4096;
   const objets = [];
   for (const o of couche?.objets ?? []) {
@@ -117,10 +133,9 @@ function compter(nom, contenu) {
         if (py > ymax) ymax = py;
       }
     }
-    if (!total || !o.valeur) continue;
+    if (!total || !o.valeur || !garde(o.valeur)) continue;
     objets.push({ code: o.valeur, rings: o.rings, sens: total < 0 ? -1 : 1, xmin, ymin, xmax, ymax });
   }
-  if (!objets.length) vides++;
   const b = tileBounds(z, x, y);
   const enTuile = (lon, lat) => {
     const [tx, ty] = tileOf(lon, lat, z);
@@ -134,18 +149,25 @@ function compter(nom, contenu) {
       const [fx1, fy0] = enTuile((bj + 1) * BASE_STEP_LON, (bi + 1) * BASE_STEP_LAT);
       const [x0, y0, x1, y1] = [Math.max(0, fx0), Math.max(0, fy0), Math.min(E, fx1), Math.min(E, fy1)];
       if (x1 <= x0 || y1 <= y0) continue;
-      carre.plein = (fx1 - fx0) * (fy1 - fy0);
-      carre.vu += (x1 - x0) * (y1 - y0);
+      if (surface) {
+        carre.plein = (fx1 - fx0) * (fy1 - fy0);
+        carre.vu += (x1 - x0) * (y1 - y0);
+      }
       for (const o of objets) {
         if (o.xmax < x0 || o.xmin > x1 || o.ymax < y0 || o.ymin > y1) continue;
         let a = 0;
         for (const ring of o.rings) a += aireDans(ring, x0, y0, x1, y1);
         a *= o.sens;
-        if (a > 0) carre.aires.set(o.code, (carre.aires.get(o.code) ?? 0) + a);
+        if (a > 0) ajoute(carre, o.code, a);
       }
     }
   }
+  return objets.length;
 }
+const ajouteForet = (carre, code, a) => carre.aires.set(code, (carre.aires.get(code) ?? 0) + a);
+const ajouteBati = (carre, _symbole, a) => {
+  carre.bati += a;
+};
 
 // Téléchargement à plusieurs de front ; le calcul, lui, est fait tuile par tuile dès qu'elle arrive.
 const debut = Date.now();
@@ -155,9 +177,12 @@ await Promise.all(
   Array.from({ length: DE_FRONT }, async () => {
     while (rang < aLire.length) {
       const nom = aLire[rang++];
-      const contenu = await tuile(nom);
+      const contenu = await tuile(SERVICE, CACHE, nom);
       octets += contenu.length;
-      compter(nom, contenu);
+      if (!compter(nom, contenu, COUCHE, 'code_tfv', () => true, ajouteForet, true)) vides++;
+      const plan = await tuile(SERVICE_PLAN, CACHE_PLAN, nom);
+      octets += plan.length;
+      compter(nom, plan, COUCHE_BATI, 'symbo', (symbole) => SYMBOLES_BATIS.has(symbole), ajouteBati, false);
       if (++faites % 50 === 0 || faites === aLire.length) {
         console.log(`${faites}/${aLire.length} tuiles, ${(octets / 1e6).toFixed(0)} Mo, ${Math.round((Date.now() - debut) / 1000)} s`);
       }
@@ -169,9 +194,11 @@ await Promise.all(
 const codes = [...new Set([...carres.values()].flatMap((c) => [...c.aires.keys()]))].sort();
 const rangDe = new Map(codes.map((code, k) => [code, k]));
 const cases = {};
+const bati = {};
 let incomplets = 0;
 let boises = 0;
 let recouverts = 0;
+let urbains = 0;
 for (const carre of carres.values()) {
   if (!SEULEMENT && (carre.plein === 0 || carre.vu / carre.plein < 0.999)) incomplets++;
   // Aux limites de départements, des polygones de la BD Forêt se recouvrent : la somme peut alors
@@ -185,21 +212,26 @@ for (const carre of carres.values()) {
     .sort((a, b) => b[1] - a[1] || a[0] - b[0]);
   if (parts.length) boises++;
   (cases[carre.cell] ??= Array.from({ length: SUB_COUNT }, () => null))[carre.k] = parts.flat();
+  // Part bâtie, en pour cent entiers (zones d'habitat et d'activité peuvent se recouvrir : 100 au plus).
+  const partBatie = Math.min(100, Math.round((carre.bati / (carre.plein || 1)) * 100));
+  if (partBatie >= 25) urbains++;
+  (bati[carre.cell] ??= Array.from({ length: SUB_COUNT }, () => null))[carre.k] = partBatie;
 }
 if (incomplets) throw new Error(`${incomplets} carrés ne sont pas couverts en entier par les tuiles lues`);
 
 const resultat = {
   v: 1,
   genere: new Date().toISOString().slice(0, 10),
-  source: `IGN, BD Forêt® V2 (tuiles vectorielles ${SERVICE.split('/').pop()}, zoom ${ZOOM})`,
+  source: `IGN, BD Forêt® V2 (tuiles vectorielles ${SERVICE.split('/').pop()}, zoom ${ZOOM}) ; part bâtie : IGN, Plan IGN (tuiles vectorielles ${SERVICE_PLAN.split('/').pop()}, couche ${COUCHE_BATI}, zoom ${ZOOM})`,
   pasLat: BASE_STEP_LAT,
   pasLon: BASE_STEP_LON,
   codes,
   cases,
+  bati,
 };
 mkdirSync(dirname(SORTIE), { recursive: true });
 writeFileSync(SORTIE, `${JSON.stringify(resultat)}\n`);
 console.log(
   `${carres.size} carrés (${boises} avec au moins 1 % de forêt), ${codes.length} types, ${telechargees} tuiles téléchargées, ` +
-    `${vides} sans forêt, ${recouverts} carrés ramenés à 100 %, ${Math.round((Date.now() - debut) / 1000)} s ; écrit : ${SORTIE} (${(readFileSync(SORTIE).length / 1000).toFixed(0)} ko)`,
+    `${vides} sans forêt, ${recouverts} carrés ramenés à 100 %, ${urbains} carrés bâtis à 25 % ou plus, ${Math.round((Date.now() - debut) / 1000)} s ; écrit : ${SORTIE} (${(readFileSync(SORTIE).length / 1000).toFixed(0)} ko)`,
 );

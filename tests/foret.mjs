@@ -1,4 +1,4 @@
-// Parts de forêt par carré de 4,5 km : géométrie du calcul, lecteur de tuiles, et fichier versionné
+// Parts de forêt et part bâtie par carré de 4,5 km : géométrie du calcul, lecteur de tuiles, et fichier versionné
 // (public/foret/parts.json, écrit par scripts/foret/parts.mjs). Sans réseau, sans TypeScript :
 //   npm run test:foret
 import { readFileSync } from 'node:fs';
@@ -127,6 +127,42 @@ check(
   'fichier : repères connus (Paris et la Beauce presque sans forêt, Fontainebleau et les Landes très boisées)',
   reperes.Paris <= 2 && reperes.Beauce <= 5 && reperes.Fontainebleau >= 70 && reperes.Landes >= 60,
   JSON.stringify(reperes),
+);
+
+// ── Part bâtie (zones bâties et d'activité du Plan IGN) ──────────────────────────
+const defautsBati = [];
+let batis = 0;
+for (const [id, lignes] of Object.entries(parts.cases)) {
+  const bati = parts.bati?.[id];
+  if (!Array.isArray(bati) || bati.length !== 16) {
+    defautsBati.push(`${id} : part bâtie absente ou incomplète`);
+    continue;
+  }
+  lignes.forEach((ligne, k) => {
+    const part = bati[k];
+    if (ligne === null) {
+      if (part !== null) defautsBati.push(`${id}/${k} : carré sans terre mais part bâtie renseignée`);
+    } else if (!Number.isInteger(part) || part < 0 || part > 100) defautsBati.push(`${id}/${k} : part bâtie ${part}`);
+    else if (part >= 15) batis++;
+  });
+}
+check(
+  'fichier : une part bâtie entière (0 à 100 %) par carré de terre française, aucune case en trop',
+  defautsBati.length === 0 && Object.keys(parts.bati ?? {}).length === liste.cases.length,
+  defautsBati.slice(0, 4).join(' ; ') || `${batis} carrés bâtis à 15 % ou plus sur ${carres}`,
+);
+/** Part bâtie du carré qui contient un point, en %. */
+function batiEn(latitude, longitude) {
+  const bi = Math.floor(latitude / parts.pasLat);
+  const bj = Math.floor(longitude / parts.pasLon);
+  const [ci, cj] = [Math.floor(bi / 4), Math.floor(bj / 4)];
+  return parts.bati?.[`${ci}:${cj}`]?.[(bi - ci * 4) * 4 + (bj - cj * 4)] ?? null;
+}
+const villes = { Paris: batiEn(48.86, 2.37), Lyon: batiEn(45.76, 4.84), Nancy: batiEn(48.69, 6.18), Fontainebleau: batiEn(48.42, 2.65), Landes: batiEn(44.15, -0.74), Beauce: batiEn(48.2, 1.88) };
+check(
+  'fichier : repères bâtis (Paris, Lyon et Nancy surtout bâtis ; forêt de Fontainebleau, Landes et Beauce presque pas)',
+  villes.Paris >= 80 && villes.Lyon >= 60 && villes.Nancy >= 60 && villes.Fontainebleau <= 10 && villes.Landes <= 10 && villes.Beauce <= 10,
+  JSON.stringify(villes),
 );
 
 const failed = results.filter((ok) => !ok).length;

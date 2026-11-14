@@ -73,10 +73,31 @@ export const METEO_BASE = import.meta.env.DEV
  * site, en développement aussi). Un carré d'indice n'est coloré que si les arbres hôtes du champignon
  * y couvrent au moins HOST_MIN_COVER de la surface, et d'autant plus qu'ils en couvrent (teinte
  * pleine à HOST_FULL_COVER) : centres-villes, mer et plaines sans arbres restent éteints.
+ *
+ * Seuil relevé de 5 à 10 % le 14/11/2026 : à 5 %, 85 % des carrés de France s'allumaient pour les
+ * cèpes, donc presque toutes les villes et tous les villages (72 % à 10 %).
  */
 export const FOREST_SHARE_URL = new URL('foret/parts.json', document.baseURI).href;
-export const HOST_MIN_COVER = 0.05;
+export const HOST_MIN_COVER = 0.1;
 export const HOST_FULL_COVER = 0.5;
+/**
+ * Part bâtie d'un carré de 4,5 km (zones bâties et zones d'activité du Plan IGN, même fichier) à
+ * partir de laquelle il reste éteint : c'est d'abord une ville, même s'il contient un bois. Les
+ * carrés de 500 m, eux, montrent ce bois quand on zoome.
+ */
+export const BUILT_MAX_COVER = 0.15;
+/**
+ * Carrés de 500 m : part des points relevés (9 par carré) qui doivent être sous un arbre hôte pour
+ * que le carré soit dessiné. Trois points sur neuf : un bosquet ou un parc en ville n'en pose plus.
+ */
+export const FINE_MIN_HOST_SHARE = 0.3;
+/**
+ * En ville (carré de 4,5 km bâti à BUILT_MAX_COVER ou plus), un carré de 500 m n'est dessiné que
+ * s'il est franchement boisé en hôtes (cinq points sur neuf) et tient à un massif (au moins deux
+ * carrés voisins, sur huit, ont eux aussi des arbres hôtes) : un parc ou un square isolé n'en pose plus.
+ */
+export const FINE_TOWN_MIN_HOST_SHARE = 0.5;
+export const FINE_TOWN_MIN_NEIGHBOURS = 2;
 
 /** Météo de secours : Open-Meteo en direct (gratuit, sans clé, usage non commercial). */
 export const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';

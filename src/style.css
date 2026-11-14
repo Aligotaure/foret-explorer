@@ -1340,6 +1340,12 @@ summary.verdict__head::before {
   line-height: 1.4;
 }
 
+/* « pousse attendue d'ici N jours » : quand revenir. */
+.verdict__reasons strong {
+  color: var(--navy-900);
+  font-weight: 700;
+}
+
 .spot__actions {
   display: flex;
   flex-wrap: wrap;
