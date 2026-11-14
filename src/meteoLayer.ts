@@ -12,8 +12,11 @@ import {
   WEATHER_SUB_MIN_ZOOM,
 } from './config';
 import {
+  FINE_STEP_LAT,
+  FINE_STEP_LON,
   altitudeCache,
   fineCellsForBounds,
+  FINE_POINTS,
   hasForest,
   fineCellsToDraw,
   hostShare,
@@ -641,6 +644,29 @@ export class MeteoLayer {
         return [{ id: c.id, share, town: built >= BUILT_MAX_COVER }];
       }),
     );
+  }
+
+  /**
+   * Pour le bilan d'un coin en ville : le carré de 500 m qui contient ce point passe-t-il la règle de
+   * ville pour ce champignon (assez boisé, tenu à un massif), d'après le relevé que la carte vient de
+   * faire ? null : inconnu (pas de relevé fin de cette vue, ou l'un des neuf carrés autour du point
+   * n'est pas relevé en entier, au bord de l'écran) ; le bilan estime alors.
+   */
+  townSquareKept(lat: number, lon: number, m: Mushroom): boolean | null {
+    const samples = this.fineData?.samples;
+    if (!samples) return null;
+    const i = Math.floor(lat / FINE_STEP_LAT);
+    const j = Math.floor(lon / FINE_STEP_LON);
+    const around = [];
+    for (let di = -1; di <= 1; di++) {
+      for (let dj = -1; dj <= 1; dj++) {
+        const id = `${i + di}:${j + dj}`;
+        const sample = samples.get(id);
+        if (!sample || sample.length < FINE_POINTS) return null;
+        around.push({ id, share: hostShare(m, sample), town: true });
+      }
+    }
+    return fineCellsToDraw(around).has(`${i}:${j}`);
   }
 
   /** Carrés de 500 m : relevé des forêts et des sols, altitudes IGN, indice de chaque carré. */

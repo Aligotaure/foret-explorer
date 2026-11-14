@@ -367,13 +367,22 @@ function forestShare() {
  * (dans les deux cas, la carte se rabat sur Open-Meteo) ; `'provisoire'` : le passage du jour n'a
  * pas encore eu lieu, hier n'est connu que par l'estimation de la veille.
  */
-export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0, foret = true } = {}) {
+export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0, foret = true, mois = 10 } = {}) {
   log.meteo ??= [];
   log.foret ??= [];
+  // Mois figé (octobre par défaut) dans toutes les pages des tests : la saison des champignons en
+  // dépend (en février les cèpes sont hors saison : plus de grille, plus de carrés), et sans cela
+  // les vérifications passeraient ou casseraient selon le jour où elles tournent. Seule la saison
+  // lit le mois (`currentMonth`) ; les dates des fichiers météo simulés restent celles du jour.
+  await page.addInitScript((m) => {
+    Date.prototype.getMonth = () => m - 1;
+  }, mois);
   // Parts de forêt par carré de 4,5 km (public/foret/parts.json) : le vrai fichier pèse 900 ko et
-  // changerait les tests à chaque recalcul. `foret: false` : fichier absent.
+  // changerait les tests à chaque recalcul. `foret: false` : fichier absent ; `'suspendu'` : il ne
+  // répond jamais (réseau qui pend).
   await page.route('**/foret/parts.json', (route) => {
     log.foret.push(new URL(route.request().url()).pathname);
+    if (foret === 'suspendu') return undefined;
     if (!foret) return route.fulfill({ status: 404, body: '' });
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(forestShare()) });
   });

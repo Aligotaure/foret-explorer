@@ -190,7 +190,8 @@ export function sampleCells(map: MapLibreMap, cells: readonly FineCell[]): Map<s
 export const hasForest = (samples: readonly Sample[] | undefined): boolean => Boolean(samples?.some((s) => s.code));
 
 /** Points relevés dans un carré entièrement visible (3 × 3). */
-const POINTS = OFFSETS.length ** 2;
+export const FINE_POINTS = OFFSETS.length ** 2;
+const POINTS = FINE_POINTS;
 
 /**
  * Part des neuf points d'un carré qui sont sous un arbre hôte du champignon (0 à 1). Un carré à

@@ -115,7 +115,7 @@ onViewChange((view) => {
 const app = byId('app');
 const meteo = new MeteoLayer(map, store);
 const legend = new LegendPanel(byId('legend'), store, meteo);
-const spot = new SpotPanel(byId('spot'), map, store);
+const spot = new SpotPanel(byId('spot'), map, store, meteo);
 initLegendToggle(store);
 initToolbar(map, store);
 initSearch(byId<HTMLFormElement>('search'), map);

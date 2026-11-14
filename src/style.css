@@ -1328,6 +1328,24 @@ summary.verdict__head::before {
   font-size: 12px;
 }
 
+/* Hors saison de plus d'un mois : nom grisé, pas de pourcentage (rien n'est calculé). */
+.verdict--dormant {
+  background: #ededf5;
+}
+
+.verdict--dormant .verdict__name strong {
+  color: #6c6c88;
+  font-weight: 600;
+}
+
+.verdict--dormant .verdict__why {
+  color: #6c6c88;
+}
+
+.spot__urban {
+  margin-top: 8px;
+}
+
 .level-pill {
   padding: 2px 9px;
   border-radius: 999px;
