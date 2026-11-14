@@ -10,6 +10,7 @@ import { BDFORET, FRANCE_BOUNDS, MAP_MAX_ZOOM, MAP_MIN_ZOOM } from './config';
 import { countClasses } from './counts';
 import { byId, debounce, h, toast } from './dom';
 import { registerSoilPatterns } from './geology';
+import { initGridLoader } from './gridLoader';
 import { LegendPanel } from './legend';
 import {
   LAYERS,
@@ -117,7 +118,7 @@ const meteo = new MeteoLayer(map, store);
 const legend = new LegendPanel(byId('legend'), store, meteo);
 const spot = new SpotPanel(byId('spot'), map, store, meteo);
 initLegendToggle(store);
-initToolbar(map, store);
+initGridLoader(byId('grid-loader'), map, meteo, initToolbar(map, store));
 initSearch(byId<HTMLFormElement>('search'), map);
 store.subscribe((state, prev) => {
   app.classList.toggle('legend-open', state.legendOpen);

@@ -33,8 +33,11 @@ export function initLegendToggle(store: Store): void {
   sync(store.state);
 }
 
-/** Barres d'outils de droite : fond de carte, géolocalisation, plein écran, zoom. */
-export function initToolbar(map: MapLibreMap, store: Store): void {
+/**
+ * Barres d'outils de droite : fond de carte, géolocalisation, plein écran, zoom. Rend les deux boutons
+ * de zoom, que `gridLoader.ts` met en pause pendant le calcul des carrés.
+ */
+export function initToolbar(map: MapLibreMap, store: Store): HTMLButtonElement[] {
   const basemap = toolButton('map', 'Fond de carte');
   basemap.addEventListener('click', () =>
     store.update({ basemap: store.state.basemap === 'plan' ? 'ortho' : 'plan' }),
@@ -84,10 +87,16 @@ export function initToolbar(map: MapLibreMap, store: Store): void {
     });
     bottom.append(fullscreen);
   }
+  // En pause (`aria-disabled`, pas `disabled` : le bouton garde le clavier), un clic ne fait rien.
+  const paused = (button: HTMLButtonElement): boolean => button.getAttribute('aria-disabled') === 'true';
   const zoomIn = toolButton('plus', 'Zoomer');
-  zoomIn.addEventListener('click', () => map.zoomIn());
+  zoomIn.addEventListener('click', () => {
+    if (!paused(zoomIn)) map.zoomIn();
+  });
   const zoomOut = toolButton('minus', 'Dézoomer');
-  zoomOut.addEventListener('click', () => map.zoomOut());
+  zoomOut.addEventListener('click', () => {
+    if (!paused(zoomOut)) map.zoomOut();
+  });
   bottom.append(h('div', { class: 'toolbar__group' }, zoomIn, zoomOut));
 
   const sync = (state: AppState): void => {
@@ -97,4 +106,5 @@ export function initToolbar(map: MapLibreMap, store: Store): void {
   };
   store.subscribe(sync);
   sync(store.state);
+  return [zoomIn, zoomOut];
 }

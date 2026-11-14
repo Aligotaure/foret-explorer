@@ -151,6 +151,19 @@ export const FINE_DIVISIONS = 9;
 export const FINE_MAX_CELLS = 1600;
 
 /**
+ * Calcul des carrés en cours (mode indice) : à partir de ce zoom (la règle de la carte affiche alors
+ * 2 km ou moins), un petit champignon se remplit et le zoom est mis en pause tant que les carrés de la
+ * nouvelle vue ne sont pas dessinés (demande de Clément du 14/11/2026). C'est là qu'on attend le plus :
+ * tuiles détaillées des forêts, puis relevé des carrés de 500 m. Relevé le 14/11/2026 : en revenant du
+ * zoom 13 au zoom 11,6, les carrés de 500 m disparaissent tout de suite et ceux de 4,5 km de la
+ * nouvelle vue n'arrivent que 0,8 s plus tard (sans carte graphique, plusieurs secondes) ; et chaque
+ * cran de zoom donné pendant ce temps relance tout le travail.
+ * La pause ne dure jamais plus de GRID_BUSY_MAX_MS : un réseau lent ne doit pas coincer le visiteur.
+ */
+export const GRID_BUSY_MIN_ZOOM = 11;
+export const GRID_BUSY_MAX_MS = 8000;
+
+/**
  * Altitude IGN : points par requête et délai entre deux requêtes. La Géoplateforme limite le calcul
  * altimétrique à 5 requêtes par seconde et par adresse IP (erreur 429 au-delà).
  */

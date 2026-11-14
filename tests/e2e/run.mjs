@@ -327,6 +327,16 @@ async function disclaimerTests(browser, base) {
   await context.close();
 }
 
+/** Zoom en pause pendant le calcul des carrés ? (champignon affiché, gestes et boutons de zoom coupés) */
+const zoomPause = (page) =>
+  page.evaluate(() => ({
+    // (Plein, il est en train de disparaître : le calcul est fini.)
+    loader: !document.getElementById('grid-loader').hidden && !document.getElementById('grid-loader').classList.contains('is-full'),
+    gestures: [window.map.scrollZoom, window.map.doubleClickZoom, window.map.touchZoomRotate, window.map.boxZoom].map((g) => (g.isEnabled() ? 'libre' : 'pause')).join(),
+    buttons: [...document.querySelectorAll('#toolbar-bottom .toolbar__group button')].map((b) => b.getAttribute('aria-disabled') ?? 'libre').join(),
+    drag: window.map.dragPan.isEnabled(),
+  }));
+
 async function desktopTests(browser, base) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await preAccept(context);
@@ -794,6 +804,12 @@ async function desktopTests(browser, base) {
   // 4,5 km ; pastilles à 70 % et plus seulement, jamais sur un carré sans arbre hôte.
   const viewBefore = await viewOf(page);
   await page.evaluate(() => window.map.jumpTo({ center: [6.16, 45.98], zoom: 9 }));
+  const freeLow = await zoomPause(page);
+  check(
+    'vue d’ensemble (zoom 9) : pas de champignon de chargement, le zoom reste libre juste après un déplacement',
+    !freeLow.loader && freeLow.gestures === 'libre,libre,libre,libre' && freeLow.buttons === 'libre,libre',
+    JSON.stringify(freeLow),
+  );
   await page.waitForFunction(() => window.map.getZoom() < 10 && window.map.querySourceFeatures('meteo-points').length > 0, null, { timeout: 15000 }).catch(() => {});
   await idle(page);
   const spots = await page.evaluate(
@@ -1184,6 +1200,27 @@ async function desktopTests(browser, base) {
   // Grille fine : carrés de 500 m à partir du zoom 13 (mode indice)
   const before = log.altitude.length;
   await page.evaluate(() => window.map.jumpTo({ zoom: 13.6 }));
+  // Calcul des carrés en cours : le champignon s'affiche et le zoom est en pause (gestes, boutons,
+  // touches + et −), sans bloquer le déplacement. Un clic sur « + » et la touche « + » ne font rien.
+  const paused = await zoomPause(page);
+  const ignored = await page.evaluate(async () => {
+    const [plus] = document.querySelectorAll('#toolbar-bottom .toolbar__group button');
+    const before = window.map.getZoom();
+    plus.click();
+    window.map.getCanvas().dispatchEvent(new KeyboardEvent('keydown', { key: '+', keyCode: 187, bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    return { before, after: window.map.getZoom(), focusable: !plus.disabled, fill: Boolean(document.querySelector('#grid-loader .grid-loader__fill svg')), text: document.querySelector('#grid-loader .grid-loader__text')?.textContent ?? '', hiddenFromReaders: document.getElementById('grid-loader').getAttribute('aria-hidden') };
+  });
+  check(
+    'calcul des carrés (zoom 13,6) : champignon de chargement affiché, zoom en pause (molette, double clic, pincement, cadre, boutons), déplacement libre',
+    paused.loader && paused.gestures === 'pause,pause,pause,pause' && paused.buttons === 'true,true' && paused.drag && ignored.fill && ignored.text === 'Calcul des carrés…' && ignored.hiddenFromReaders === 'true',
+    JSON.stringify(paused),
+  );
+  check(
+    'zoom en pause : ni le bouton « + » ni la touche « + » ne zooment, et le bouton garde le clavier (aria-disabled, pas disabled)',
+    ignored.after === ignored.before && ignored.focusable,
+    `zoom ${ignored.before} → ${ignored.after}`,
+  );
   await page.waitForFunction(() => window.map.querySourceFeatures('meteo-fin').length > 0, null, { timeout: 20000 });
   await page.waitForFunction(
     () => [...document.querySelectorAll('#legend .legend-hint')].some((p) => /carrés? de 500 m avec arbres hôtes/.test(p.textContent)),
@@ -1210,6 +1247,18 @@ async function desktopTests(browser, base) {
       })(),
     };
   });
+  const released = await page
+    .waitForFunction(() => document.getElementById('grid-loader').hidden && window.map.scrollZoom.isEnabled(), null, { timeout: 9000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  const free = await zoomPause(page);
+  check(
+    'carrés dessinés : le champignon disparaît et le zoom reprend (gestes et boutons)',
+    released && !free.loader && free.gestures === 'libre,libre,libre,libre' && free.buttons === 'libre,libre',
+    JSON.stringify(free),
+  );
   const batches = log.altitude.slice(before);
   // Un point par carré demandé (séparés par « | », écrit %7C dans l'adresse).
   const asked = batches.reduce((n, q) => n + (/[?&]lon=([^&]*)/.exec(q)?.[1].split('%7C').length ?? 0), 0);
@@ -1282,6 +1331,12 @@ async function desktopTests(browser, base) {
     text: JSON.stringify(window.map.getLayoutProperty('meteo-etiquettes', 'text-field')),
   }));
   check('mode pluie : couleurs et étiquettes en mm', rain.fill.startsWith('["step",["get","rain20"]') && rain.text.includes('rain20'), rain.text);
+  await page.evaluate(() => {
+    const c = window.map.getCenter();
+    window.map.jumpTo({ center: [c.lng + 0.002, c.lat] });
+  });
+  const rainFree = await zoomPause(page);
+  check('mode pluie (zoom 11,5) : pas de calcul de carrés, donc ni champignon ni pause du zoom', !rainFree.loader && rainFree.gestures === 'libre,libre,libre,libre', JSON.stringify(rainFree));
   const rainLines = await page.evaluate(() => window.map.getLayer('meteo-contours').minzoom);
   check('mode pluie : le quadrillage des cases revient à tous les zooms', rainLines === 4, `à partir du zoom ${rainLines}`);
   const wholeCells = await page
@@ -1412,6 +1467,13 @@ async function desktopTests(browser, base) {
     return now;
   });
   check('retour à un champignon de saison : la grille est redessinée dans l’instant, sans attendre le réseau', back > 0, `${back} carré(s) envoyé(s) tout de suite`);
+  // (Après ce test seulement : déplacer la carte pendant qu'un champignon hors saison est montré fait oublier le relevé gardé.)
+  await page.evaluate(() => {
+    const c = window.map.getCenter();
+    window.map.jumpTo({ center: [c.lng + 0.002, c.lat] });
+  });
+  const asleepFree = await zoomPause(page);
+  check('champignon hors saison choisi : rien à calculer, donc ni champignon de chargement ni pause du zoom', !asleepFree.loader && asleepFree.gestures === 'libre,libre,libre,libre', JSON.stringify(asleepFree));
   await page.getByRole('button', { name: 'Morilles', exact: true }).click();
   await page.getByRole('switch', { name: 'Afficher la grille météo' }).uncheck();
 
@@ -1729,6 +1791,28 @@ async function fallbackTests(browser, base) {
   const early = await page4.evaluate(() => document.querySelector('#spot .spot__facts')?.textContent ?? '');
   await page4.waitForFunction(() => /930 m/.test(document.querySelector('#spot .spot__facts')?.textContent ?? ''), null, { timeout: 12000 });
   check('altitude lente : météo affichée sans attendre, puis altitude exacte', /≈ \d+ m \(d’après la grille météo\) · altitude exacte en cours/.test(early), early.slice(-80));
+  // La pause du zoom s'arrête dès que les carrés de 500 m sont dessinés (à l'altitude du carré de
+  // 4,5 km) : elle n'attend pas leurs altitudes exactes, ici retardées de 7 s.
+  await page4.locator('#spot .panel__close').click();
+  await page4.evaluate(() => {
+    localStorage.removeItem('foret-explorer:altitudes'); // celles que les pages précédentes ont gardées
+    window.store.update({ mushroom: 'cepe', weatherMode: 'indice' });
+    window.__t0 = performance.now();
+    window.map.jumpTo({ zoom: 13.6 });
+  });
+  const lockedSlow = await zoomPause(page4);
+  await page4.waitForFunction(() => document.getElementById('grid-loader').hidden && window.map.scrollZoom.isEnabled() && window.map.querySourceFeatures('meteo-fin').length > 0, null, { timeout: 6500 }).catch(() => {});
+  const slow = await page4.evaluate(() => ({
+    after: Math.round(performance.now() - window.__t0),
+    free: document.getElementById('grid-loader').hidden && window.map.scrollZoom.isEnabled(),
+    squares: window.map.querySourceFeatures('meteo-fin').length,
+    status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /500 m/.test(t)) ?? '',
+  }));
+  check(
+    'altitudes lentes : la pause du zoom se lève dès que les carrés de 500 m sont dessinés, sans attendre leurs altitudes',
+    lockedSlow.loader && slow.free && slow.squares > 0 && slow.after < 6500 && /relevé des forêts et des altitudes/.test(slow.status),
+    `libre après ${slow.after} ms, ${slow.squares} carré(s) ; ${slow.status.slice(-60)}`,
+  );
   await context.close();
 }
 

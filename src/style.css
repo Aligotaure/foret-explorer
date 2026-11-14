@@ -678,6 +678,103 @@ li.is-off .swatch {
   transform: translateX(-50%);
 }
 
+/* ── Calcul des carrés en cours : champignon qui se remplit (gridLoader.ts) ──
+   À la place du bandeau « Zoomez… » : l'un ne s'affiche que sous le zoom 10, l'autre à partir du
+   zoom 11. Il ne prend aucun geste à la carte. */
+.grid-loader {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px 5px 9px;
+  border-radius: 999px;
+  background: var(--navy-800);
+  box-shadow: var(--shadow);
+  color: var(--lavender-soft);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  /* Un calcul de moins d'un quart de seconde ne fait rien clignoter. */
+  animation: grid-loader-in 0.15s 0.25s both;
+}
+
+.grid-loader__icon {
+  position: relative;
+  display: block;
+  width: 26px;
+  height: 26px;
+  color: #8f8fb8;
+}
+
+.grid-loader__icon .icon,
+.grid-loader__icon svg {
+  display: block;
+  width: 26px;
+  height: 26px;
+}
+
+/* Le même champignon, plein, dans un cache ancré en bas dont la hauteur monte. */
+.grid-loader__fill {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 10%;
+  overflow: hidden;
+  color: #e9a04a;
+  animation: grid-loader-fill 4s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.grid-loader__fill .icon {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+}
+
+.grid-loader__fill svg path {
+  fill: currentColor;
+}
+
+.grid-loader.is-full .grid-loader__fill {
+  height: 100%;
+  animation: none;
+}
+
+@keyframes grid-loader-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* Il monte vite puis ralentit, sans jamais se dire plein avant que les carrés soient là. */
+@keyframes grid-loader-fill {
+  from {
+    height: 10%;
+  }
+
+  to {
+    height: 88%;
+  }
+}
+
+/* Zoom en pause pendant le calcul : les boutons le montrent, sans perdre le clavier. */
+.btn-square[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: progress;
+}
+
+.btn-square[aria-disabled='true']:hover {
+  background: var(--navy-800);
+}
+
 .zoom-hint__btn {
   padding: 6px 12px;
   border: 0;
@@ -788,6 +885,10 @@ li.is-off .swatch {
   #app.legend-open .zoom-hint {
     left: max(50%, calc(var(--panel-width) + 2 * var(--gap) + 200px));
   }
+
+  #app.legend-open .grid-loader {
+    left: max(50%, calc(var(--panel-width) + 2 * var(--gap) + 110px));
+  }
 }
 
 /* ── Mobile : recherche pleine largeur sous l'îlot, légende en tiroir bas ── */
@@ -835,6 +936,10 @@ li.is-off .swatch {
   }
 
   /* Sous la recherche, et arrêté avant la colonne de boutons (qui cachait « Zoomer ici »). */
+  .grid-loader {
+    top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
+  }
+
   .zoom-hint {
     top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
     right: calc(var(--btn) + 2 * var(--gap));
@@ -1120,7 +1225,8 @@ li.is-off .swatch {
     max-height: calc(100% - var(--btn) - 3 * var(--gap) - 40px - var(--safe-top));
   }
 
-  .zoom-hint {
+  .zoom-hint,
+  .grid-loader {
     top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
   }
 }
@@ -2352,6 +2458,18 @@ html[data-view='analytics'] .island__link[data-view='analytics'] {
 /* Anneau de focus dans la bande noire de la pilule : visible aussi par-dessus une carte claire. */
 .island__link:focus-visible {
   outline-offset: -2px;
+}
+
+/* Animations réduites : le champignon s'affiche à demi plein, sans monter. */
+@media (prefers-reduced-motion: reduce) {
+  .grid-loader {
+    animation: none;
+  }
+
+  .grid-loader__fill {
+    height: 55%;
+    animation: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

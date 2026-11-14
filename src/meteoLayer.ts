@@ -4,6 +4,8 @@ import {
   BUILT_MAX_COVER,
   FINE_MIN_ZOOM,
   FRANCE_BOUNDS,
+  GRID_BUSY_MAX_MS,
+  GRID_BUSY_MIN_ZOOM,
   HOST_FULL_COVER,
   HOST_MIN_COVER,
   WEATHER_MAX_CELLS,
@@ -258,9 +260,16 @@ export class MeteoLayer {
   private timer: number | undefined;
   private data: GridData | null = null;
   private fineData: FineData | null = null;
+  /** Les carrés de la vue sont en cours de calcul (voir `begin`). */
+  private busy = false;
+  private readonly busyListeners = new Set<(busy: boolean) => void>();
+  /** Numéro du dernier travail lancé : seul lui peut annoncer que le calcul est fini. */
+  private work = 0;
+  private busyCap: number | undefined;
 
   /** La carte a bougé : la grille est refaite une fois la carte posée. */
   readonly refresh = (): void => {
+    this.begin();
     window.clearTimeout(this.timer);
     this.timer = window.setTimeout(() => void this.update(), REFRESH_DELAY_MS);
   };
@@ -278,6 +287,47 @@ export class MeteoLayer {
   onStatus(listener: (s: MeteoStatus) => void): void {
     this.listeners.add(listener);
     listener(this.status);
+  }
+
+  /** Prévenu quand le calcul des carrés de la vue commence (vrai) et quand ils sont dessinés (faux). */
+  onBusy(listener: (busy: boolean) => void): void {
+    this.busyListeners.add(listener);
+    listener(this.busy);
+  }
+
+  private setBusy(busy: boolean): void {
+    if (!busy) window.clearTimeout(this.busyCap);
+    if (busy === this.busy) return;
+    this.busy = busy;
+    for (const l of this.busyListeners) l(busy);
+  }
+
+  /**
+   * La vue, le mode ou le champignon vient de changer : aux zooms où cela se voit et s'attend
+   * (GRID_BUSY_MIN_ZOOM, mode indice, champignon de saison), le calcul des carrés est annoncé « en
+   * cours » jusqu'à ce que la carte les ait dessinés (`settle`), GRID_BUSY_MAX_MS au plus. Tout
+   * travail lancé avant perd le droit d'annoncer la fin : c'est le suivant qui la dira.
+   */
+  private begin(): void {
+    this.work++;
+    if (this.store.state.weatherMode !== 'indice' || this.offSeason() || this.map.getZoom() < GRID_BUSY_MIN_ZOOM) return this.setBusy(false);
+    window.clearTimeout(this.busyCap);
+    this.busyCap = window.setTimeout(() => this.setBusy(false), GRID_BUSY_MAX_MS);
+    this.setBusy(true);
+  }
+
+  /**
+   * Le travail `token` a envoyé ses carrés à la carte (ou n'a rien à envoyer) : le calcul est fini
+   * quand elle les a dessinés, c'est-à-dire à son prochain repos. Sans effet si un travail plus
+   * récent a pris la suite.
+   */
+  private settle(token: number): void {
+    if (token !== this.work || !this.busy) return;
+    const done = (): void => {
+      if (token === this.work) this.setBusy(false);
+    };
+    if (this.map.loaded() && this.map.areTilesLoaded() && !this.map.isMoving()) window.setTimeout(done, 0);
+    else this.map.once('idle', done);
   }
 
   private setStatus(status: MeteoStatus): void {
@@ -307,6 +357,8 @@ export class MeteoLayer {
     setMeteoVisible(this.map, on);
     setFineVisible(this.map, state.weatherMode === 'indice');
     if (!on) {
+      this.work++;
+      this.setBusy(false);
       window.clearTimeout(this.timer);
       this.controller?.abort();
         this.setSource(SOURCES.meteoTop, []);
@@ -327,6 +379,7 @@ export class MeteoLayer {
     // Tout de suite, avec ce qu'on a déjà : le mode ou le champignon vient de changer, la carte ne
     // bouge pas. Puis une mise à jour, sans attendre (elle ne renvoie rien si rien n'a changé).
     this.redraw();
+    this.begin();
     window.clearTimeout(this.timer);
     void this.update();
   }
@@ -483,7 +536,18 @@ export class MeteoLayer {
     this.setStatus(status);
   }
 
+  /** Refait la grille de la vue, et dit quand ses carrés sont à l'écran (voir `begin`). */
   private async update(): Promise<void> {
+    const token = ++this.work;
+    try {
+      // Les carrés de 500 m sont à l'écran dès leur premier dessin : inutile d'attendre leurs altitudes.
+      await this.load(() => this.settle(token));
+    } finally {
+      this.settle(token);
+    }
+  }
+
+  private async load(drawn: () => void): Promise<void> {
     const state = this.store.state;
     if (state.weatherMode === 'off') return;
     this.controller?.abort();
@@ -513,7 +577,7 @@ export class MeteoLayer {
       this.data = { cells, series: weather.series, shared: weather.shared, hosts, view };
       const index = this.store.state.weatherMode === 'indice';
       this.drawGrid(index ? { state: 'loading' } : { state: 'off' });
-      if (index) await this.updateFine(weather.series, controller.signal);
+      if (index) await this.updateFine(weather.series, controller.signal, drawn);
       else this.dropFine();
     } catch (error) {
       if (controller.signal.aborted || isAbort(error)) return;
@@ -702,7 +766,7 @@ export class MeteoLayer {
   }
 
   /** Carrés de 500 m : relevé des forêts et des sols, altitudes IGN, indice de chaque carré. */
-  private async updateFine(series: ReadonlyMap<string, DailySeries>, signal: AbortSignal): Promise<void> {
+  private async updateFine(series: ReadonlyMap<string, DailySeries>, signal: AbortSignal, drawn: () => void): Promise<void> {
     if (this.map.getZoom() < FINE_MIN_ZOOM) {
       this.dropFine();
       this.setFine({ state: 'zoom' });
@@ -733,6 +797,7 @@ export class MeteoLayer {
     track('ign.altitude.cacheHits', wanted.length - missing.length);
 
     let count = this.renderFine(fine);
+    drawn();
     if (missing.length) {
       try {
         // Les altitudes arrivent par lots : redessiner à chacun ferait refaire toutes les tuiles des
