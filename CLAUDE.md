@@ -111,7 +111,7 @@ nouvelle dépendance sans raison.
 | `meteoGrid.ts` | Grille météo commune (cases de 0,16° × 0,224°, blocs de 8 × 8, 16 carrés de 4,5 km par case : `subBox`, `subIndexAt`), format des fichiers, dates ; lu aussi par Node (scripts) : aucun import |
 | `weather.ts` | Fichiers météo communs (index, blocs), résumé de 30 jours daté (épisodes de pluie, gel, `rain20` pour l'humidité, jour estimé), `atAltitude`, `summaryAtAltitude`, Open-Meteo en secours (cache du jour), altitude IGN |
 | `meteoLayer.ts` | Grille météo sur la vue, à tous les zooms (toute la France d'un coup en vue d'ensemble) : pluie cumulée ou indice du champignon choisi : cases de 18 km et pastilles sous le zoom 10, carrés de 4,5 km à partir du zoom 10, allumés à la mesure de leurs arbres hôtes, hors des villes ; carrés fins en mode indice ; rien pour un champignon hors saison. Règles de fluidité en tête de classe |
-| `fineGrid.ts` | Carrés de 500 m : découpage, relevé forêt/sol (index spatial sur `queryRenderedFeatures`), altitudes en cache permanent, choix des carrés à dessiner (`fineCellsToDraw` : plus sévère en ville), indice par carré |
+| `fineGrid.ts` | Carrés de 500 m : découpage, relevé forêt/sol (index spatial sur `queryRenderedFeatures`), gardé d'une visite à l'autre (`foret-explorer:releves`), altitudes en cache permanent, choix des carrés à dessiner (`fineCellsToDraw` : plus sévère en ville), indice par carré |
 | `metrics.ts` | Compteurs de consommation des API (en mémoire) et envoi groupé au serveur de mesure |
 | `metricsSchema.ts` | Liste des compteurs, partagée avec `worker/` (un compteur absent est refusé par le serveur) |
 | `spot.ts` | Bilan d'un coin au clic, la réponse d'abord : zone protégée, terrain (forêt, sol, altitude, statut), une ligne par champignon, bouton « ? », pluie, règles repliées |
@@ -320,8 +320,55 @@ reste possible ; la recherche de lieu et la géolocalisation aussi.
   serait un bavardage) ; les boutons de zoom passent en `aria-disabled` (ils gardent le clavier) et
   sont décrits par « Zoom en pause pendant le calcul des carrés. ». Animations réduites : champignon
   à demi plein, sans monter.
-Ni en mode pluie, ni pour un champignon hors saison, ni sous le zoom 11. La classe `zoom-paused` du
+Ni en mode pluie, ni pour un champignon hors saison, ni sous le zoom 11, ni sur une vue dont les
+carrés de 500 m sont déjà relevés (voir « Relevés gardés »). La classe `zoom-paused` du
 conteneur de la carte dit si la pause est en cours (tests).
+
+**Relevés gardés, grille démarrée plus tôt** (idée de Clément du 14/11/2026 : « une mise en cache » ;
+`fineGrid.ts`, `MeteoLayer.updateFine` / `knownView`, `mapView.ts`). Entre un zoom et l'arrivée des
+carrés de 500 m, le temps part à attendre les tuiles détaillées des forêts : le relevé lit les
+polygones affichés (`queryRenderedFeatures`), donc rien ne se calcule avant elles. Or le relevé d'un
+carré vu en entier ne change pas (BD Forêt et sols sont des données fixes) :
+- **Gardé d'une visite à l'autre** : `localStorage`, clé `foret-explorer:releves`, 20 000 carrés au
+  plus (les plus anciens sont oubliés), écrit 3 s après un relevé (et à la fermeture de la page).
+  Mesuré sur de vraies données : 448 carrés et 14 055 caractères pour une vue des Alpes au zoom 12,3
+  (1280 × 800), 924 carrés et 27 916 caractères avec une seconde vue, soit ≈ 30 caractères par carré
+  et 600 000 au plus.
+  Format `{ v, d, c, g, s }` : `c` et `g` listent les codes de forêt et les sols cités, `s` donne par
+  carré ses neuf points en 18 caractères (rang du code, rang du sol ; « - » : rien), ou 2 caractères
+  si les neuf se valent. Oublié en bloc 30 jours après sa première écriture (`SURVEY_MAX_DAYS`), et
+  dès que `SURVEY_VERSION` change : **la changer quand les règles des sols ou la nomenclature des
+  forêts changent.**
+- **Vue déjà relevée** (`isSurveyed` : tous ses carrés entièrement visibles sont gardés ; ceux du
+  bord de l'écran, relevés en partie, ne le sont jamais) : carrés dessinés tout de suite à partir du
+  cache, sans attendre les tuiles ; **pas de pause du zoom** ni de champignon, et la mise à jour part
+  120 ms après le geste au lieu de 500 (`KNOWN_VIEW_DELAY_MS`). Les tuiles arrivées, le relevé est
+  complété par les carrés du bord. Vue en partie connue : on attend comme avant (dessiner quelques
+  carrés connus ferait refaire deux fois les tuiles des carrés, pour rien de visible).
+- **Tuile en panne** : un carré sous une tuile de forêt ou de sol qui n'a pas pu être lue est relevé
+  mais pas gardé (`noteSurveyTile`, renseigné par `mapView.ts` sur les événements `error` et
+  `sourcedata` de MapLibre, qui portent la tuile) : sans elle il paraîtrait sans forêt, et le
+  resterait des semaines. Une tuile absente (404 de l'IGN : pas de forêt) n'est pas une panne.
+- **Grille démarrée à la lecture du style** (`startGrid`, premier `styledata`), et plus à `load` :
+  MapLibre n'émet `load` qu'une fois toutes les tuiles de la vue arrivées, fond et forêts compris,
+  alors que la grille n'attend que les fichiers météo. À `load`, le mode n'est réappliqué que si le
+  champignon ou le mode a changé entre-temps (sinon les altitudes seraient demandées deux fois).
+
+Mesuré le 14/11/2026 (vraies données, Chromium sans carte graphique, ancienne et nouvelle version en
+alternance, deux passes ; `revisite.mjs`, `ouverture.mjs`), arrivée des carrés de 500 m :
+
+| Cas | Avant | Après |
+|---|---|---|
+| Page ouverte sur une vue relevée à la visite d'avant | 2,8 à 3,8 s (4 relevés) | 1,3 à 1,5 s |
+| Page rechargée, puis zoom de 11,3 à 12,3 sur une vue relevée à la visite d'avant | 2,8 et 3,0 s | 1,6 et 1,7 s |
+| Même zoom sur une vue relevée dans la même visite | 1,6 et 1,8 s | 1,7 et 1,7 s |
+| Même zoom, vue jamais relevée | 2,5 et 2,8 s | 3,8 et 2,8 s |
+| Page ouverte sur la France entière (cases de 18 km) | 1,8 et 1,8 s | 1,6 et 1,0 s |
+
+Dans la même visite, pas de gain de temps : MapLibre a encore les tuiles en mémoire, et le reste
+(animation du zoom, tuiles des carrés refaites, dessin) ne dépend pas du cache ; seule la pause du
+zoom disparaît. Vue jamais relevée : inchangée, l'écart entre les passes est celui du réseau. Le
+cache n'allège pas le dessin : une image coûte toujours autant.
 
 Ce qui reste : à partir du zoom 10, une image coûte encore 125 ms, dont 68 pour les forêts ; choisir
 un champignon y change aussi le filtre des forêts, et MapLibre refait alors toutes les tuiles de la
@@ -413,7 +460,7 @@ Grille fine (`fineGrid.ts`, zoom ≥ `FINE_MIN_ZOOM` = 12, mode indice) : chaque
 (0,04° × 0,056°) est découpée en 9 × 9 carrés (id « I:J ») ; une case météo commune en contient
 exactement 36 × 36 (parent : `cellOfBase`). Forêt et sol relevés sur 3 × 3 points par
 carré, en une seule requête `queryRenderedFeatures` sur toute la vue puis test point-dans-polygone (un
-appel par point serait bien plus lent) ; relevés gardés pour la visite. Altitude IGN au centre, gardée
+appel par point serait bien plus lent) ; relevés gardés d'une visite à l'autre (voir « Relevés gardés »). Altitude IGN au centre, gardée
 dans `localStorage` (`foret-explorer:altitudes`, 40 000 carrés au plus, écrit une fois par relevé),
 demandée seulement pour les carrés **à dessiner pour le champignon montré** (`fineToDraw` ; avant le
 14/11/2026 : pour tout carré boisé, lande ou parc de ville compris), par lots de 200 points. Un carré
@@ -875,6 +922,14 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   hôtes dans ce secteur » ou « secteur urbanisé ». Entre les zooms 9,35 et 10 la règle affiche déjà
   5 km et les cases restent de 18 km. Un secteur entre 50 et 69 % n'a ni pastille ni étiquette avant
   le zoom 10 (la légende donne la meilleure chance de la vue).
+- Relevés gardés : un carré relevé reste tel quel 30 jours au plus dans le navigateur, même si la
+  BD Forêt ou les sols du site changent entre-temps (changer `SURVEY_VERSION` pour l'éviter). Le
+  cache ne sert qu'aux vues déjà vues en entier : une vue neuve attend toujours ses tuiles, et entre
+  les zooms 11 et 12 (carrés de 4,5 km) rien n'est changé. La phrase « Sur votre appareil… » de la
+  confidentialité (`a-propos.html`) ne cite pas ces relevés, seule la liste « Gardé dans ce
+  navigateur » les nomme : la corriger demande une nouvelle version des conditions, à regrouper avec
+  les autres retouches en attente. Les garde-fous (30 jours, changement de version, quota du
+  navigateur dépassé) n'ont pas de test.
 - Pause du zoom pendant le calcul des carrés (à partir du zoom 11) : elle commence à la fin du geste,
   pas pendant ; un zoom continu de la France à une forêt n'est donc pas freiné. Sur une machine lente,
   elle peut durer jusqu'à son plafond de 8 s, et le remplissage du champignon suit le temps, pas
@@ -929,3 +984,6 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
 15. Si le trafic approche la limite de GitHub Pages : un CDN devant le site, ou les archives de
     tuiles et les fichiers météo servis ailleurs (voir aussi la piste 9) ; serveur de mesure : une
     seule ligne écrite par envoi au lieu d'une par compteur.
+16. Carrés de 500 m prêts autour de la vue : relever aussi la marge des tuiles déjà chargées (elles
+    débordent de l'écran ; à vérifier avec `querySourceFeatures`), sans rien télécharger de plus ; et
+    faire démarrer avant `load` ce qui n'attend pas les tuiles (comptages exclus).

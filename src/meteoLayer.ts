@@ -20,6 +20,8 @@ import {
   fineCellsForBounds,
   FINE_POINTS,
   hasForest,
+  isSurveyed,
+  knownSamples,
   fineCellsToDraw,
   hostShare,
   sampleCells,
@@ -188,6 +190,11 @@ const FINE_RENDER_EVERY_MS = 1200;
 
 /** Déplacement de la carte : on attend qu'elle se pose avant de refaire la grille. */
 const REFRESH_DELAY_MS = 500;
+/**
+ * Vue dont les carrés de 500 m sont déjà relevés : le temps de laisser passer un geste enchaîné, pas
+ * plus (rien n'attend les tuiles, voir `MeteoLayer.updateFine`).
+ */
+const KNOWN_VIEW_DELAY_MS = 120;
 
 /** Entre l'arrivée des tuiles des carrés et la fin annoncée du calcul : le temps de les dessiner. */
 const SETTLE_MS = 60;
@@ -283,10 +290,22 @@ export class MeteoLayer {
    * sinon le zoom serait en pause à chaque nouvelle position, c'est-à-dire tout le temps en marchant.
    */
   readonly refresh = (byTracking = false): void => {
-    if (!byTracking) this.begin();
+    // Vue dont les carrés de 500 m sont déjà relevés : rien à attendre des tuiles, donc pas de pause
+    // du zoom et un délai de repos très court (les carrés viennent du relevé gardé, voir `updateFine`).
+    const known = this.knownView();
+    if (!byTracking) this.begin(known);
     window.clearTimeout(this.timer);
-    this.timer = window.setTimeout(() => void this.update(), REFRESH_DELAY_MS);
+    this.timer = window.setTimeout(() => void this.update(), known ? KNOWN_VIEW_DELAY_MS : REFRESH_DELAY_MS);
   };
+
+  /** Les carrés de 500 m de la vue sont-ils tous déjà relevés (cette visite ou une précédente) ? */
+  private knownView(): boolean {
+    if (this.store.state.weatherMode !== 'indice' || this.offSeason() || this.map.getZoom() < FINE_MIN_ZOOM) return false;
+    const b = this.map.getBounds();
+    const view = { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() };
+    const cells = fineCellsForBounds(view);
+    return cells !== null && isSurveyed(cells, view);
+  }
 
   constructor(
     private readonly map: MapLibreMap,
@@ -322,10 +341,10 @@ export class MeteoLayer {
    * cours » jusqu'à ce que la carte les ait dessinés (`settle`), GRID_BUSY_MAX_MS au plus. Tout
    * travail lancé avant perd le droit d'annoncer la fin : c'est le suivant qui la dira.
    */
-  private begin(): void {
+  private begin(known = false): void {
     this.work++;
     this.unwatch?.();
-    if (this.capped || this.store.state.weatherMode !== 'indice' || this.offSeason() || this.map.getZoom() < GRID_BUSY_MIN_ZOOM) return this.setBusy(false);
+    if (known || this.capped || this.store.state.weatherMode !== 'indice' || this.offSeason() || this.map.getZoom() < GRID_BUSY_MIN_ZOOM) return this.setBusy(false);
     if (this.busy) return; // déjà en pause : le plafond court depuis son début, un déplacement ne le relance pas
     this.busyCap = window.setTimeout(() => {
       this.capped = true;
@@ -340,11 +359,13 @@ export class MeteoLayer {
    * des zones : sur un réseau lent, elles feraient durer la pause pour rien). Sans effet si un
    * travail plus récent a pris la suite.
    */
-  private settle(token: number): void {
+  private settle(token: number, known = false): void {
     if (token !== this.work) return;
     this.unwatch?.();
+    // (Carrés tirés du relevé gardé : ils n'attendent pas les forêts détaillées.)
+    const sources = known ? [SOURCES.meteo, SOURCES.meteoFine] : [SOURCES.meteo, SOURCES.meteoFine, SOURCES.bdForet];
     const ready = (): boolean =>
-      [SOURCES.meteo, SOURCES.meteoFine, SOURCES.bdForet].every((id) => {
+      sources.every((id) => {
         try {
           return this.map.isSourceLoaded(id);
         } catch {
@@ -586,13 +607,13 @@ export class MeteoLayer {
     const token = ++this.work;
     try {
       // Les carrés de 500 m sont à l'écran dès leur premier dessin : inutile d'attendre leurs altitudes.
-      await this.load(() => this.settle(token));
+      await this.load((known) => this.settle(token, known));
     } finally {
       this.settle(token);
     }
   }
 
-  private async load(drawn: () => void): Promise<void> {
+  private async load(drawn: (known?: boolean) => void): Promise<void> {
     const state = this.store.state;
     if (state.weatherMode === 'off') return;
     this.controller?.abort();
@@ -811,21 +832,46 @@ export class MeteoLayer {
   }
 
   /** Carrés de 500 m : relevé des forêts et des sols, altitudes IGN, indice de chaque carré. */
-  private async updateFine(series: ReadonlyMap<string, DailySeries>, signal: AbortSignal, drawn: () => void): Promise<void> {
+  private async updateFine(series: ReadonlyMap<string, DailySeries>, signal: AbortSignal, drawn: (known?: boolean) => void): Promise<void> {
     if (this.map.getZoom() < FINE_MIN_ZOOM) {
       this.dropFine();
       this.setFine({ state: 'zoom' });
       return;
     }
     const b = this.map.getBounds();
-    const cells = fineCellsForBounds({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() });
+    const view = { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() };
+    const cells = fineCellsForBounds(view);
     if (!cells) {
       this.dropFine();
       this.setFine({ state: 'many' });
       return;
     }
-    await waitForIdle(this.map, signal);
-    const samples = sampleCells(this.map, cells.filter((c) => series.has(c.parentId)));
+    // Relevés déjà gardés (cette visite ou une précédente) : ils se dessinent sans attendre les tuiles
+    // des forêts, qui ne servent plus qu'aux carrés jamais vus en entier.
+    const toSurvey = cells.filter((c) => series.has(c.parentId));
+    const known = knownSamples(toSurvey);
+    const surveyed = isSurveyed(toSurvey, view);
+    let samples: ReadonlyMap<string, Sample[]> = known;
+    if (known.size < toSurvey.length) {
+      // Vue déjà relevée (il ne manque que des carrés du bord de l'écran, jamais vus en entier) : on
+      // dessine tout de suite ce qu'on sait, plus ce qui est affiché en ce moment (un carré du bord,
+      // relevé en partie, ne disparaît pas le temps du nouveau relevé). Sinon on attend comme avant :
+      // quelques carrés connus dans un coin ne valent ni d'estomper la grille des cases, ni de faire
+      // refaire deux fois les tuiles des carrés.
+      if (surveyed) {
+        const seen = new Map(known);
+        for (const c of toSurvey) {
+          const shown = seen.has(c.id) ? undefined : this.fineData?.samples.get(c.id);
+          if (shown) seen.set(c.id, shown);
+        }
+        const early: FineData = { cells: toSurvey.filter((c) => hasForest(seen.get(c.id))), samples: seen, series, fallback: false };
+        this.fineData = early;
+        this.renderFine(early);
+        drawn(true);
+      }
+      await waitForIdle(this.map, signal);
+      samples = sampleCells(this.map, toSurvey);
+    }
     const forested = cells.filter((c) => hasForest(samples.get(c.id)));
     // Tous les carrés boisés sont gardés (changer de champignon les redessine dans l'instant), mais
     // l'altitude IGN n'est demandée que pour ceux qui seront dessinés pour le champignon montré :
@@ -842,7 +888,7 @@ export class MeteoLayer {
     track('ign.altitude.cacheHits', wanted.length - missing.length);
 
     let count = this.renderFine(fine);
-    drawn();
+    drawn(surveyed);
     if (missing.length) {
       try {
         // Les altitudes arrivent par lots : redessiner à chacun ferait refaire toutes les tuiles des

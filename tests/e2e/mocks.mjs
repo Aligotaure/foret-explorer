@@ -367,7 +367,7 @@ function forestShare() {
  * (dans les deux cas, la carte se rabat sur Open-Meteo) ; `'provisoire'` : le passage du jour n'a
  * pas encore eu lieu, hier n'est connu que par l'estimation de la veille.
  */
-export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0, foret = true, mois = 10 } = {}) {
+export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0, foret = true, mois = 10, delaiForet = () => 0, panneForet = () => false } = {}) {
   log.meteo ??= [];
   log.foret ??= [];
   // Mois figé (octobre par défaut) dans toutes les pages des tests : la saison des champignons en
@@ -440,7 +440,11 @@ export async function installMocks(page, log, { meteoCommune = true, altitudeLen
     if (tms) {
       log.tms.push(tms.slice(1).join('/'));
       const [z, x, y] = tms.slice(1).map(Number);
-      return route.fulfill({ status: 200, contentType: 'application/x-protobuf', headers: CORS, body: forestTile(z, x, y) });
+      // `panneForet(z)` : la tuile échoue (service en panne) ; `delaiForet(z)` : elle met ce délai (ms).
+      if (panneForet(z)) return route.fulfill({ status: 500, headers: CORS, body: '' });
+      const tile = () => route.fulfill({ status: 200, contentType: 'application/x-protobuf', headers: CORS, body: forestTile(z, x, y) });
+      const wait = delaiForet(z);
+      return wait ? new Promise((r) => setTimeout(r, wait)).then(tile) : tile();
     }
     if (url.pathname === '/wmts') {
       const layer = url.searchParams.get('LAYER');

@@ -27,10 +27,11 @@ import { MeteoLayer } from './meteoLayer';
 import { flush, sessionTotals, startMetrics, track, trackMapRequest } from './metrics';
 import { initSearch } from './search';
 import { SpotPanel } from './spot';
-import { Store, loadInitialState, persistState } from './state';
+import { Store, loadInitialState, persistState, type AppState } from './state';
 import { STORAGE_PREFIX } from './legal';
 import { initLegendToggle, initToolbar } from './toolbar';
 import { currentView, onViewChange, onViewLeave } from './view';
+import { noteSurveyTile } from './fineGrid';
 import { loadZonesInfo, noteZonesError, registerZonePattern } from './zones';
 
 // ── État ──────────────────────────────────────────────────────────────────────
@@ -143,9 +144,22 @@ map.on('zoom', updateZoomUi);
 updateZoomUi();
 
 // ── Liaison état → carte ──────────────────────────────────────────────────────
+// La grille démarre dès que le style est lu : « load » n'arrive qu'une fois toutes les tuiles de la vue
+// chargées (fond, forêts), alors que la grille n'en a pas besoin, ni les carrés de 500 m d'une vue
+// déjà relevée (relevés gardés dans le navigateur).
+let gridStarted: { mode: AppState['weatherMode']; mushroom: AppState['mushroom'] } | null = null;
+const startGrid = (): void => {
+  if (gridStarted || !map.getLayer(LAYERS.meteoFill)) return;
+  map.off('styledata', startGrid);
+  gridStarted = { mode: store.state.weatherMode, mushroom: store.state.mushroom };
+  meteo.applyMode();
+};
+map.on('styledata', startGrid);
 map.on('load', () => {
   applyState(map, store.state); // l'état a pu changer pendant le chargement du style
-  meteo.applyMode();
+  // (`applyState` ne sait pas que les forêts s'estompent sous les carrés de 500 m déjà dessinés.)
+  applyOpacity(map, store.state.opacity, meteo.dimsForests);
+  if (gridStarted?.mode !== store.state.weatherMode || gridStarted.mushroom !== store.state.mushroom) meteo.applyMode();
   store.subscribe((state, prev) => {
     if (state.selected !== prev.selected) applySelection(map, state.selected);
     if (state.opacity !== prev.opacity) applyOpacity(map, state.opacity, meteo.dimsForests);
@@ -184,6 +198,13 @@ map.on('mouseleave', LAYERS.fill, () => {
   map.getCanvas().style.cursor = '';
 });
 
+// ── Tuiles dont dépend le relevé des carrés de 500 m (forêts, sols) ────────────
+const isSurveySource = (id: string | undefined): id is string => id === SOURCES.bdForet || id === SOURCES.geologie;
+function noteTile(source: string, tile: unknown, ok: boolean): void {
+  const at = (tile as { tileID?: { canonical?: { z: number; x: number; y: number } } } | undefined)?.tileID?.canonical;
+  if (at) noteSurveyTile(source, at, ok);
+}
+
 // ── Comptage des types présents dans la zone (pastilles de la légende) ─────────
 let countsDirty = true;
 map.on('moveend', () => {
@@ -191,6 +212,8 @@ map.on('moveend', () => {
 });
 map.on('sourcedata', (event) => {
   if (event.sourceId === SOURCES.bdForet) countsDirty = true;
+  // Une tuile des forêts ou des sols relue : les carrés de 500 m qu'elle couvre se gardent à nouveau.
+  if (isSurveySource(event.sourceId)) noteTile(event.sourceId, event.tile, true);
 });
 map.on('idle', () => {
   if (!countsDirty) return;
@@ -208,6 +231,8 @@ map.on('error', (event) => {
   const status = (event.error as { status?: number } | undefined)?.status;
   if (status === 404 && (sourceId === SOURCES.bdForet || sourceId === SOURCES.bdForetRaster)) return;
   console.warn('[carte]', sourceId ?? '', event.error?.message ?? event.error);
+  // Forêts ou sols illisibles ici : le relevé des carrés de 500 m y serait faux, il n'est pas gardé.
+  if (isSurveySource(sourceId)) noteTile(sourceId, (event as { tile?: unknown }).tile, false);
   if (sourceId === SOURCES.geologie) track('pages.geology.errors');
   else if (sourceId === SOURCES.zones) {
     // Tuile des zones en panne (réseau…) : le bilan ne doit plus affirmer qu'une forêt est privée.

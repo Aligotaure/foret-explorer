@@ -1320,11 +1320,18 @@ async function desktopTests(browser, base) {
     window.meteo.refresh(true);
     const byTracking = container.classList.contains('zoom-paused');
     await new Promise((resolve) => setTimeout(resolve, 1500));
+    // Déplacement du visiteur sur une vue déjà relevée : rien à attendre, pas de pause non plus.
+    window.meteo.refresh(false);
+    const known = container.classList.contains('zoom-paused');
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    // Vue jamais relevée (relevés oubliés) : la pause revient.
+    (await import('/src/fineGrid.ts')).forgetSurveys();
     window.meteo.refresh(false);
     const byVisitor = container.classList.contains('zoom-paused');
-    return { byTracking, byVisitor };
+    return { byTracking, known, byVisitor };
   });
   check('suivi de la position : pas de pause du zoom quand c’est le GPS qui déplace la carte (un déplacement du visiteur, lui, la déclenche)', !tracking.byTracking && tracking.byVisitor, JSON.stringify(tracking));
+  check('vue déjà relevée dans la visite : un déplacement du visiteur n’y met pas le zoom en pause', !tracking.known, JSON.stringify(tracking));
   await page.waitForFunction(() => !window.map.getContainer().classList.contains('zoom-paused') && document.getElementById('grid-loader').hidden, null, { timeout: 12000 }).catch(() => {});
   await idle(page);
   const batches = log.altitude.slice(before);
@@ -1625,6 +1632,161 @@ async function desktopTests(browser, base) {
   await context.close();
 }
 
+/**
+ * Relevés des carrés de 500 m gardés d'une visite à l'autre : une vue déjà relevée se redessine sans
+ * attendre les tuiles des forêts, sans pause du zoom ; une tuile en panne ne laisse rien dans le cache.
+ */
+async function surveyCacheTests(browser, base) {
+  const FOREST = '13.2/45.92/6.19';
+  const KEY = 'foret-explorer:releves';
+  const stored = (page) =>
+    page.evaluate((key) => {
+      const raw = localStorage.getItem(key);
+      const saved = raw ? JSON.parse(raw) : null;
+      const texts = Object.values(saved?.s ?? {});
+      return { chars: raw?.length ?? 0, entries: texts.length, shapes: texts.every((t) => t.length === 2 || t.length === 18), day: saved?.d ?? '', codes: saved?.c?.length ?? 0 };
+    }, KEY);
+  const squares = (page) =>
+    page.evaluate(() => {
+      // `drawn` : morceaux de carrés dans les tuiles (un carré à cheval sur deux tuiles compte deux
+      // fois) ; `count` : le nombre annoncé par la légende, une fois le relevé fini.
+      const status = [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /500 m avec/.test(t)) ?? '';
+      return {
+        drawn: window.map.querySourceFeatures('meteo-fin').length,
+        count: Number(status.match(/(\d+) carrés? de 500 m avec/)?.[1] ?? -1),
+        surveyed: window.meteo.fineData?.cells.length ?? 0,
+        forests: window.map.isSourceLoaded('bdforet'),
+      };
+    });
+  const indexOn = (page) => page.evaluate(() => window.store.update({ mushroom: 'cepe', weatherMode: 'indice' }));
+
+  // Première visite : le relevé de la vue est écrit dans le navigateur, quelques secondes après.
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await preAccept(context);
+  const page = await context.newPage();
+  await installMocks(page, { tms: [], wmts: [], geocode: [], other: [] });
+  await page.goto(`${base}#carte=${FOREST}`);
+  await waitForMap(page);
+  await indexOn(page);
+  await page.waitForFunction(() => window.map.querySourceFeatures('meteo-fin').length > 0, null, { timeout: 15000 });
+  await page.waitForFunction((key) => localStorage.getItem(key) !== null, KEY, { timeout: 8000 }).catch(() => {});
+  await page.waitForFunction(() => [...document.querySelectorAll('#legend .legend-hint')].some((p) => /500 m avec/.test(p.textContent)), null, { timeout: 8000 }).catch(() => {});
+  const first = { ...(await squares(page)), ...(await stored(page)) };
+  check(
+    'relevés gardés : la vue relevée est écrite dans le navigateur (2 ou 18 caractères par carré, jour de la première écriture)',
+    first.drawn > 20 && first.entries > 100 && first.shapes && /^\d{4}-\d\d-\d\d$/.test(first.day) && first.codes > 0 && first.chars < first.entries * 40,
+    `${first.entries} carré(s), ${first.chars} caractères, ${first.codes} type(s) de forêt ; ${first.drawn} dessiné(s)`,
+  );
+  await page.close();
+
+  // Seconde visite (mémoire vide, même navigateur) : les tuiles détaillées des forêts mettent 6 s.
+  // Arrivé par le zoom 10,5, on saute sur la forêt déjà relevée : ses carrés sont là avant ces tuiles,
+  // et le zoom n'est pas mis en pause.
+  let slow = 0;
+  const page2 = await context.newPage();
+  await installMocks(page2, { tms: [], wmts: [], geocode: [], other: [] }, { delaiForet: (z) => (z >= 12 ? slow : 0) });
+  await page2.goto(`${base}#carte=10.5/45.92/6.19`);
+  await waitForMap(page2);
+  await indexOn(page2);
+  await page2.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 0, null, { timeout: 15000 });
+  slow = 6000;
+  await page2.evaluate(() => {
+    window.__paused = false;
+    new MutationObserver(() => {
+      if (window.map.getContainer().classList.contains('zoom-paused')) window.__paused = true;
+    }).observe(window.map.getContainer(), { attributes: true, attributeFilter: ['class'] });
+    window.__t0 = performance.now();
+    window.map.jumpTo({ zoom: 13.2 });
+  });
+  const quick = await page2
+    .waitForFunction(() => window.map.querySourceFeatures('meteo-fin').length > 0, null, { timeout: 4000 })
+    .then(() => true, () => false);
+  const again = {
+    ...(await squares(page2)),
+    after: await page2.evaluate(() => Math.round(performance.now() - window.__t0)),
+    paused: await page2.evaluate(() => window.__paused),
+    loader: await page2.evaluate(() => !document.getElementById('grid-loader').hidden),
+  };
+  check(
+    'vue déjà relevée à une visite précédente : carrés de 500 m dessinés avant l’arrivée des tuiles des forêts, sans pause du zoom ni champignon',
+    quick && !again.forests && again.drawn > 20 && again.after < 4000 && !again.paused && !again.loader,
+    `${again.drawn} carré(s) après ${again.after} ms, tuiles des forêts ${again.forests ? 'arrivées' : 'en route'}, pause : ${again.paused}`,
+  );
+  // Les tuiles arrivées, le relevé est complété par les carrés du bord de l'écran : aucun ne disparaît.
+  await page2.waitForFunction(() => window.map.isSourceLoaded('bdforet') && window.map.loaded(), null, { timeout: 20000 }).catch(() => {});
+  await page2.waitForTimeout(800);
+  const full = await squares(page2);
+  check(
+    'vue déjà relevée : une fois les tuiles arrivées, le relevé est complété (bord de l’écran) sans rien retirer',
+    full.forests && full.surveyed >= again.surveyed && full.drawn >= again.drawn && full.count === first.count && first.count > 0,
+    `${again.surveyed} → ${full.surveyed} carré(s) boisé(s), ${again.drawn} → ${full.drawn} morceau(x) dessiné(s) ; ${full.count} carré(s) annoncé(s) (première visite : ${first.count})`,
+  );
+  // Vue jamais relevée : rien n'est dessiné d'avance, et le zoom se met en pause comme avant.
+  await page2.evaluate(() => {
+    window.__paused = false;
+    window.map.jumpTo({ center: [6.45, 45.92] });
+  });
+  await page2.waitForTimeout(1500);
+  const fresh = { ...(await zoomPause(page2)), seen: await page2.evaluate(() => window.__paused) };
+  check('vue jamais relevée : le zoom se met en pause en attendant les tuiles des forêts', fresh.paused && fresh.seen, `pause : ${fresh.paused}`);
+  await page2.close();
+
+  // Règles du cache : écriture compacte relue à l'identique, texte abîmé refusé.
+  const page3 = await context.newPage();
+  await installMocks(page3, { tms: [], wmts: [], geocode: [], other: [] });
+  await page3.goto(`${base}#carte=10.5/45.92/6.19`);
+  await waitForMap(page3);
+  const rules = await page3.evaluate(async () => {
+    const { packSamples, unpackSamples } = await import('/src/fineGrid.ts');
+    const mixed = [
+      { code: 'FF1G01-01', soil: 'calcaire' },
+      { code: null, soil: null },
+      { code: 'FF2-91-91', soil: null },
+      { code: 'FF1G01-01', soil: 'gres' },
+      { code: 'FF1G01-01', soil: 'calcaire' },
+      { code: null, soil: null },
+      { code: 'FF1-49-49', soil: 'humide' },
+      { code: 'FF1-49-49', soil: 'humide' },
+      { code: null, soil: null },
+    ];
+    const same = Array.from({ length: 9 }, () => ({ code: 'FF1G01-01', soil: 'marne' }));
+    const none = Array.from({ length: 9 }, () => ({ code: null, soil: null }));
+    const codes = [];
+    const soils = [];
+    const texts = [mixed, same, none].map((s) => packSamples(s, codes, soils));
+    const back = texts.map((t) => unpackSamples(t, codes, soils));
+    return {
+      lengths: texts.map((t) => t.length).join(),
+      equal: JSON.stringify(back) === JSON.stringify([mixed, same, none]),
+      partial: packSamples(mixed.slice(0, 4), codes, soils),
+      broken: [unpackSamples('0', codes, soils), unpackSamples('z0', codes, soils), unpackSamples('0z', codes, soils), unpackSamples('0000', codes, soils)].every((v) => v === null),
+      unknownSoil: unpackSamples('00', codes, ['granit']),
+    };
+  });
+  check(
+    'relevés gardés : neuf points écrits en 18 caractères (2 s’ils se valent), relus à l’identique ; relevé partiel et texte abîmé refusés',
+    rules.lengths === '18,2,2' && rules.equal && rules.partial === null && rules.broken && rules.unknownSoil === null,
+    JSON.stringify(rules),
+  );
+  await context.close();
+
+  // Tuiles détaillées des forêts en panne : la carte dessine avec ce qu'elle a, mais ne garde rien
+  // (un relevé fait sans elles resterait faux pendant des semaines).
+  const broken = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await preAccept(broken);
+  const page4 = await broken.newPage();
+  await installMocks(page4, { tms: [], wmts: [], geocode: [], other: [] }, { panneForet: (z) => z >= 12 });
+  await page4.goto(`${base}#carte=10.5/45.92/6.19`);
+  await waitForMap(page4);
+  await indexOn(page4);
+  await page4.evaluate(() => window.map.jumpTo({ zoom: 13.2 }));
+  await page4.waitForFunction(() => window.meteo.fineData !== null && window.map.loaded(), null, { timeout: 15000 }).catch(() => {});
+  await page4.waitForTimeout(4500); // plus que le délai d'écriture
+  const lost = { ...(await stored(page4)), ...(await squares(page4)) };
+  check('tuiles des forêts en panne : aucun relevé gardé dans le navigateur', lost.entries === 0, `${lost.entries} carré(s) gardé(s), ${lost.surveyed} relevé(s) à l’écran`);
+  await broken.close();
+}
+
 /** Fichiers météo communs injoignables : la carte interroge Open-Meteo elle-même, avec mesure. */
 async function fallbackTests(browser, base) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -1767,6 +1929,9 @@ async function fallbackTests(browser, base) {
   const page7 = await context.newPage();
   const log7 = { tms: [], wmts: [], geocode: [], other: [] };
   await installMocks(page7, log7, { mois: 7 });
+  // Réglages par défaut (grille éteinte) : avec ceux des pages précédentes, la grille, qui démarre dès
+  // la lecture du style, dessinerait les cèpes et demanderait leurs altitudes avant le test.
+  await page7.addInitScript(() => localStorage.removeItem('foret-explorer:v1'));
   await page7.goto(`${base}#carte=13.6/45.92/6.19`);
   await waitForMap(page7);
   await page7.evaluate(() => window.store.update({ mushroom: null, weatherMode: 'off' })); // l'état gardé par le navigateur vient des pages précédentes
@@ -1809,6 +1974,11 @@ async function fallbackTests(browser, base) {
   const page8 = await context.newPage();
   const log8 = { tms: [], wmts: [], geocode: [], other: [] };
   await installMocks(page8, log8);
+  // Réglages par défaut et aucune altitude gardée : la page part de zéro.
+  await page8.addInitScript(() => {
+    localStorage.removeItem('foret-explorer:v1');
+    localStorage.removeItem('foret-explorer:altitudes');
+  });
   await page8.goto(`${base}#carte=13.6/45.92/6.19`);
   await waitForMap(page8);
   const fineOf = async (id) => {
@@ -1862,8 +2032,9 @@ async function fallbackTests(browser, base) {
   // La pause du zoom s'arrête dès que les carrés de 500 m sont dessinés (à l'altitude du carré de
   // 4,5 km) : elle n'attend pas leurs altitudes exactes, ici retardées de 7 s.
   await page4.locator('#spot .panel__close').click();
-  await page4.evaluate(() => {
+  await page4.evaluate(async () => {
     localStorage.removeItem('foret-explorer:altitudes'); // celles que les pages précédentes ont gardées
+    (await import('/src/fineGrid.ts')).forgetSurveys(); // et leurs relevés : la vue doit être neuve
     window.store.update({ mushroom: 'cepe', weatherMode: 'indice' });
     window.__t0 = performance.now();
     window.map.jumpTo({ zoom: 13.6 });
@@ -1998,6 +2169,7 @@ try {
   await disclaimerTests(browser, server.url);
   await desktopTests(browser, server.url);
   await fallbackTests(browser, server.url);
+  await surveyCacheTests(browser, server.url);
   await mobileTests(browser, server.url);
   await viewTests({ browser, base: server.url, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour });
 } finally {
