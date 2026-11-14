@@ -698,8 +698,8 @@ li.is-off .swatch {
   white-space: nowrap;
   pointer-events: none;
   transform: translateX(-50%);
-  /* Un calcul de moins d'un quart de seconde ne fait rien clignoter. */
-  animation: grid-loader-in 0.15s 0.25s both;
+  /* (Un calcul de moins d'un quart de seconde ne l'affiche pas du tout : voir gridLoader.ts.) */
+  animation: grid-loader-in 0.15s both;
 }
 
 .grid-loader__icon {
@@ -1228,6 +1228,12 @@ li.is-off .swatch {
   .zoom-hint,
   .grid-loader {
     top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
+  }
+
+  /* Bilan ouvert : le champignon se centre dans la place libre à sa gauche, au lieu de passer
+     par-dessus sa première ligne. */
+  #app:has(#spot:not([hidden])) .grid-loader {
+    left: max(100px, calc((100% - var(--panel-width) - var(--btn) - 3 * var(--gap)) / 2));
   }
 }
 

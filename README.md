@@ -68,7 +68,8 @@ légales, la confidentialité et un bouton « Effacer mes données ».
 La carte affiche une **chance estimée en %** : 70 % et plus, bonnes conditions ; 50 à 70 %, ça se
 tente ; en dessous de 50 %, peu d'espoir sans connaître un coin précis. En vue d'ensemble (cases de
 18 km), des pastilles marquent les secteurs à 70 % et plus. Un champignon à plus d'un mois de sa saison
-est grisé : rien n'est calculé pour lui. L'indice applique des règles de cueilleur (délai après une grosse pluie, températures, gel, arbre
+est grisé : rien n'est calculé pour lui. En zoomant de près (règle de 2 km et moins), un petit
+champignon se remplit pendant que les carrés se calculent, et le zoom attend qu'ils soient dessinés. L'indice applique des règles de cueilleur (délai après une grosse pluie, températures, gel, arbre
 hôte, sol). C'est une aide pour choisir où aller, pas une garantie, et il ne dit rien de ce qui se
 mange : au moindre doute, faites contrôler la récolte par un pharmacien ou une société mycologique.
 

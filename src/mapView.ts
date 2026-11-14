@@ -155,8 +155,9 @@ map.on('load', () => {
     if (state.weatherMode !== prev.weatherMode || state.mushroom !== prev.mushroom) meteo.applyMode();
   });
 });
-map.on('moveend', () => {
-  if (store.state.weatherMode !== 'off') meteo.refresh();
+map.on('moveend', (event) => {
+  // (`geolocateSource` : déplacement fait par le suivi de la position, pas par le visiteur.)
+  if (store.state.weatherMode !== 'off') meteo.refresh(Boolean((event as { geolocateSource?: boolean }).geolocateSource));
 });
 // Dernière vue, reprise à la prochaine visite (sans #carte= dans l'adresse).
 map.on(

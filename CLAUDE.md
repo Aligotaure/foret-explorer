@@ -117,6 +117,7 @@ nouvelle dépendance sans raison.
 | `spot.ts` | Bilan d'un coin au clic, la réponse d'abord : zone protégée, terrain (forêt, sol, altitude, statut), une ligne par champignon, bouton « ? », pluie, règles repliées |
 | `search.ts` | Recherche de lieu (autocomplétion de la Géoplateforme) |
 | `toolbar.ts` | Boutons : légende, fond de carte, géolocalisation, plein écran, zoom |
+| `gridLoader.ts` | Calcul des carrés en cours : champignon qui se remplit (`#grid-loader`) et zoom en pause, pilotés par `MeteoLayer.onBusy` |
 | `counts.ts` | Nombre de polygones par type dans les tuiles affichées |
 | `dom.ts`, `icons.ts` | Utilitaires DOM (`h()`, `toast()`…), icônes SVG |
 
@@ -286,6 +287,41 @@ trois corrections (`mapStyle.ts`, `meteoLayer.ts`, `config.ts`) :
 Essayé puis abandonné : ne plus renvoyer la grille à chaque déplacement sous le zoom 10 (cases gardées
 par blocs météo). En alternance au zoom 9,2, aucun écart mesurable (12 à 19 images sans renvoi, 15 à
 20 avec) : la complexité d'un cache de plus n'était pas payée.
+
+**Calcul en cours : champignon et pause du zoom** (demande de Clément du 14/11/2026, `gridLoader.ts`,
+`MeteoLayer.begin` / `settle` / `onBusy`). Aux échelles de 2 km et moins, entre un zoom et l'arrivée
+des carrés la carte ne montrait rien de neuf, et chaque cran de zoom donné en plus relançait tout le
+travail. Relevé (`trou.mjs`) : en revenant du zoom 13 au zoom 11,6, les carrés de 500 m disparaissent
+à 0,7 s et les carrés de 4,5 km de la nouvelle vue n'arrivent qu'à 1,6 s ; en zoomant de 11,3 à 12,3,
+les carrés de 500 m arrivent à 2,6 s (sans carte graphique ; plusieurs secondes de plus chez Clément).
+Depuis : à partir du zoom `GRID_BUSY_MIN_ZOOM` (11), en mode indice et pour un champignon de saison,
+`MeteoLayer` annonce « calcul en cours » de la fin d'un déplacement (`moveend`), ou d'un changement
+de mode ou de champignon, jusqu'à l'arrivée des tuiles des carrés et des forêts détaillées (premier
+dessin des carrés de 500 m : on n'attend ni leurs altitudes, ni le fond de carte, ni les zones). Un
+seul travail a le droit d'annoncer la fin : le dernier lancé (`work`). Pendant ce temps, un champignon
+se remplit à la place du bandeau « Zoomez… » (jamais ensemble : l'un sous le zoom 10, l'autre à partir
+du zoom 11 ; affiché seulement si le calcul dure plus d'un quart de seconde) et le zoom ne répond
+plus : molette, pincement, double clic, cadre de zoom, touches + et −, boutons + et −. Se déplacer
+reste possible ; la recherche de lieu et la géolocalisation aussi.
+- **Bornes** : la pause dure `GRID_BUSY_MAX_MS` (8 s) au plus depuis son début (un déplacement ne
+  relance pas le compte) ; ce plafond atteint, plus de pause tant qu'un calcul ne s'est pas terminé
+  (`capped`) : sur un réseau lent, on ne zoomerait sinon que d'un cran toutes les 8 s. Pas de pause
+  quand c'est le suivi de la position (GPS, `geolocateSource`) qui déplace la carte : elle
+  reviendrait à chaque position, c'est-à-dire tout le temps en marchant.
+- **Gestes arrêtés avant MapLibre, pas coupés dedans** (écouteurs en capture sur le conteneur de la
+  carte ; MapLibre écoute sur `getCanvasContainer()`). Trois pièges vérifiés dans son code :
+  `scrollZoom.disable()` en plein zoom le laisse « en train de zoomer » (la carte ne retrouve plus
+  son repos, la molette ne répond plus) ; molette coupée, il n'annule plus l'événement, et un
+  pincement au pavé tactile (une molette avec Ctrl) agrandit toute la page ; `touchZoomRotate.disable()`
+  rend le pincement au navigateur (`touch-action`), qui zoome la page. Les touches se reconnaissent à
+  leur code (`keyCode`, comme MapLibre), pas à leur caractère (Maj + « + » d'un clavier allemand
+  vaut « * »). Seul `doubleClickZoom` est coupé dans MapLibre : il n'a pas d'état en cours.
+- **Accessibilité** : le champignon est décoratif (`aria-hidden` : l'annoncer à chaque déplacement
+  serait un bavardage) ; les boutons de zoom passent en `aria-disabled` (ils gardent le clavier) et
+  sont décrits par « Zoom en pause pendant le calcul des carrés. ». Animations réduites : champignon
+  à demi plein, sans monter.
+Ni en mode pluie, ni pour un champignon hors saison, ni sous le zoom 11. La classe `zoom-paused` du
+conteneur de la carte dit si la pause est en cours (tests).
 
 Ce qui reste : à partir du zoom 10, une image coûte encore 125 ms, dont 68 pour les forêts ; choisir
 un champignon y change aussi le filtre des forêts, et MapLibre refait alors toutes les tuiles de la
@@ -839,6 +875,12 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   hôtes dans ce secteur » ou « secteur urbanisé ». Entre les zooms 9,35 et 10 la règle affiche déjà
   5 km et les cases restent de 18 km. Un secteur entre 50 et 69 % n'a ni pastille ni étiquette avant
   le zoom 10 (la légende donne la meilleure chance de la vue).
+- Pause du zoom pendant le calcul des carrés (à partir du zoom 11) : elle commence à la fin du geste,
+  pas pendant ; un zoom continu de la France à une forêt n'est donc pas freiné. Sur une machine lente,
+  elle peut durer jusqu'à son plafond de 8 s, et le remplissage du champignon suit le temps, pas
+  l'avancement réel. Le zoom « double toucher puis glisser » passe encore. Pas essayée sur un vrai
+  téléphone ni avec un vrai pavé tactile (les gestes sont simulés dans les tests) ; le plafond et la
+  trêve qui le suit ne sont couverts par aucun test (il faudrait attendre 8 s).
 - Hors saison : au mois près, sans tenir compte de la région (les morilles sont grisées en janvier
   jusque dans le Midi) ; les chanterelles en tube sont grisées en février malgré un poids de 0,1.
 - Bilan sans appel : sous le zoom 12, un vrai massif pris dans un secteur bâti à 15 % ou plus reçoit

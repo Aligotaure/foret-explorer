@@ -327,15 +327,23 @@ async function disclaimerTests(browser, base) {
   await context.close();
 }
 
-/** Zoom en pause pendant le calcul des carrés ? (champignon affiché, gestes et boutons de zoom coupés) */
+/** Zoom en pause pendant le calcul des carrés ? (gestes interceptés, boutons en pause, champignon affiché) */
 const zoomPause = (page) =>
-  page.evaluate(() => ({
-    // (Plein, il est en train de disparaître : le calcul est fini.)
-    loader: !document.getElementById('grid-loader').hidden && !document.getElementById('grid-loader').classList.contains('is-full'),
-    gestures: [window.map.scrollZoom, window.map.doubleClickZoom, window.map.touchZoomRotate, window.map.boxZoom].map((g) => (g.isEnabled() ? 'libre' : 'pause')).join(),
-    buttons: [...document.querySelectorAll('#toolbar-bottom .toolbar__group button')].map((b) => b.getAttribute('aria-disabled') ?? 'libre').join(),
-    drag: window.map.dragPan.isEnabled(),
-  }));
+  page.evaluate(() => {
+    const loader = document.getElementById('grid-loader');
+    const buttons = [...document.querySelectorAll('#toolbar-bottom .toolbar__group button')];
+    return {
+      paused: window.map.getContainer().classList.contains('zoom-paused'),
+      // (Plein, il est en train de disparaître : le calcul est fini.)
+      loader: !loader.hidden && !loader.classList.contains('is-full'),
+      doubleClick: window.map.doubleClickZoom.isEnabled(),
+      buttons: buttons.map((b) => b.getAttribute('aria-disabled') ?? 'libre').join(),
+      described: buttons.map((b) => document.getElementById(b.getAttribute('aria-describedby') ?? '')?.textContent ?? '').join('|'),
+      // Rien n'est coupé dans MapLibre (sauf le double clic) : les gestes sont arrêtés avant lui.
+      handlers: [window.map.scrollZoom, window.map.touchZoomRotate, window.map.boxZoom, window.map.dragPan].every((g) => g.isEnabled()),
+    };
+  });
+const zoomFree = (z) => !z.paused && !z.loader && z.doubleClick && z.buttons === 'libre,libre' && z.described === '|' && z.handlers;
 
 async function desktopTests(browser, base) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -807,7 +815,7 @@ async function desktopTests(browser, base) {
   const freeLow = await zoomPause(page);
   check(
     'vue d’ensemble (zoom 9) : pas de champignon de chargement, le zoom reste libre juste après un déplacement',
-    !freeLow.loader && freeLow.gestures === 'libre,libre,libre,libre' && freeLow.buttons === 'libre,libre',
+    zoomFree(freeLow),
     JSON.stringify(freeLow),
   );
   await page.waitForFunction(() => window.map.getZoom() < 10 && window.map.querySourceFeatures('meteo-points').length > 0, null, { timeout: 15000 }).catch(() => {});
@@ -1199,27 +1207,67 @@ async function desktopTests(browser, base) {
 
   // Grille fine : carrés de 500 m à partir du zoom 13 (mode indice)
   const before = log.altitude.length;
-  await page.evaluate(() => window.map.jumpTo({ zoom: 13.6 }));
-  // Calcul des carrés en cours : le champignon s'affiche et le zoom est en pause (gestes, boutons,
-  // touches + et −), sans bloquer le déplacement. Un clic sur « + » et la touche « + » ne font rien.
+  await page.evaluate(() => {
+    // Quand la pause se lève-t-elle ? (noté dans la page : les attentes qui suivent sont plus longues)
+    const container = window.map.getContainer();
+    const t0 = performance.now();
+    window.__released = null;
+    new MutationObserver(() => {
+      if (window.__released === null && !container.classList.contains('zoom-paused')) window.__released = Math.round(performance.now() - t0);
+    }).observe(container, { attributes: true, attributeFilter: ['class'] });
+    window.map.jumpTo({ zoom: 13.6 });
+  });
+  // Calcul des carrés en cours : le zoom est en pause (molette, pincement, cadre, touches, boutons),
+  // sans rien couper dans MapLibre ni bloquer le déplacement ; le champignon s'affiche.
   const paused = await zoomPause(page);
   const ignored = await page.evaluate(async () => {
-    const [plus] = document.querySelectorAll('#toolbar-bottom .toolbar__group button');
+    const canvas = window.map.getCanvas();
+    const inner = window.map.getCanvasContainer(); // là où MapLibre écoute
+    const reached = [];
+    const spy = (event) => reached.push(event.type === 'keydown' ? `touche ${event.keyCode}` : event.type === 'touchstart' ? `toucher ${event.touches.length}` : event.type);
+    for (const type of ['wheel', 'keydown', 'touchstart', 'mousedown']) inner.addEventListener(type, spy, true);
     const before = window.map.getZoom();
+    const [plus] = document.querySelectorAll('#toolbar-bottom .toolbar__group button');
     plus.click();
-    window.map.getCanvas().dispatchEvent(new KeyboardEvent('keydown', { key: '+', keyCode: 187, bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 350));
-    return { before, after: window.map.getZoom(), focusable: !plus.disabled, fill: Boolean(document.querySelector('#grid-loader .grid-loader__fill svg')), text: document.querySelector('#grid-loader .grid-loader__text')?.textContent ?? '', hiddenFromReaders: document.getElementById('grid-loader').getAttribute('aria-hidden') };
+    const wheel = new WheelEvent('wheel', { deltaY: -240, bubbles: true, cancelable: true, clientX: 700, clientY: 400 });
+    canvas.dispatchEvent(wheel);
+    const pinch = new WheelEvent('wheel', { deltaY: -40, ctrlKey: true, bubbles: true, cancelable: true, clientX: 700, clientY: 400 });
+    canvas.dispatchEvent(pinch);
+    // Maj + « + » d'un clavier allemand : la touche vaut « * », son code 187 : MapLibre zoomerait de deux niveaux.
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { key: '*', keyCode: 187, shiftKey: true, bubbles: true }));
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { key: '-', keyCode: 189, bubbles: true }));
+    canvas.dispatchEvent(new MouseEvent('mousedown', { shiftKey: true, button: 0, bubbles: true, cancelable: true, clientX: 700, clientY: 400 }));
+    const finger = (id, x) => new Touch({ identifier: id, target: canvas, clientX: x, clientY: 400 });
+    canvas.dispatchEvent(new TouchEvent('touchstart', { touches: [finger(1, 650), finger(2, 750)], changedTouches: [finger(2, 750)], bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    for (const type of ['wheel', 'keydown', 'touchstart', 'mousedown']) inner.removeEventListener(type, spy, true);
+    const loader = document.getElementById('grid-loader');
+    return {
+      before,
+      after: window.map.getZoom(),
+      reached: reached.join(),
+      prevented: wheel.defaultPrevented && pinch.defaultPrevented,
+      focusable: !plus.disabled,
+      loader: !loader.hidden,
+      fill: Boolean(loader.querySelector('.grid-loader__fill svg')),
+      text: loader.querySelector('.grid-loader__text')?.textContent ?? '',
+      hiddenFromReaders: loader.getAttribute('aria-hidden'),
+    };
   });
   check(
-    'calcul des carrés (zoom 13,6) : champignon de chargement affiché, zoom en pause (molette, double clic, pincement, cadre, boutons), déplacement libre',
-    paused.loader && paused.gestures === 'pause,pause,pause,pause' && paused.buttons === 'true,true' && paused.drag && ignored.fill && ignored.text === 'Calcul des carrés…' && ignored.hiddenFromReaders === 'true',
+    'calcul des carrés (zoom 13,6) : zoom en pause dès la fin du déplacement, boutons « + » et « − » en pause et décrits, rien de coupé dans MapLibre sauf le double clic',
+    paused.paused && !paused.doubleClick && paused.buttons === 'true,true' && paused.described === 'Zoom en pause pendant le calcul des carrés.|Zoom en pause pendant le calcul des carrés.' && paused.handlers,
     JSON.stringify(paused),
   );
   check(
-    'zoom en pause : ni le bouton « + » ni la touche « + » ne zooment, et le bouton garde le clavier (aria-disabled, pas disabled)',
-    ignored.after === ignored.before && ignored.focusable,
-    `zoom ${ignored.before} → ${ignored.after}`,
+    'zoom en pause : molette, pincement du pavé tactile, touches + et − (d’après leur code), Maj + glisser et toucher à deux doigts n’arrivent pas à MapLibre ; la page ne zoome pas ; le zoom ne bouge pas',
+    ignored.reached === '' && ignored.prevented && ignored.after === ignored.before && ignored.focusable,
+    `arrivés à MapLibre : « ${ignored.reached} » ; zoom ${ignored.before} → ${ignored.after}`,
+  );
+  check(
+    'champignon de chargement : affiché après un quart de seconde, plein et contour superposés, « Calcul des carrés… », décoratif pour les lecteurs d’écran',
+    ignored.loader && ignored.fill && ignored.text === 'Calcul des carrés…' && ignored.hiddenFromReaders === 'true',
+    JSON.stringify({ affiche: ignored.loader, texte: ignored.text }),
   );
   await page.waitForFunction(() => window.map.querySourceFeatures('meteo-fin').length > 0, null, { timeout: 20000 });
   await page.waitForFunction(
@@ -1247,18 +1295,38 @@ async function desktopTests(browser, base) {
       })(),
     };
   });
-  const released = await page
-    .waitForFunction(() => document.getElementById('grid-loader').hidden && window.map.scrollZoom.isEnabled(), null, { timeout: 9000 })
-    .then(
-      () => true,
-      () => false,
-    );
+  await page.waitForFunction(() => window.__released !== null && document.getElementById('grid-loader').hidden, null, { timeout: 9000 }).catch(() => {});
   const free = await zoomPause(page);
+  const releasedAfter = await page.evaluate(() => window.__released);
   check(
-    'carrés dessinés : le champignon disparaît et le zoom reprend (gestes et boutons)',
-    released && !free.loader && free.gestures === 'libre,libre,libre,libre' && free.buttons === 'libre,libre',
-    JSON.stringify(free),
+    'carrés dessinés : la pause se lève d’elle-même, bien avant son plafond de 8 s ; le champignon disparaît, les boutons reprennent',
+    zoomFree(free) && releasedAfter !== null && releasedAfter < 6000,
+    `levée après ${releasedAfter} ms ; ${JSON.stringify(free)}`,
   );
+  // Contre-épreuve : hors pause, la même molette zoome bien (puis retour au zoom du test).
+  await page.mouse.move(700, 430);
+  await page.mouse.wheel(0, -240);
+  await page.waitForTimeout(1200);
+  const wheeled = await page.evaluate(() => window.map.getZoom());
+  check('hors pause, la molette zoome normalement', wheeled > 13.7, `zoom ${wheeled.toFixed(2)}`);
+  await page.evaluate(() => window.map.jumpTo({ zoom: 13.6 }));
+  await page.waitForFunction(() => !window.map.getContainer().classList.contains('zoom-paused') && document.getElementById('grid-loader').hidden, null, { timeout: 12000 }).catch(() => {});
+  await page.waitForFunction(() => [...document.querySelectorAll('#legend .legend-hint')].some((p) => /carrés? de 500 m avec arbres hôtes/.test(p.textContent)), null, { timeout: 20000 }).catch(() => {});
+  await idle(page);
+  // Suivi de la position (GPS) : il déplace la carte à chaque nouvelle position ; la grille est refaite,
+  // mais sans pause du zoom (sinon on ne pourrait plus zoomer en marchant).
+  const tracking = await page.evaluate(async () => {
+    const container = window.map.getContainer();
+    window.meteo.refresh(true);
+    const byTracking = container.classList.contains('zoom-paused');
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    window.meteo.refresh(false);
+    const byVisitor = container.classList.contains('zoom-paused');
+    return { byTracking, byVisitor };
+  });
+  check('suivi de la position : pas de pause du zoom quand c’est le GPS qui déplace la carte (un déplacement du visiteur, lui, la déclenche)', !tracking.byTracking && tracking.byVisitor, JSON.stringify(tracking));
+  await page.waitForFunction(() => !window.map.getContainer().classList.contains('zoom-paused') && document.getElementById('grid-loader').hidden, null, { timeout: 12000 }).catch(() => {});
+  await idle(page);
   const batches = log.altitude.slice(before);
   // Un point par carré demandé (séparés par « | », écrit %7C dans l'adresse).
   const asked = batches.reduce((n, q) => n + (/[?&]lon=([^&]*)/.exec(q)?.[1].split('%7C').length ?? 0), 0);
@@ -1336,7 +1404,7 @@ async function desktopTests(browser, base) {
     window.map.jumpTo({ center: [c.lng + 0.002, c.lat] });
   });
   const rainFree = await zoomPause(page);
-  check('mode pluie (zoom 11,5) : pas de calcul de carrés, donc ni champignon ni pause du zoom', !rainFree.loader && rainFree.gestures === 'libre,libre,libre,libre', JSON.stringify(rainFree));
+  check('mode pluie (zoom 11,5) : pas de calcul de carrés, donc ni champignon ni pause du zoom', zoomFree(rainFree), JSON.stringify(rainFree));
   const rainLines = await page.evaluate(() => window.map.getLayer('meteo-contours').minzoom);
   check('mode pluie : le quadrillage des cases revient à tous les zooms', rainLines === 4, `à partir du zoom ${rainLines}`);
   const wholeCells = await page
@@ -1473,7 +1541,7 @@ async function desktopTests(browser, base) {
     window.map.jumpTo({ center: [c.lng + 0.002, c.lat] });
   });
   const asleepFree = await zoomPause(page);
-  check('champignon hors saison choisi : rien à calculer, donc ni champignon de chargement ni pause du zoom', !asleepFree.loader && asleepFree.gestures === 'libre,libre,libre,libre', JSON.stringify(asleepFree));
+  check('champignon hors saison choisi : rien à calculer, donc ni champignon de chargement ni pause du zoom', zoomFree(asleepFree), JSON.stringify(asleepFree));
   await page.getByRole('button', { name: 'Morilles', exact: true }).click();
   await page.getByRole('switch', { name: 'Afficher la grille météo' }).uncheck();
 
@@ -1801,16 +1869,16 @@ async function fallbackTests(browser, base) {
     window.map.jumpTo({ zoom: 13.6 });
   });
   const lockedSlow = await zoomPause(page4);
-  await page4.waitForFunction(() => document.getElementById('grid-loader').hidden && window.map.scrollZoom.isEnabled() && window.map.querySourceFeatures('meteo-fin').length > 0, null, { timeout: 6500 }).catch(() => {});
+  await page4.waitForFunction(() => document.getElementById('grid-loader').hidden && !window.map.getContainer().classList.contains('zoom-paused') && window.map.querySourceFeatures('meteo-fin').length > 0, null, { timeout: 6500 }).catch(() => {});
   const slow = await page4.evaluate(() => ({
     after: Math.round(performance.now() - window.__t0),
-    free: document.getElementById('grid-loader').hidden && window.map.scrollZoom.isEnabled(),
+    free: document.getElementById('grid-loader').hidden && !window.map.getContainer().classList.contains('zoom-paused'),
     squares: window.map.querySourceFeatures('meteo-fin').length,
     status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /500 m/.test(t)) ?? '',
   }));
   check(
     'altitudes lentes : la pause du zoom se lève dès que les carrés de 500 m sont dessinés, sans attendre leurs altitudes',
-    lockedSlow.loader && slow.free && slow.squares > 0 && slow.after < 6500 && /relevé des forêts et des altitudes/.test(slow.status),
+    lockedSlow.paused && slow.free && slow.squares > 0 && slow.after < 6500 && /relevé des forêts et des altitudes/.test(slow.status),
     `libre après ${slow.after} ms, ${slow.squares} carré(s) ; ${slow.status.slice(-60)}`,
   );
   await context.close();

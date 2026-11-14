@@ -189,6 +189,9 @@ const FINE_RENDER_EVERY_MS = 1200;
 /** Déplacement de la carte : on attend qu'elle se pose avant de refaire la grille. */
 const REFRESH_DELAY_MS = 500;
 
+/** Entre l'arrivée des tuiles des carrés et la fin annoncée du calcul : le temps de les dessiner. */
+const SETTLE_MS = 60;
+
 /** Dernier zoom d'une couche (plage de zoom du quadrillage). */
 const MAX_LAYER_ZOOM = 24;
 
@@ -266,10 +269,21 @@ export class MeteoLayer {
   /** Numéro du dernier travail lancé : seul lui peut annoncer que le calcul est fini. */
   private work = 0;
   private busyCap: number | undefined;
+  /**
+   * Le plafond de la pause a été atteint (réseau ou machine trop lents) : plus de pause tant qu'un
+   * calcul ne s'est pas terminé, sinon le visiteur ne pourrait zoomer que d'un cran toutes les 8 s.
+   */
+  private capped = false;
+  /** Retire l'écoute posée par `settle` sur l'arrivée des tuiles. */
+  private unwatch: (() => void) | undefined;
 
-  /** La carte a bougé : la grille est refaite une fois la carte posée. */
-  readonly refresh = (): void => {
-    this.begin();
+  /**
+   * La carte a bougé : la grille est refaite une fois la carte posée. `byTracking` : c'est le suivi
+   * de la position (GPS) qui l'a déplacée, pas le visiteur : le calcul n'est pas annoncé « en cours »,
+   * sinon le zoom serait en pause à chaque nouvelle position, c'est-à-dire tout le temps en marchant.
+   */
+  readonly refresh = (byTracking = false): void => {
+    if (!byTracking) this.begin();
     window.clearTimeout(this.timer);
     this.timer = window.setTimeout(() => void this.update(), REFRESH_DELAY_MS);
   };
@@ -310,24 +324,54 @@ export class MeteoLayer {
    */
   private begin(): void {
     this.work++;
-    if (this.store.state.weatherMode !== 'indice' || this.offSeason() || this.map.getZoom() < GRID_BUSY_MIN_ZOOM) return this.setBusy(false);
-    window.clearTimeout(this.busyCap);
-    this.busyCap = window.setTimeout(() => this.setBusy(false), GRID_BUSY_MAX_MS);
+    this.unwatch?.();
+    if (this.capped || this.store.state.weatherMode !== 'indice' || this.offSeason() || this.map.getZoom() < GRID_BUSY_MIN_ZOOM) return this.setBusy(false);
+    if (this.busy) return; // déjà en pause : le plafond court depuis son début, un déplacement ne le relance pas
+    this.busyCap = window.setTimeout(() => {
+      this.capped = true;
+      this.setBusy(false);
+    }, GRID_BUSY_MAX_MS);
     this.setBusy(true);
   }
 
   /**
    * Le travail `token` a envoyé ses carrés à la carte (ou n'a rien à envoyer) : le calcul est fini
-   * quand elle les a dessinés, c'est-à-dire à son prochain repos. Sans effet si un travail plus
-   * récent a pris la suite.
+   * quand leurs tuiles et celles des forêts détaillées sont arrivées (pas celles du fond de carte ni
+   * des zones : sur un réseau lent, elles feraient durer la pause pour rien). Sans effet si un
+   * travail plus récent a pris la suite.
    */
   private settle(token: number): void {
-    if (token !== this.work || !this.busy) return;
+    if (token !== this.work) return;
+    this.unwatch?.();
+    const ready = (): boolean =>
+      [SOURCES.meteo, SOURCES.meteoFine, SOURCES.bdForet].every((id) => {
+        try {
+          return this.map.isSourceLoaded(id);
+        } catch {
+          return true;
+        }
+      });
     const done = (): void => {
-      if (token === this.work) this.setBusy(false);
+      if (token !== this.work) return;
+      this.capped = false;
+      this.setBusy(false);
     };
-    if (this.map.loaded() && this.map.areTilesLoaded() && !this.map.isMoving()) window.setTimeout(done, 0);
-    else this.map.once('idle', done);
+    // (Un court instant après l'arrivée des tuiles : le temps que la carte les dessine.)
+    if (ready()) {
+      window.setTimeout(done, SETTLE_MS);
+      return;
+    }
+    const onData = (): void => {
+      if (token !== this.work) return this.unwatch?.();
+      if (!ready()) return;
+      this.unwatch?.();
+      window.setTimeout(done, SETTLE_MS);
+    };
+    this.map.on('sourcedata', onData);
+    this.unwatch = () => {
+      this.map.off('sourcedata', onData);
+      this.unwatch = undefined;
+    };
   }
 
   private setStatus(status: MeteoStatus): void {
@@ -358,6 +402,7 @@ export class MeteoLayer {
     setFineVisible(this.map, state.weatherMode === 'indice');
     if (!on) {
       this.work++;
+      this.unwatch?.();
       this.setBusy(false);
       window.clearTimeout(this.timer);
       this.controller?.abort();
