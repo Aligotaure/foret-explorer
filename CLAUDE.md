@@ -59,10 +59,11 @@ https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
   cases, de leur point de relevé et de l'altitude de leurs 16 carrés de 4,5 km), seulement si la
   taille des cases change ; les points de relevé existants sont gardés. Pas de CORS ni d'accès depuis
   le bac à sable : à lancer en local ou dans une tâche GitHub.
-- `node scripts/foret/parts.mjs` : refait `public/foret/parts.json` (part de chaque type de forêt
-  dans chacun des 29 483 carrés de 4,5 km), seulement si la grille change ou si l'IGN publie une
-  nouvelle BD Forêt. 889 tuiles vectorielles du zoom 10 (≈ 320 Mo, gardées dans `.cache/foret/`),
-  une à deux minutes, sans dépendance ; tourne en local (il traduit `src/meteoGrid.ts` lui-même).
+- `node scripts/foret/parts.mjs` : refait `public/foret/parts.json` (part de chaque type de forêt et
+  part bâtie de chacun des 29 483 carrés de 4,5 km), seulement si la grille change ou si l'IGN publie
+  une nouvelle BD Forêt. 889 tuiles vectorielles du zoom 10 de la BD Forêt (≈ 320 Mo, gardées dans
+  `.cache/foret/`) et autant du Plan IGN (≈ 85 Mo, `.cache/plan/`), une à deux minutes, sans
+  dépendance ; tourne en local (il traduit `src/meteoGrid.ts` lui-même).
 - `npm run test:donnees` : `test:meteo` (mise à jour de la météo commune rejouée sur plusieurs jours
   avec des séries simulées : budgets, jours manquants, journée provisoire, publication) + `test:geologie` (règles des sols
   sur la table de toutes les descriptions de France, `tests/donnees/`) + `test:foret` (géométrie du
@@ -104,13 +105,13 @@ nouvelle dépendance sans raison.
 | `legendExtras.ts` | Sections « Je cherche… » (fiche, lien MycoDB), « Météo », « Nature du sol », « Droit de cueillir » |
 | `ui.ts` | Section repliable (chevron = bouton, titre cliquable aussi), interrupteur, titre avec icône (partagés par les panneaux) |
 | `mushrooms.ts` | Profils des 5 champignons (hôtes, sols, saison, températures, délai après pluie, précautions, fiche MycoDB) et indice (raisons, ce qui l'annule) |
-| `forestShare.ts` | Arbres hôtes de chaque carré de 4,5 km, lus dans `public/foret/parts.json` : part de surface et qualité moyenne des hôtes, par champignon |
+| `forestShare.ts` | Arbres hôtes et part bâtie de chaque carré de 4,5 km, lus dans `public/foret/parts.json` : part de surface et qualité moyenne des hôtes par champignon, et la règle d'allumage d'un carré (`isLit`) |
 | `soils.ts` | 8 natures de sol, champignons associés, motifs dessinés au canevas |
 | `geology.ts` | Motifs fournis à MapLibre (`styleimagemissing`), forêt et sol sous un point |
 | `meteoGrid.ts` | Grille météo commune (cases de 0,16° × 0,224°, blocs de 8 × 8, 16 carrés de 4,5 km par case : `subBox`, `subIndexAt`), format des fichiers, dates ; lu aussi par Node (scripts) : aucun import |
 | `weather.ts` | Fichiers météo communs (index, blocs), résumé de 30 jours daté (épisodes de pluie, gel, `rain20` pour l'humidité, jour estimé), `atAltitude`, `summaryAtAltitude`, Open-Meteo en secours (cache du jour), altitude IGN |
-| `meteoLayer.ts` | Grille météo sur la vue, à tous les zooms (toute la France d'un coup en vue d'ensemble) : pluie cumulée ou indice du champignon choisi, détaillé par carrés de 4,5 km à partir du zoom 8, allumés à la mesure de leurs arbres hôtes ; carrés fins en mode indice |
-| `fineGrid.ts` | Carrés de 500 m : découpage, relevé forêt/sol (index spatial sur `queryRenderedFeatures`), altitudes en cache permanent, indice par carré |
+| `meteoLayer.ts` | Grille météo sur la vue, à tous les zooms (toute la France d'un coup en vue d'ensemble) : pluie cumulée ou indice du champignon choisi, détaillé par carrés de 4,5 km à partir du zoom 8, allumés à la mesure de leurs arbres hôtes, hors des villes ; carrés fins en mode indice. Règles de fluidité en tête de classe |
+| `fineGrid.ts` | Carrés de 500 m : découpage, relevé forêt/sol (index spatial sur `queryRenderedFeatures`), altitudes en cache permanent, choix des carrés à dessiner (`fineCellsToDraw` : plus sévère en ville), indice par carré |
 | `metrics.ts` | Compteurs de consommation des API (en mémoire) et envoi groupé au serveur de mesure |
 | `metricsSchema.ts` | Liste des compteurs, partagée avec `worker/` (un compteur absent est refusé par le serveur) |
 | `spot.ts` | Bilan d'un coin au clic, la réponse d'abord : zone protégée, terrain (forêt, sol, altitude, statut), une ligne par champignon, bouton « ? », pluie, règles repliées |
@@ -158,18 +159,26 @@ zoom dans une propriété `layout` n'est évaluée qu'aux zooms entiers).
 
 Arbres hôtes (`forestShare.ts`, `public/foret/parts.json`, mode indice) : avant le 14/11/2026, cases
 et carrés ne regardaient que la météo (Paris affichait « 78 % · favorable », le bilan au même point
-« ≈ 0 % »). Désormais un carré n'est coloré que si les arbres hôtes du champignon y couvrent au moins
-`HOST_MIN_COVER` (5 %) de la surface, et d'autant plus qu'ils en couvrent (teinte pleine à
-`HOST_FULL_COVER`, 50 %) ; son indice est multiplié par la qualité moyenne de ces hôtes (pas par le
-sol, inconnu à cette échelle : le bilan, qui regarde la forêt et le sol du point, peut différer dans
-les deux sens). Propriété `c_<champignon>` : part
-d'hôtes (0 à 1), −1 si le fichier manque (la grille se dessine alors comme avant et la légende le
-dit). Sous le seuil : ni teinte, ni quadrillage, ni étiquette, ni pastille. Case entière (zoom < 8) :
-moyenne de ses carrés, pastille posée sur le plus boisé. Aux zooms des carrés de 500 m, la grille des
+« ≈ 0 % »). Désormais un carré n'est coloré (`isLit`) que si les arbres hôtes du champignon y couvrent
+au moins `HOST_MIN_COVER` (10 %) de la surface et si moins de `BUILT_MAX_COVER` (15 %) est bâti, et
+d'autant plus qu'ils en couvrent (teinte pleine à `HOST_FULL_COVER`, 50 %) ; son indice est multiplié
+par la qualité moyenne de ces hôtes (pas par le sol, inconnu à cette échelle : le bilan, qui regarde
+la forêt et le sol du point, peut différer dans les deux sens). Seuils du 14/11/2026 : à 5 % d'hôtes
+et sans regarder le bâti, 85 % des carrés de France s'allumaient pour les cèpes (25 154 sur 29 483),
+dont 1 600 bâtis à 15 % ou plus : toutes les villes étaient colorées (Nancy : 80 à 84 % sur le
+centre). Avec 10 % et 15 % : 20 048 carrés (68 %). Un carré éteint n'est pas envoyé à la carte : ni
+teinte, ni quadrillage, ni étiquette, ni pastille. Propriétés d'un carré : celles du champignon
+montré seulement, sous des noms fixes (`l` niveau, `p` chance estimée, `c` part d'hôtes de 0 à 1 ;
+`c` = −1 si le fichier manque : la grille se dessine alors comme avant et la légende le dit ; `c` = 0
+pour une case éteinte du mode pluie). Case entière (zoom < 8) :
+moyenne de ses carrés, pastille posée sur son carré allumé le plus boisé. Aux zooms des carrés de 500 m, la grille des
 cases reste en fond sans étiquette dès que le relevé fin est fait (`fineDone`), même s'il n'a trouvé
 aucun arbre hôte. Fichier : par case commune, 16 carrés `[rang du code, part en %, …]` (null : pas de
-terre française) ; 899 ko, 223 ko compressé ; aux limites de départements des polygones de la BD
-Forêt se recouvrent (99 carrés ramenés à 100 %). Les identifiants de texte des cases (« I:J/k ») ne
+terre française) dans `cases`, et leur part bâtie en % dans `bati` (champ ajouté le 14/11/2026, même
+format `v: 1` : un fichier sans lui se lit encore, rien n'est alors tenu pour bâti) ; 993 ko, 236 ko
+compressé ; aux limites de départements des polygones de la BD Forêt se recouvrent (99 carrés ramenés
+à 100 %). Part bâtie : zones bâties et zones d'activité du Plan IGN (voir « Données et API ») ;
+3 509 carrés bâtis à 10 % ou plus, 2 043 à 15 %, 1 011 à 25 %, 299 à 50 %. Les identifiants de texte des cases (« I:J/k ») ne
 survivent pas aux tuiles de MapLibre : dans les tests, un carré se reconnaît à son centre (`x`, `y`).
 Simulé dans les tests e2e (`forestShare()` de `mocks.mjs`). Le fichier est chargé dans tous les modes (en
 passant de la pluie à la chance estimée, les carrés déjà là sont repeints tout de suite) ; un échec
@@ -178,6 +187,40 @@ entière est allumée dès qu'un de ses carrés l'est (sa teinte suit la moyenne
 étiquettes est vide dans les tests : aucune étiquette n'y est dessinée, on y évalue donc les
 expressions de MapLibre carré par carré (`map.style.getLayer(…).paint.get(…).evaluate(…)`). Le mois
 est figé en octobre dans les tests de bureau (saison des champignons).
+
+## Fluidité : ce que coûte un changement sur la carte
+
+Mesuré le 14/11/2026 (Chromium sans carte graphique, comme une machine virtuelle ou un vieux
+téléphone ; vraies données, 1280 × 800 ; fil principal occupé et images redessinées, relevés par le
+profileur du navigateur et l'événement `render` de MapLibre). Un clic sur un champignon :
+
+| Vue | Avant | Après |
+|---|---|---|
+| France entière (zoom 5) | 1,2 à 1,4 s, 20 à 22 images | 0,4 s, 4 images |
+| Lyon (zoom 9) | 1,1 à 1,3 s, 12 à 15 images | 0,5 s, 5 images |
+| Annecy (zoom 11) | 1,8 s, 6 à 8 images | 1,2 à 1,4 s, 5 images |
+| Forêt (zoom 13, carrés de 500 m) | 1,0 s, 9 à 10 images | 0,6 s, 4 à 5 images |
+
+Le code du site n'y pèse presque rien (5 à 100 ms) : le temps part dans MapLibre. Deux faits à
+garder en tête avant de toucher à la grille (`meteoLayer.ts`, `mapStyle.ts`) :
+- chaque arrivée de tuiles fait redessiner la carte, et sans carte graphique chacune de ces images
+  occupe le fil principal 0,1 à 0,3 s (0,1 s à Lyon au zoom 9, 0,26 s à Annecy au zoom 11) ;
+- MapLibre refait toutes les tuiles d'une source dès qu'on change son contenu (`setData`), un filtre,
+  ou une propriété de dessin dont l'expression lit une propriété des objets (`['get', …]`). Une
+  propriété constante (opacité fixe) ne refait rien.
+
+D'où les règles : les carrés ne portent que les valeurs du champignon montré sous des noms fixes
+(`l`, `p`, `c` : changer de champignon ne change plus aucune expression, un test le vérifie) ; un
+carré éteint n'est pas envoyé ; un contenu identique au précédent n'est pas renvoyé (`setSource`) ;
+la grille est refaite tout de suite au changement de mode ou de champignon (les 0,5 s d'attente ne
+servent qu'aux déplacements) ; les carrés de 500 m sont redessinés au plus toutes les 1,2 s pendant
+que leurs altitudes arrivent ; pas de fondu des étiquettes (`fadeDuration: 0`) ni de transition de
+0,3 s (`transition` du style) ; sources de la grille avec un `maxzoom` bas (une ou deux tuiles pour
+la vue au lieu de douze).
+
+Ce qui reste : à partir du zoom 10, choisir un champignon change aussi le filtre des forêts, et
+MapLibre refait alors toutes les tuiles de la BD Forêt (≈ 1 s à lui seul au zoom 11 sans carte
+graphique). Voir « Pistes ».
 
 ## Bilan et légende : la réponse d'abord
 
@@ -203,12 +246,15 @@ bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
 - Sous le zoom 10, ou tant que les tuiles de la BD Forêt ne sont pas arrivées (clic juste après un
   zoom), la forêt est **inconnue**, pas absente (`forestUnknown` : `'zoom'` ou `'loading'`). Le bilan
   applique alors la règle de la carte au carré de 4,5 km qui contient le point (`View.sector`,
-  `hostCover`) : sans arbres hôtes dans le secteur, aucune chance annoncée (« peu d'arbres hôtes dans
-  ce secteur ») ; sinon celle de ses forêts hôtes, et la raison le dit. Fichier des parts absent :
+  `hostCover`, `isLit`) : sans arbres hôtes dans le secteur, aucune chance annoncée (« peu d'arbres
+  hôtes dans ce secteur ») ; secteur d'abord bâti, de même (« secteur surtout bâti ») ; sinon celle
+  de ses forêts hôtes, et la raison le dit. Fichier des parts absent :
   météo seule. Sans cela, le bilan annonçait « favorable » en pleine ville dès qu'on dézoomait.
 - La phrase de pluie d'un champignon commente la pluie la plus récente dont le délai n'est pas
   dépassé, plutôt qu'une vieille pluie « dépassée » qui pèse plus dans l'indice (sinon elle contredit
   le bloc météo) ; une pluie modeste encore fraîche ne promet rien (« pousse incertaine »).
+  « pousse attendue d'ici N jours » est en gras dans sa raison (`reasonItem` de `spot.ts`, repérée par
+  `AWAITED` de `mushrooms.ts` : garder les deux textes identiques) : c'est la seule qui dit quand revenir.
 - Un `<details>` créé ouvert émet lui aussi « toggle » : ne retenir dans `SpotPanel.cards` que ce qui
   s'écarte de l'état d'office, sinon l'ancienne ligne reste dépliée quand le champignon recherché
   change. Le clavier retrouve sa place après un redessin par la clé `data-focus` de l'élément.
@@ -231,7 +277,11 @@ carré, en une seule requête `queryRenderedFeatures` sur toute la vue puis test
 appel par point serait bien plus lent) ; relevés gardés pour la visite. Altitude IGN au centre, gardée
 dans `localStorage` (`foret-explorer:altitudes`, 40 000 carrés au plus), demandée seulement pour les
 carrés boisés, par lots de 200 points (service en panne : altitude du carré de 4,5 km). Températures
-de la case commune corrigées de −0,65 °C par 100 m ; la pluie reste celle de la case. Carré dessiné seulement s'il contient un arbre hôte ; opacité
+de la case commune corrigées de −0,65 °C par 100 m ; la pluie reste celle de la case. Carré dessiné
+seulement si trois de ses neuf points au moins sont sous un arbre hôte du champignon montré
+(`FINE_MIN_HOST_SHARE`) ; en ville (son carré de 4,5 km est bâti à 15 % ou plus), il en faut cinq et
+deux carrés voisins boisés sur huit (`fineCellsToDraw` : un parc isolé n'en pose plus ; un voisin hors
+de l'écran, inconnu, compte pour boisé). Opacité
 selon la part d'arbres hôtes ; défavorable = contour seul. Les forêts s'estompent (45 %) à ces zooms.
 ⚠ Zoom MapLibre = zoom « 512 px » : au zoom 13, ≈ 5 m/pixel (pas 10).
 
@@ -374,6 +424,13 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   passée en 30 secondes, les fichiers étant déjà connus). Tests e2e : `pmtilesArchive()` de
   `tests/e2e/mocks.mjs` fabrique une archive minimale (une entrée de répertoire qui rend la même tuile
   pour tous les z/x/y) servie par morceaux.
+- **Plan IGN en tuiles vectorielles** (vérifié le 14/11/2026 ; seulement pour calculer la part bâtie,
+  `scripts/foret/parts.mjs` ; la carte, elle, affiche le Plan IGN en images WMTS) :
+  `https://data.geopf.fr/tms/1.0.0/PLAN.IGN/{z}/{x}/{y}.pbf`, numérotation XYZ comme la BD Forêt.
+  Au zoom 10, couche `bati_zone_surf`, champ `symbo` : `ZONE_BATI` (zones d'habitat) et
+  `ZONE_INDUS_ACTI` (zones industrielles et d'activité), polygones généralisés ; les deux peuvent se
+  recouvrir (part ramenée à 100 %). Autres couches du même niveau : `ocs_vegetation_surf`,
+  `hydro_surf`, `routier_route`, `oro_courbe` (la plus lourde)… 889 tuiles, ≈ 100 ko chacune.
 - **WFS BD Forêt** (pas utilisé, utile pour un export) : `https://data.geopf.fr/wfs`,
   `TYPENAMES=LANDCOVER.FORESTINVENTORY.V2:formation_vegetale`, `OUTPUTFORMAT=application/json`,
   `CQL_FILTER` et `PROPERTYNAME` acceptés. Avec GeoServer, `BBOX=` et `CQL_FILTER=` ne se combinent
@@ -452,6 +509,47 @@ Worker et passe son adresse au build (`VITE_METRICS_URL`). Un échec côté Clou
 carte (`continue-on-error`). Vérifié le 01/11/2026 en CI : `wrangler deploy --dry-run` et `wrangler
 dev` (wrangler 4.156, `@cloudflare/workers-types` 5). GitHub Pages ne doit pas recevoir de mot de
 passe : la page privée est servie par le Worker.
+
+Constaté le 14/11/2026 : le serveur de mesure n'est pas branché (`gh secret list` ne montre aucun
+secret au dépôt, et le code en ligne ne contient aucune adresse de collecte) : la carte n'envoie donc
+aucun compteur. Avant de le brancher, voir « Montée en charge » : chaque envoi écrit une ligne par
+compteur, et l'offre gratuite de Cloudflare plafonne les lignes écrites par jour.
+
+## Montée en charge : qui appelle quoi
+
+Le site n'a pas de serveur à lui : chaque navigateur va chercher des fichiers et des tuiles, rien
+n'est calculé ailleurs. Appels d'une visite (relevés le 14/11/2026 sur les vrais services, scénario
+joué par un script : ouvrir la France, choisir un champignon, chercher un lieu, zoomer au niveau
+10,5, déplacer la carte, zoomer au niveau 13, deux bilans ; téléphone 390 × 844, puis écran
+1280 × 800) :
+
+| Hôte | Quoi | Téléphone | Grand écran | Limite connue |
+|---|---|---|---|---|
+| GitHub Pages (le site) | code et styles (350 ko compressés), `foret/parts.json` (236 ko), 46 fichiers météo (343 ko : toute la France à l'ouverture), archives des sols et des zones lues par morceaux, `info.json` | ≈ 1,7 Mo, 70 requêtes | ≈ 1,8 Mo, 75 requêtes | limite souple de 100 Go par mois, soit de l'ordre de 55 000 visites de ce genre par mois ; « rate limits may apply » sans chiffre (réponse 429) ; site de 1 Go au plus ; pas fait pour un service commercial |
+| IGN, Géoplateforme | fond de carte (images), BD Forêt (tuiles vectorielles, images en vue large), polices | ≈ 6,8 Mo, 65 requêtes | ≈ 13,5 Mo, 140 requêtes | aucune pour les tuiles (WMTS et TMS sont exclus des limites) |
+| IGN, Géoplateforme | altitude (bilan, carrés de 500 m), recherche de lieu | 4 + 1 requêtes | 4 + 1 requêtes | par adresse IP : 5 requêtes par seconde (altitude), 10 (recherche), blocage de 5 s au-delà |
+| Open-Meteo | rien en temps normal (la tâche `meteo.yml` fait ≈ 2 000 appels par jour, quel que soit le nombre de visiteurs) | 0 | 0 | secours seulement, depuis le navigateur du visiteur, si les fichiers météo ont plus de 3 jours |
+| Cloudflare (mesure) | pas branché (voir « Serveur de mesure ») | 0 | 0 | offre gratuite : 100 000 requêtes par jour, 100 000 lignes écrites par jour, remise à zéro à minuit UTC |
+
+À retenir :
+- Le nombre de visiteurs ne charge aucun serveur du projet. La première limite est le trafic de
+  GitHub Pages (souple : GitHub prévient par courriel et suggère un CDN) ; un pic soudain peut aussi
+  recevoir des réponses 429, sans seuil publié.
+- Les limites de l'IGN valent par adresse IP : chaque visiteur a la sienne. Des visiteurs derrière
+  une même adresse (entreprise, école, certains réseaux mobiles) partagent les 5 requêtes par seconde
+  de l'altitude : au-delà, les carrés de 500 m prennent l'altitude du carré de 4,5 km et le bilan
+  dit l'altitude indisponible, la carte continue.
+- Serveur de mesure, s'il est branché un jour : chaque envoi écrit une ligne par compteur non nul
+  (13 compteurs sur la visite du scénario, un envoi par minute). À ≈ 25 lignes par visite
+  (estimation, non mesurée), les 100 000 lignes par jour sont atteintes vers 4 000 visites par jour ;
+  ensuite les compteurs sont perdus, la carte n'en souffre pas. Regrouper les compteurs en une seule
+  ligne par envoi lèverait ce plafond.
+- Si la tâche météo s'arrête (60 jours sans activité sur le dépôt, panne), chaque navigateur
+  interroge Open-Meteo lui-même : à éviter à grande échelle (conditions d'Open-Meteo, voir « Limites
+  connues ») ; `surveillance.yml` échoue dès 36 h de retard.
+- Sources des limites, lues le 14/11/2026 : docs.github.com (GitHub Pages limits),
+  developers.cloudflare.com (Workers limits, Durable Objects pricing), cartes.gouv.fr (limites
+  d'usage de la Géoplateforme, page modifiée le 07/08/2026).
 
 ## Avertissement, conditions et droit de cueillir
 
@@ -576,14 +674,22 @@ passe : la page privée est servie par le Worker.
   laisser l'ancienne position dans l'entrée de l'historique (seul Précédent la retrouve). Entre 641 et
   1187 px de large, l'îlot n'est pas centré. Graphiques de la vue Analytics : une série de barres
   (ni courbe ni comparaison de deux séries).
-- Arbres hôtes des carrés : BD Forêt de 2007 à 2018, seuil de 5 % choisi à l'œil ; un carré qui mêle
-  ville et forêt reste coloré, en pâle ; pour les chanterelles en tube (hôtes surtout résineux) la
-  carte se vide en plaine de feuillus. Un carré de 500 m se dessine dès qu'un de ses neuf points est
-  sous un arbre hôte : un petit bois en ville en pose encore un.
+- Arbres hôtes des carrés : BD Forêt de 2007 à 2018 ; seuils (10 % d'hôtes, 15 % de bâti, 3 points
+  sur 9) choisis à l'œil sur Nancy, Annecy, Lyon, Paris, Limoges et Toulouse. Un carré de 4,5 km qui
+  contient un village reste coloré s'il est assez boisé (tout carré de France en contient un) ; un
+  vrai massif collé à une ville (Versailles, Fontainebleau-ville) s'éteint à cette échelle et ne se
+  retrouve qu'aux carrés de 500 m ; en ville, un bois de moins de trois carrés de 500 m n'est pas
+  montré. Pour les chanterelles en tube (hôtes surtout résineux) la carte se vide en plaine de
+  feuillus. Part bâtie : zones généralisées du Plan IGN au zoom 10, pas les bâtiments un à un.
 - Accueil : tant qu'une de ses deux fenêtres est ouverte, l'îlot ne répond pas ; sans stockage du
   navigateur, l'avertissement revient à chaque visite et la présentation n'est pas montrée d'office ;
   sur téléphone, une fois fermée, la légende reste fermée et rien à l'écran ne dit de choisir un
   champignon. Rien n'a été essayé sur un vrai téléphone ni avec un lecteur d'écran.
+- Fluidité : sans carte graphique (machine virtuelle, vieux téléphone), choisir un champignon à partir
+  du zoom 10 prend encore plus d'une seconde, à cause du filtre des forêts (voir « Fluidité »).
+  Mesures faites dans Chromium sans carte graphique seulement, pas sur un vrai téléphone.
+- Montée en charge : première limite, le trafic de GitHub Pages (voir « Montée en charge ») ; aucun
+  essai de charge n'a été fait, les chiffres viennent d'une visite jouée par un script.
 - Carrés de 4,5 km : pas de facteur de sol (inconnu à cette échelle), donc un pourcentage souvent
   au-dessus de celui des carrés de 500 m et du bilan au même endroit. Non couvert par les tests : la
   vue zoomée où le relevé fin ne trouve aucun arbre hôte (`fineDone` sans carré fin).
@@ -616,6 +722,11 @@ passe : la page privée est servie par le Worker.
     courbe ou une seconde série dans les graphiques quand une analyse en a besoin.
 12. Téléphone : ouvrir la légende à la fermeture de la présentation, et faire dire « Choisissez un
     champignon » au bandeau du haut tant qu'aucun n'est choisi.
-13. Resserrer la grille fine (2 ou 3 points sur 9 sous un arbre hôte), liens vers les fiches des
-    sosies dangereux, et mesurer la part des visites qui ouvrent un bilan avant et après la refonte
-    (les compteurs `app.sessions` et `app.spots` existent déjà).
+13. Liens vers les fiches des sosies dangereux, et mesurer la part des visites qui ouvrent un bilan
+    avant et après la refonte (les compteurs `app.sessions` et `app.spots` existent déjà).
+14. Filtre des forêts sans refaire les tuiles : une couche par type de forêt, à opacité constante
+    (allumer ou éteindre un type ne changerait alors qu'une valeur, sans rien recharger). Gros
+    chantier : `bdforet-fill` est lu partout (clics, comptages, tests).
+15. Si le trafic approche la limite de GitHub Pages : un CDN devant le site, ou les archives de
+    tuiles et les fichiers météo servis ailleurs (voir aussi la piste 9) ; serveur de mesure : une
+    seule ligne écrite par envoi au lieu d'une par compteur.

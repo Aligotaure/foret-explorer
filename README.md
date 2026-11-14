@@ -43,7 +43,7 @@ légales, la confidentialité et un bouton « Effacer mes données ».
   1 500 m n'ont pas le même indice). La pluie reste celle de la case.
 - **Carrés de 500 m** : à partir du zoom 12, la grille de l'indice se resserre encore. Chaque carré
   est calculé avec son altitude (IGN), les arbres et le sol relevés à l'intérieur ; seuls les carrés
-  où poussent des arbres hôtes sont colorés.
+  où poussent assez d'arbres hôtes sont colorés (en ville, seulement les vrais massifs, pas les parcs).
 - **Toucher la carte** ouvre le bilan du coin, la réponse d'abord : zone protégée s'il y en a une,
   type de forêt, nature du sol, altitude exacte et statut du terrain (forêt publique ou sans doute
   privée), puis une ligne par champignon, du plus probable au moins probable (les raisons se
@@ -58,9 +58,10 @@ légales, la confidentialité et un bouton « Effacer mes données ».
   parenthèses les champignons que chacune favorise. Couverture : France métropolitaine (cartes
   départementales du BRGM).
 - **Météo** : grille de cases d'environ 18 km sur toute la France, en pluie des 20 derniers jours ou
-  en chance estimée du champignon recherché. Un carré n'est coloré que s'il contient des arbres hôtes
-  de ce champignon (d'après la BD Forêt), et d'autant plus qu'il en contient : villes, mer et plaines
-  sans arbres restent éteintes. Les températures sont ramenées à l'altitude de chaque carré (4,5 km,
+  en chance estimée du champignon recherché. Un carré n'est coloré que s'il contient assez d'arbres
+  hôtes de ce champignon (au moins 10 % de sa surface, d'après la BD Forêt) et s'il n'est pas d'abord
+  une ville (moins de 15 % de bâti, d'après le Plan IGN) : villes, mer et plaines sans arbres restent
+  éteintes. Les températures sont ramenées à l'altitude de chaque carré (4,5 km,
   puis 500 m) ou du point touché. La légende donne le dernier jour de pluie connu ;
   tant que la mise à jour du jour n'est pas passée, la veille est une estimation et c'est écrit.
 
@@ -161,9 +162,10 @@ carte lit par morceaux : GitHub Pages abandonne une publication au bout de 10 mi
 dizaines de milliers de petits fichiers de tuiles n'y passent pas toujours. En développement, la
 carte lit les archives du site en ligne : pas besoin de les construire.
 
-La part de chaque type de forêt dans chaque carré de 4,5 km (`public/foret/parts.json`, versionné)
-est calculée une fois par `node scripts/foret/parts.mjs` à partir des tuiles vectorielles de la BD
-Forêt (IGN), sans dépendance ; à relancer seulement si la grille ou la BD Forêt changent.
+La part de chaque type de forêt et la part bâtie de chaque carré de 4,5 km (`public/foret/parts.json`,
+versionné) sont calculées une fois par `node scripts/foret/parts.mjs` à partir des tuiles
+vectorielles de la BD Forêt et du Plan IGN, sans dépendance ; à relancer seulement si la grille ou
+la BD Forêt changent.
 
 ### Météo commune
 
