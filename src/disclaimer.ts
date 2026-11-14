@@ -71,7 +71,7 @@ function content(): HTMLElement {
       ),
       point(
         'Cueillez des champignons entiers',
-        '(pied et chapeau) et en bon état ; séparez les espèces dans un panier, jamais dans un sac en plastique.',
+        '(pied et chapeau) et en bon état ; séparez les espèces dans un panier,' b('jamais dans un sac en plastique.'),
       ),
       point('Une application, une photo ou cette carte ne suffisent pas', 'pour identifier un champignon.'),
       point('Photographiez la récolte avant de la cuisiner,', 'et ne donnez jamais de champignons cueillis à de jeunes enfants.'),
