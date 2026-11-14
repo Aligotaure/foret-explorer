@@ -161,8 +161,10 @@ export function buildStyle(state: AppState): StyleSpecification {
       },
       // Grille météo : `maxzoom` bas exprès. Au-delà, MapLibre agrandit les tuiles de ce niveau au
       // lieu d'en découper de plus petites : une ou deux tuiles couvrent la vue au lieu de douze, donc
-      // moins d'images redessinées à chaque mise à jour (voir meteoLayer.ts). La précision reste sous
-      // le pixel aux zooms où chaque grille se lit (8 192 unités par tuile).
+      // moins d'images redessinées à chaque mise à jour (voir meteoLayer.ts). Prix : les coordonnées
+      // sont arrondies à l'unité de tuile (8 192 par tuile), soit ± 7 m pour les carrés de 4,5 km
+      // (un pixel au zoom 12 ; plus au-delà, où ils ne sont plus qu'un fond derrière les carrés de
+      // 500 m, eux à ± 0,4 m) : moins que la marge laissée entre deux carrés de 500 m.
       [SOURCES.meteo]: {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },

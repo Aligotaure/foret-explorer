@@ -262,7 +262,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
   const caveat = h(
     'p',
     { class: 'legend-hint legend-hint--caveat' },
-    'Seuls les secteurs où poussent ses arbres hôtes sont colorés, hors des villes. Chances estimées, pas mesurées : ni promesse d’en trouver, ni droit de cueillir, ni avis sur ce qui se mange.',
+    'Seuls les secteurs où poussent ses arbres hôtes sont colorés. Chances estimées, pas mesurées : ni promesse d’en trouver, ni droit de cueillir, ni avis sur ce qui se mange.',
   );
   const content = h(
     'div',

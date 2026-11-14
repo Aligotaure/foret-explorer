@@ -92,16 +92,18 @@ function coversOf(cellId: string, m: Mushroom): (HostCover | null)[] | null {
     list = Array.from({ length: SUB_COUNT }, (_, k) => {
       const parts = squares[k];
       if (!parts) return null;
+      // Sommes en pour cent entiers : 7 + 1 + 1 + 1 fait 10, alors que 0,07 + 0,01 + 0,01 + 0,01 fait
+      // 0,0999… et resterait sous un seuil de 10 % (450 carrés de France dans ce cas).
       let cover = 0;
       let weighted = 0;
       for (let n = 0; n + 1 < parts.length; n += 2) {
         const weight = weights[parts[n] ?? -1] ?? 0;
         if (weight <= 0) continue;
-        const share = (parts[n + 1] ?? 0) / 100;
-        cover += share;
-        weighted += share * weight;
+        const percent = parts[n + 1] ?? 0;
+        cover += percent;
+        weighted += percent * weight;
       }
-      return { cover: Math.min(1, cover), quality: cover > 0 ? weighted / cover : 0, built: (builtOf?.[k] ?? 0) / 100 };
+      return { cover: Math.min(100, cover) / 100, quality: cover > 0 ? weighted / cover : 0, built: (builtOf?.[k] ?? 0) / 100 };
     });
     cache.set(key, list);
   }

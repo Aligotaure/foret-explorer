@@ -711,8 +711,9 @@ async function desktopTests(browser, base) {
         properties: Object.keys(by.get(centre(0)) ?? {}).sort().join(),
         opacity: JSON.stringify(window.map.getPaintProperty('meteo-cellules', 'fill-opacity')),
         lines: JSON.stringify(window.map.getPaintProperty('meteo-contours', 'line-opacity')),
-        // Une case du mode pluie, éteinte, encore dans la source à l'instant où l'on passe à l'indice.
-        leftover: drawnWith({ l: 0, p: 0, c: 0, sub: 0, rain20: 40 }),
+        // Une case du mode pluie (elle ne porte ni l, ni p, ni c), encore dans la source à l'instant où
+        // l'on passe à l'indice.
+        leftover: drawnWith({ sub: 0, rain20: 40, elevation: 900, x: 6.2, y: 45.9 }),
         woodedDrawn: drawn(0),
         zoom: window.map.getZoom(),
         caveat: [...document.querySelectorAll('#legend .legend-hint--caveat')].filter((p) => !p.hidden).map((p) => p.textContent).join(' '),
@@ -731,7 +732,7 @@ async function desktopTests(browser, base) {
     hosts.properties,
   );
   check(
-    'carrés : teinte, quadrillage et étiquette sur le carré boisé ; rien pour une case éteinte restée du mode pluie',
+    'carrés : teinte, quadrillage et étiquette sur le carré boisé ; rien pour une case restée du mode pluie',
     hosts.leftover.fill === 0 && hosts.leftover.line === 0 && hosts.leftover.label === '' &&
       hosts.woodedDrawn?.fill > 0 && hosts.woodedDrawn.line > 0 && (hosts.zoom < 10 || hosts.zoom >= 12 || /^\d+ %$/.test(hosts.woodedDrawn.label)),
     JSON.stringify({ zoom: +hosts.zoom.toFixed(1), reste: hosts.leftover, boise: hosts.woodedDrawn }),
@@ -823,14 +824,14 @@ async function desktopTests(browser, base) {
     return { x: p.x, y: p.y };
   }, { cell: SHARE_CELL, k: SHARE_BUILT });
   await page.mouse.click(town.x, town.y);
-  await page.waitForFunction(() => [...document.querySelectorAll('#spot .verdict__why')].some((w) => /secteur surtout bâti/.test(w.textContent)), null, { timeout: 10000 }).catch(() => {});
+  await page.waitForFunction(() => [...document.querySelectorAll('#spot .verdict__why')].some((w) => /secteur urbanisé/.test(w.textContent)), null, { timeout: 10000 }).catch(() => {});
   const townSpot = await page.evaluate(() => ({
     lines: [...document.querySelectorAll('#spot .verdict')].map((v) => `${v.querySelector('strong')?.textContent} : ${v.querySelector('.verdict__why')?.textContent ?? ''} ${v.querySelector('.level-pill')?.textContent}`),
     chances: [...document.querySelectorAll('#spot .level-pill')].map((p) => Number(/≈ (\d+) %/.exec(p.textContent)?.[1])),
   }));
   check(
-    'bilan sous le zoom 10, secteur d’abord bâti (une ville avec un bois) : aucune chance annoncée, « secteur surtout bâti »',
-    townSpot.chances.length === 5 && townSpot.chances.every((c) => c === 0) && townSpot.lines.filter((l) => /secteur surtout bâti/.test(l)).length >= 3,
+    'bilan sous le zoom 10, secteur urbanisé (une ville avec un bois) : aucune chance annoncée, « secteur urbanisé »',
+    townSpot.chances.length === 5 && townSpot.chances.every((c) => c === 0) && townSpot.lines.filter((l) => /secteur urbanisé/.test(l)).length >= 3,
     townSpot.lines.join(' | ').slice(0, 200),
   );
   await page.locator('#spot .panel__close').click();
@@ -861,9 +862,8 @@ async function desktopTests(browser, base) {
   // Carrés de 500 m : trois points sur neuf sous un arbre hôte ; en ville, cinq, et le carré doit
   // tenir à un massif (un parc isolé n'en pose plus).
   const fineRule = await page.evaluate(async () => {
-    const { fineCellsToDraw } = await import('/src/fineGrid.ts');
-    const sampled = new Set();
-    for (let i = 10; i <= 14; i++) for (let j = 10; j <= 14; j++) sampled.add(`${i}:${j}`);
+    const { fineCellsToDraw, hostShare } = await import('/src/fineGrid.ts');
+    const { MUSHROOM_BY_ID } = await import('/src/mushrooms.ts');
     const kept = fineCellsToDraw(
       [
         { id: '10:10', share: 3 / 9, town: false }, // campagne, trois points : dessiné
@@ -874,13 +874,19 @@ async function desktopTests(browser, base) {
         { id: '13:14', share: 1, town: true },
         { id: '14:13', share: 1, town: true },
         { id: '14:14', share: 6 / 9, town: true },
-        { id: '14:10', share: 1, town: true }, // ville, au bord de l'écran : ses voisins inconnus comptent pour boisés
+        { id: '14:10', share: 1, town: true }, // ville, au bord de l'écran : ses voisins hors de l'écran ne comptent pas
       ],
-      sampled,
     );
-    return [...kept].sort().join(' ');
+    // Un carré à cheval sur le bord de l'écran, dont un seul point est relevé : compté sur neuf points.
+    const hetre = { code: 'FF1-09-09', soil: null };
+    const edge = hostShare(MUSHROOM_BY_ID.get('cepe'), [hetre]);
+    return { kept: [...kept].sort().join(' '), edge: +edge.toFixed(3), full: hostShare(MUSHROOM_BY_ID.get('cepe'), Array.from({ length: 9 }, () => hetre)) };
   });
-  check('carrés de 500 m : 3 points sur 9 hors des villes ; en ville, 5 points et un massif (parc isolé écarté)', fineRule === '10:10 13:13 13:14 14:10 14:13 14:14', fineRule);
+  check(
+    'carrés de 500 m : 3 points sur 9 hors des villes ; en ville, 5 points et un massif (parc isolé écarté, bord de l’écran compris) ; un seul point visible ne suffit pas',
+    fineRule.kept === '10:10 13:13 13:14 14:13 14:14' && fineRule.edge === 0.111 && fineRule.full === 1,
+    JSON.stringify(fineRule),
+  );
 
   // Phrase de pluie : une vieille pluie « dépassée » ne masque plus la pluie récente qui va faire pousser.
   const [rainReasons, modestRain, rightTime] = await page.evaluate(async () => {
@@ -984,6 +990,36 @@ async function desktopTests(browser, base) {
     fine.coarseOpacity.slice(0, 40),
   );
   check('grille fine : état dans la légende', Boolean(fine.status) && fine.coverage, fine.status);
+  // Changer de champignon : les nouvelles valeurs partent tout de suite, à partir du dernier relevé,
+  // sans attendre ni le réseau ni le repos de la carte (sinon les carrés gardent un instant les
+  // valeurs de l'ancien champignon sous le nom du nouveau).
+  const redrawn = await page.evaluate(() => {
+    const calls = { meteo: 0, 'meteo-fin': 0 };
+    const restore = [];
+    for (const id of Object.keys(calls)) {
+      const source = window.map.getSource(id);
+      const original = source.setData;
+      source.setData = function (data) {
+        calls[id]++;
+        return original.call(this, data);
+      };
+      restore.push(() => {
+        source.setData = original;
+      });
+    }
+    window.store.update({ mushroom: 'trompette' });
+    const after = { ...calls };
+    window.store.update({ mushroom: 'cepe' });
+    const back = { ...calls };
+    restore.forEach((r) => r());
+    return { after, back };
+  });
+  check(
+    'changer de champignon : grille et carrés de 500 m redessinés dans l’instant, une seule fois chacun',
+    redrawn.after.meteo === 1 && redrawn.after['meteo-fin'] === 1 && redrawn.back.meteo === 2 && redrawn.back['meteo-fin'] === 2,
+    JSON.stringify(redrawn),
+  );
+  await idle(page);
   await page.screenshot({ path: `${OUT}04b-bureau-grille-fine.png` });
   await page.evaluate(() => window.map.jumpTo({ zoom: 11.5 }));
   await idle(page);
@@ -1009,6 +1045,23 @@ async function desktopTests(browser, base) {
       () => false,
     );
   check('mode pluie : cases entières (la pluie est celle de toute la case)', wholeCells);
+  // En mode pluie, changer de champignon ne change rien à la grille : rien n'est renvoyé à la carte.
+  await idle(page);
+  const rainStill = await page.evaluate(() => {
+    const source = window.map.getSource('meteo');
+    const original = source.setData;
+    let calls = 0;
+    source.setData = function (data) {
+      calls++;
+      return original.call(this, data);
+    };
+    const properties = Object.keys(window.map.querySourceFeatures('meteo')[0]?.properties ?? {}).sort().join();
+    window.store.update({ mushroom: 'trompette' });
+    window.store.update({ mushroom: 'cepe' });
+    source.setData = original;
+    return { calls, properties };
+  });
+  check('mode pluie : les cases ne portent pas d’indice, changer de champignon ne renvoie rien à la carte', rainStill.calls === 0 && rainStill.properties === 'elevation,rain20,sub,x,y', JSON.stringify(rainStill));
 
   // Nature du sol
   await page.getByRole('switch', { name: 'Afficher la nature du sol' }).check();

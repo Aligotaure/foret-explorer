@@ -1,5 +1,5 @@
 import maplibregl, { type LngLat, type Map as MapLibreMap, type PointLike } from 'maplibre-gl';
-import { BDFORET, DIRECT_PAST_DAYS, GEOLOGY, HOST_MIN_COVER, SPOT_ALTITUDE_TIMEOUT_MS, SPOT_ALTITUDE_WAIT_MS } from './config';
+import { BDFORET, DIRECT_PAST_DAYS, FINE_MIN_ZOOM, GEOLOGY, HOST_MIN_COVER, SPOT_ALTITUDE_TIMEOUT_MS, SPOT_ALTITUDE_WAIT_MS } from './config';
 import { h, toast } from './dom';
 import { hostCover, isLit, loadForestShare } from './forestShare';
 import { forestAt, soilAt, type ForestAtPoint, type SoilAtPoint } from './geology';
@@ -489,12 +489,15 @@ export class SpotPanel {
           MUSHROOMS.map((m) => {
             if (!v.forestUnknown) return scoreMushroom(m, weather, month, context);
             // Forêt inconnue sous le point : même règle que le carré de la carte. Secteur sans arbres
-            // hôtes, ou d'abord bâti : pas de chance annoncée ; sinon, celle de ses forêts hôtes.
-            // Fichier absent : météo seule.
+            // hôtes, ou urbanisé : pas de chance annoncée ; sinon, celle de ses forêts hôtes.
+            // Fichier absent : météo seule. La part bâtie ne compte qu'aux zooms où la carte montre
+            // les carrés de 4,5 km : au-delà elle dessine des carrés de 500 m jusque dans les massifs
+            // en ville, et le bilan les contredirait.
             const host = hostCover(v.sector.cell, v.sector.k, m);
             if (!host) return scoreMushroom(m, weather, month, context);
-            if (!isLit(host)) {
-              const blocker = host.cover < HOST_MIN_COVER ? 'peu d’arbres hôtes dans ce secteur' : 'secteur surtout bâti';
+            const lit = this.map.getZoom() < FINE_MIN_ZOOM ? isLit(host) : host.cover >= HOST_MIN_COVER;
+            if (!lit) {
+              const blocker = host.cover < HOST_MIN_COVER ? 'peu d’arbres hôtes dans ce secteur' : 'secteur urbanisé';
               return { ...scoreMushroom(m, weather, month, { ...context, hostQuality: 0 }), blocker };
             }
             return scoreMushroom(m, weather, month, { ...context, hostQuality: host.quality });

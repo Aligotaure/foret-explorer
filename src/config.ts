@@ -93,8 +93,9 @@ export const BUILT_MAX_COVER = 0.15;
 export const FINE_MIN_HOST_SHARE = 0.3;
 /**
  * En ville (carré de 4,5 km bâti à BUILT_MAX_COVER ou plus), un carré de 500 m n'est dessiné que
- * s'il est franchement boisé en hôtes (cinq points sur neuf) et tient à un massif (au moins deux
- * carrés voisins, sur huit, ont eux aussi des arbres hôtes) : un parc ou un square isolé n'en pose plus.
+ * s'il est franchement boisé en hôtes (cinq points sur neuf) et tient à un massif (au moins deux de
+ * ses huit voisins passent eux-mêmes la règle des trois points) : un parc ou un square isolé n'en
+ * pose plus.
  */
 export const FINE_TOWN_MIN_HOST_SHARE = 0.5;
 export const FINE_TOWN_MIN_NEIGHBOURS = 2;

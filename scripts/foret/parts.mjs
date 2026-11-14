@@ -13,9 +13,13 @@
 // marge serait comptée deux fois). Les aires s'additionnent d'une tuile à l'autre.
 //
 // Part bâtie (champ `bati` du fichier) : même calcul sur les zones bâties et les zones d'activité du
-// Plan IGN (tuiles vectorielles PLAN.IGN, couche `bati_zone_surf`, mêmes tuiles du zoom 10, ≈ 200 Mo,
-// gardées dans .cache/plan/). La carte s'en sert pour ne pas allumer un carré qui est surtout une
+// Plan IGN (tuiles vectorielles PLAN.IGN, couche `bati_zone_surf`, mêmes tuiles du zoom 10, ≈ 85 Mo,
+// gardées dans .cache/plan/). La carte s'en sert pour ne pas allumer un carré qui est d'abord une
 // ville, même s'il contient un bois.
+//
+// Toutes les aires sont comptées en fraction de tuile, pas en unités de tuile : les tuiles du Plan
+// IGN n'ont pas toutes 4 096 unités de côté (9 tuiles des Alpes du Nord en ont 256 à 2 048 pour la
+// couche bâtie ; comptées en unités, Grenoble ressortait bâtie à 1 %).
 //
 // À relancer si la grille change (src/meteoGrid.ts, scripts/meteo/cases-france.json) ou si l'IGN
 // publie une nouvelle BD Forêt. Le fichier produit est versionné (public/foret/parts.json).
@@ -87,15 +91,23 @@ mkdirSync(CACHE_PLAN, { recursive: true });
 let octets = 0;
 let telechargees = 0;
 let vides = 0;
+/** Tuiles du Plan IGN rendues vides par le service : anormal sur terre, donc ni gardées ni tues. */
+const planVides = [];
 
-/** Contenu d'une tuile (cache d'abord) ; vide : la tuile n'existe pas (rien à cet endroit). */
-async function tuile(service, cache, nom) {
+/**
+ * Contenu d'une tuile (cache d'abord). `videPossible` : une réponse 404 ou 204 veut dire « rien à cet
+ * endroit » (BD Forêt : aucune forêt) et se garde ; sinon c'est une erreur passagère du service, à
+ * retenter (le Plan IGN couvre toute la terre : le 14/11/2026, une tuile du Loiret est revenue vide
+ * une fois, puis pleine). Rend un tampon vide si la tuile reste introuvable.
+ */
+async function tuile(service, cache, nom, videPossible) {
   const fichier = join(cache, `${nom.replaceAll('/', '_')}.pbf`);
-  if (existsSync(fichier)) return readFileSync(fichier);
+  if (existsSync(fichier) && (videPossible || readFileSync(fichier).length)) return readFileSync(fichier);
   for (let essai = 1; ; essai++) {
     try {
       const reponse = await fetch(`${service}/${nom}.pbf`, { headers: { 'user-agent': USER_AGENT }, signal: AbortSignal.timeout(90_000) });
       if (reponse.status === 404 || reponse.status === 204) {
+        if (!videPossible) throw new Error(`vide (HTTP ${reponse.status})`);
         writeFileSync(fichier, Buffer.alloc(0));
         return Buffer.alloc(0);
       }
@@ -105,7 +117,13 @@ async function tuile(service, cache, nom) {
       telechargees++;
       return contenu;
     } catch (error) {
-      if (essai >= ESSAIS) throw new Error(`tuile ${nom} : ${error.message}`);
+      if (essai >= ESSAIS) {
+        if (!videPossible && /^vide/.test(error.message)) {
+          planVides.push(nom);
+          return Buffer.alloc(0);
+        }
+        throw new Error(`tuile ${nom} : ${error.message}`);
+      }
       await sleep(1500 * essai);
     }
   }
@@ -114,7 +132,9 @@ async function tuile(service, cache, nom) {
 /**
  * Ajoute aux carrés les aires des polygones d'une couche d'une tuile : `ajoute(carré, valeur, aire)`
  * pour chaque polygone gardé par `garde(valeur)`. `surface` : cette passe compte aussi la surface du
- * carré vue par les tuiles (une seule passe doit le faire). Rend le nombre de polygones gardés.
+ * carré vue par les tuiles (une seule passe doit le faire). Aires en fraction de tuile (divisées par
+ * le carré du côté de la couche, qui change d'une tuile et d'un service à l'autre). Rend le nombre
+ * de polygones gardés.
  */
 function compter(nom, contenu, nomCouche, propriete, garde, ajoute, surface) {
   const [z, x, y] = nom.split('/').map(Number);
@@ -150,15 +170,15 @@ function compter(nom, contenu, nomCouche, propriete, garde, ajoute, surface) {
       const [x0, y0, x1, y1] = [Math.max(0, fx0), Math.max(0, fy0), Math.min(E, fx1), Math.min(E, fy1)];
       if (x1 <= x0 || y1 <= y0) continue;
       if (surface) {
-        carre.plein = (fx1 - fx0) * (fy1 - fy0);
-        carre.vu += (x1 - x0) * (y1 - y0);
+        carre.plein = ((fx1 - fx0) * (fy1 - fy0)) / (E * E);
+        carre.vu += ((x1 - x0) * (y1 - y0)) / (E * E);
       }
       for (const o of objets) {
         if (o.xmax < x0 || o.xmin > x1 || o.ymax < y0 || o.ymin > y1) continue;
         let a = 0;
         for (const ring of o.rings) a += aireDans(ring, x0, y0, x1, y1);
         a *= o.sens;
-        if (a > 0) ajoute(carre, o.code, a);
+        if (a > 0) ajoute(carre, o.code, a / (E * E));
       }
     }
   }
@@ -177,10 +197,10 @@ await Promise.all(
   Array.from({ length: DE_FRONT }, async () => {
     while (rang < aLire.length) {
       const nom = aLire[rang++];
-      const contenu = await tuile(SERVICE, CACHE, nom);
+      const contenu = await tuile(SERVICE, CACHE, nom, true);
       octets += contenu.length;
       if (!compter(nom, contenu, COUCHE, 'code_tfv', () => true, ajouteForet, true)) vides++;
-      const plan = await tuile(SERVICE_PLAN, CACHE_PLAN, nom);
+      const plan = await tuile(SERVICE_PLAN, CACHE_PLAN, nom, false);
       octets += plan.length;
       compter(nom, plan, COUCHE_BATI, 'symbo', (symbole) => SYMBOLES_BATIS.has(symbole), ajouteBati, false);
       if (++faites % 50 === 0 || faites === aLire.length) {
@@ -218,6 +238,7 @@ for (const carre of carres.values()) {
   (bati[carre.cell] ??= Array.from({ length: SUB_COUNT }, () => null))[carre.k] = partBatie;
 }
 if (incomplets) throw new Error(`${incomplets} carrés ne sont pas couverts en entier par les tuiles lues`);
+if (planVides.length) console.warn(`⚠ ${planVides.length} tuile(s) du Plan IGN rendue(s) vide(s) par le service, part bâtie comptée nulle : ${planVides.join(', ')}. Relancer plus tard.`);
 
 const resultat = {
   v: 1,

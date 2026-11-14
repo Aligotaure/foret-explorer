@@ -158,10 +158,12 @@ function batiEn(latitude, longitude) {
   const [ci, cj] = [Math.floor(bi / 4), Math.floor(bj / 4)];
   return parts.bati?.[`${ci}:${cj}`]?.[(bi - ci * 4) * 4 + (bj - cj * 4)] ?? null;
 }
-const villes = { Paris: batiEn(48.86, 2.37), Lyon: batiEn(45.76, 4.84), Nancy: batiEn(48.69, 6.18), Fontainebleau: batiEn(48.42, 2.65), Landes: batiEn(44.15, -0.74), Beauce: batiEn(48.2, 1.88) };
+// Grenoble et Chambéry sont dans des tuiles du Plan IGN dont la couche bâtie n'a pas 4 096 unités de
+// côté : comptées en unités de tuile au lieu de fractions, elles ressortaient bâties à 1 %.
+const villes = { Paris: batiEn(48.86, 2.37), Lyon: batiEn(45.76, 4.84), Nancy: batiEn(48.69, 6.18), Grenoble: batiEn(45.188, 5.724), Chambéry: batiEn(45.57, 5.92), Fontainebleau: batiEn(48.42, 2.65), Landes: batiEn(44.15, -0.74), Beauce: batiEn(48.2, 1.88) };
 check(
-  'fichier : repères bâtis (Paris, Lyon et Nancy surtout bâtis ; forêt de Fontainebleau, Landes et Beauce presque pas)',
-  villes.Paris >= 80 && villes.Lyon >= 60 && villes.Nancy >= 60 && villes.Fontainebleau <= 10 && villes.Landes <= 10 && villes.Beauce <= 10,
+  'fichier : repères bâtis (Paris, Lyon, Nancy, Grenoble et Chambéry surtout bâtis ; forêt de Fontainebleau, Landes et Beauce presque pas)',
+  villes.Paris >= 80 && villes.Lyon >= 60 && villes.Nancy >= 60 && villes.Grenoble >= 60 && villes.Chambéry >= 60 && villes.Fontainebleau <= 10 && villes.Landes <= 10 && villes.Beauce <= 10,
   JSON.stringify(villes),
 );
 

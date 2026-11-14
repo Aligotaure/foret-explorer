@@ -189,11 +189,18 @@ export function sampleCells(map: MapLibreMap, cells: readonly FineCell[]): Map<s
 
 export const hasForest = (samples: readonly Sample[] | undefined): boolean => Boolean(samples?.some((s) => s.code));
 
-/** Part des points relevés d'un carré qui sont sous un arbre hôte du champignon (0 à 1). */
+/** Points relevés dans un carré entièrement visible (3 × 3). */
+const POINTS = OFFSETS.length ** 2;
+
+/**
+ * Part des neuf points d'un carré qui sont sous un arbre hôte du champignon (0 à 1). Un carré à
+ * cheval sur le bord de l'écran n'est relevé qu'en partie : on compte quand même sur neuf, sinon il
+ * se dessinerait sur la foi d'un seul point visible, puis disparaîtrait une fois entier à l'écran.
+ */
 export function hostShare(m: Mushroom, samples: readonly Sample[]): number {
   let hosts = 0;
   for (const s of samples) if (s.code !== null && (m.hosts[s.code] ?? 0) > 0) hosts++;
-  return samples.length ? hosts / samples.length : 0;
+  return hosts / POINTS;
 }
 
 /** Un carré candidat au dessin : sa part d'arbres hôtes, et s'il est en ville (carré de 4,5 km d'abord bâti). */
@@ -208,10 +215,10 @@ export interface FineCandidate {
  * FINE_MIN_HOST_SHARE de points sous un arbre hôte suffit. En ville, il faut en plus que le carré
  * soit franchement boisé et tienne à un massif (voir FINE_TOWN_MIN_*) : avant le 14/11/2026, le
  * moindre parc urbain posait un carré coloré au milieu des rues.
- * `sampled` : carrés dont on connaît la forêt ; un voisin hors de l'écran, inconnu, compte pour boisé
- * (sinon un carré du bord de l'écran disparaîtrait et reviendrait au gré des déplacements).
+ * Seuls les voisins connus comptent : au bord de l'écran, un carré de ville n'apparaît que lorsque
+ * son massif est assez visible (le contraire ferait revenir les parcs le long des bords).
  */
-export function fineCellsToDraw(candidates: readonly FineCandidate[], sampled: ReadonlySet<string>): Set<string> {
+export function fineCellsToDraw(candidates: readonly FineCandidate[]): Set<string> {
   const wooded = new Set(candidates.filter((c) => c.share >= FINE_MIN_HOST_SHARE).map((c) => c.id));
   const kept = new Set<string>();
   for (const c of candidates) {
@@ -226,8 +233,7 @@ export function fineCellsToDraw(candidates: readonly FineCandidate[], sampled: R
     for (let di = -1; di <= 1; di++) {
       for (let dj = -1; dj <= 1; dj++) {
         if (!di && !dj) continue;
-        const id = `${i + di}:${j + dj}`;
-        if (wooded.has(id) || !sampled.has(id)) neighbours++;
+        if (wooded.has(`${i + di}:${j + dj}`)) neighbours++;
       }
     }
     if (neighbours >= FINE_TOWN_MIN_NEIGHBOURS) kept.add(c.id);

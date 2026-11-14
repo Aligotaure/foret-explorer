@@ -86,6 +86,29 @@ interface Box {
   north: number;
 }
 
+type GridCell = NonNullable<ReturnType<typeof cellsForBounds>>[number];
+
+/** Dernier relevé de la vue : de quoi redessiner la grille tout de suite, sans rien redemander. */
+interface GridData {
+  cells: readonly GridCell[];
+  series: ReadonlyMap<string, DailySeries>;
+  /** Fichiers météo communs (sinon Open-Meteo en direct). */
+  shared: boolean;
+  /** Les arbres hôtes de chaque carré sont connus (fichier des parts chargé). */
+  hosts: boolean;
+  /** Largeur de la vue, en degrés (espacement des pastilles). */
+  width: number;
+}
+
+/** Dernier relevé des carrés de 500 m (forêts et sols de la vue). */
+interface FineData {
+  cells: readonly FineCell[];
+  samples: ReadonlyMap<string, Sample[]>;
+  series: ReadonlyMap<string, DailySeries>;
+  /** Altitude IGN indisponible : carrés dessinés à l'altitude du carré de 4,5 km. */
+  fallback: boolean;
+}
+
 /** Rectangle d'une case ; `inset` le rétrécit (part de la largeur ôtée de chaque côté). */
 function boxPolygon(c: Box, inset = 0): Polygon {
   const dx = (c.east - c.west) * inset;
@@ -153,6 +176,10 @@ function waitForIdle(map: MapLibreMap, signal: AbortSignal): Promise<void> {
  *    `p` chance estimée, `c` part d'arbres hôtes) : les expressions ne changent pas avec le champignon ;
  *  - un carré éteint n'est pas envoyé à la carte ;
  *  - un contenu identique au précédent n'est pas renvoyé (`setSource`).
+ * Contrepartie : le bon contenu doit partir dès que le champignon ou le mode change. `redraw()` le
+ * refait donc tout de suite à partir du dernier relevé gardé (`data`, `fineData`), sans attendre le
+ * réseau ni le repos de la carte ; sinon les carrés montrent un instant les valeurs de l'ancien
+ * champignon sous le nom du nouveau.
  */
 export class MeteoLayer {
   private controller: AbortController | null = null;
@@ -173,6 +200,8 @@ export class MeteoLayer {
     [SOURCES.meteoTop, '[]'],
   ]);
   private timer: number | undefined;
+  private data: GridData | null = null;
+  private fineData: FineData | null = null;
 
   /** La carte a bougé : la grille est refaite une fois la carte posée. */
   readonly refresh = (): void => {
@@ -225,7 +254,7 @@ export class MeteoLayer {
       window.clearTimeout(this.timer);
       this.controller?.abort();
       this.showHotspots([], 1);
-      this.showFine(false);
+      this.dropFine();
       this.setStatus({ state: 'off' });
       return;
     }
@@ -238,9 +267,19 @@ export class MeteoLayer {
     } else {
       this.paintIndex();
     }
-    // Tout de suite, sans attendre : le mode ou le champignon vient de changer, la carte ne bouge pas.
+    // Tout de suite, avec ce qu'on a déjà : le mode ou le champignon vient de changer, la carte ne
+    // bouge pas. Puis une mise à jour, sans attendre (elle ne renvoie rien si rien n'a changé).
+    this.redraw();
     window.clearTimeout(this.timer);
     void this.update();
+  }
+
+  /** Redessine la grille et les carrés de 500 m à partir du dernier relevé, sans rien redemander. */
+  private redraw(): void {
+    if (!this.data) return;
+    const index = this.store.state.weatherMode === 'indice';
+    const fine = index && this.map.getZoom() >= FINE_MIN_ZOOM ? this.fineData : null;
+    this.drawGrid(!index ? { state: 'off' } : fine ? { state: 'ok', count: this.renderFine(fine), altitude: !fine.fallback } : { state: 'loading' });
   }
 
   /**
@@ -248,14 +287,16 @@ export class MeteoLayer {
    * rappelées avec les mêmes valeurs, MapLibre n'en fait rien. Seul `fineDone` les change.
    */
   private paintIndex(): void {
-    const level = ['get', 'l'];
+    // Les cases du mode pluie ne portent ni `l`, ni `p`, ni `c` : s'il en reste un instant dans la
+    // source quand on passe à l'indice, elles valent 0 partout, donc éteintes (voir `unlit`).
+    const level = ['coalesce', ['get', 'l'], 0];
     const colors = LEVELS.flatMap((l, i) => [i, l.color]);
     // Sous le seuil, un secteur ne vaut pas le déplacement : presque effacé, sans étiquette.
-    const chance = ['get', 'p'];
+    const chance = ['coalesce', ['get', 'p'], 0];
     // Arbres hôtes du carré (`c`, part de sa surface ; −1 : inconnue, on dessine comme avant) :
-    // d'autant plus soutenu qu'il est boisé. Sous le seuil il est éteint : en mode indice il n'est
-    // pas dans la source, mais les cases du mode pluie y restent un instant quand on change de mode.
-    const cover = ['get', 'c'];
+    // d'autant plus soutenu qu'il est boisé. Sous le seuil il est éteint (en mode indice, un carré
+    // éteint n'est de toute façon pas dans la source).
+    const cover = ['coalesce', ['get', 'c'], 0];
     const unlit = ['all', ['>=', cover, 0], ['<', cover, HOST_MIN_COVER]];
     const wooded = ['case', ['<', cover, 0], 1, unlit, 0, ['interpolate', ['linear'], cover, HOST_MIN_COVER, 0.45, HOST_FULL_COVER, 1]];
     const opacity = ['*', ['match', level, 0, 0.04, 1, 0.1, 2, 0.26, 3, 0.36, 0], wooded];
@@ -324,6 +365,12 @@ export class MeteoLayer {
     return ranked[0]?.p ?? null;
   }
 
+  /** Plus de carrés de 500 m à montrer (zoom, mode, vue hors de France) : leur relevé est oublié aussi. */
+  private dropFine(): void {
+    this.fineData = null;
+    this.showFine(false);
+  }
+
   /** `done` : le relevé fin de la vue est fait, qu'il ait trouvé des arbres hôtes (`on`) ou non. */
   private showFine(on: boolean, done = on): void {
     if (!on) this.setSource(SOURCES.meteoFine, []);
@@ -334,14 +381,20 @@ export class MeteoLayer {
     applyOpacity(this.map, this.store.state.opacity, this.dimsForests);
   }
 
+  /** Vide la grille : rien à montrer pour cette vue (zoom trop petit, hors de France, trop de cases). */
+  private clearGrid(status: MeteoStatus): void {
+    this.data = null;
+    this.setSource(SOURCES.meteo, []);
+    this.showHotspots([], 1);
+    this.dropFine();
+    this.setStatus(status);
+  }
+
   private async update(): Promise<void> {
     const state = this.store.state;
     if (state.weatherMode === 'off') return;
-    if (this.map.getZoom() < WEATHER_MIN_ZOOM) {
-      this.showFine(false);
-      this.setStatus({ state: 'zoom' });
-      return;
-    }
+    this.controller?.abort();
+    if (this.map.getZoom() < WEATHER_MIN_ZOOM) return this.clearGrid({ state: 'zoom' });
     // Vue limitée à l'emprise de la France : pas de météo ailleurs, et jamais trop de cases.
     const b = this.map.getBounds();
     const [west, south, east, north] = FRANCE_BOUNDS;
@@ -351,125 +404,121 @@ export class MeteoLayer {
       east: Math.min(b.getEast(), east),
       north: Math.min(b.getNorth(), north),
     };
-    this.controller?.abort();
-    if (view.west >= view.east || view.south >= view.north) {
-      this.setSource(SOURCES.meteo, []);
-      this.showFine(false);
-      this.setStatus({ state: 'outside' });
-      return;
-    }
+    if (view.west >= view.east || view.south >= view.north) return this.clearGrid({ state: 'outside' });
     const cells = cellsForBounds(view, WEATHER_MAX_CELLS);
-    if (!cells) {
-      this.showFine(false);
-      this.setStatus({ state: 'many' });
-      return;
-    }
+    if (!cells) return this.clearGrid({ state: 'many' });
     const controller = new AbortController();
     this.controller = controller;
-    this.setStatus({ state: 'loading' });
+    // « Chargement… » seulement s'il n'y a encore rien à l'écran pour cette grille.
+    if (!this.data) this.setStatus({ state: 'loading' });
     try {
       const weather = await weatherForCells(cells, controller.signal);
       if (controller.signal.aborted) return;
-      if (weather.tooMany) {
-        this.showFine(false);
-        this.setStatus({ state: 'many' });
-        return;
-      }
-      const series = weather.series;
-      const month = new Date().getMonth() + 1;
-      const today = todayKey();
-      // L'indice se détaille par carrés de 4,5 km ; la pluie, elle, est la même dans toute la case.
-      const subdivide = state.weatherMode === 'indice' && this.map.getZoom() >= WEATHER_SUB_MIN_ZOOM;
-      let day = '';
-      let estimated = false;
-      let count = 0;
-      let detailed = false;
-      const features: Feature[] = [];
-      // Arbres hôtes de chaque carré : sans eux, le pourcentage ne regardait que la météo. Chargés
-      // en mode pluie aussi : en passant à la chance estimée, les carrés déjà là sont repeints tout
-      // de suite, et ils doivent déjà savoir où sont les arbres (sinon les villes s'allument un instant).
+      if (weather.tooMany) return this.clearGrid({ state: 'many' });
+      // Arbres hôtes de chaque carré : sans eux, le pourcentage ne regardait que la météo.
       const hosts = await loadForestShare();
       if (controller.signal.aborted) return;
-      const shown = MUSHROOM_BY_ID.get(indexMushroom(state));
-      const index = state.weatherMode === 'indice';
-      /**
-       * `host` : arbres hôtes du champignon montré dans ce carré (null : inconnus, météo seule) ;
-       * `lit` : le carré est allumé (assez d'arbres hôtes, pas d'abord une ville : `isLit`).
-       */
-      const add = (id: string, weatherOf: () => WeatherSummary, box: Box, sub: 0 | 1, host: { cover: number; quality: number } | null, lit: boolean, spot: Box = box): void => {
-        // Arbres hôtes connus : l'indice vaut pour eux (qualité moyenne des hôtes du carré). En mode
-        // indice un carré éteint n'est pas dessiné du tout : il n'est ni calculé ni envoyé à la carte.
-        if (index && !lit) return;
-        const w = weatherOf();
-        const score = lit && shown ? scoreMushroom(shown, w, month, host ? { hostQuality: host.quality } : {}) : null;
-        features.push({
-          type: 'Feature',
-          id,
-          properties: {
-            rain20: Math.round(w.rain20),
-            elevation: Math.round(w.elevation),
-            sub,
-            // Où poser la pastille de la vue d'ensemble : au centre, ou sur le carré le plus boisé d'une case.
-            x: +((spot.west + spot.east) / 2).toFixed(4),
-            y: +((spot.south + spot.north) / 2).toFixed(4),
-            // Champignon montré seulement : niveau, chance estimée, part d'arbres hôtes (−1 : inconnue ;
-            // 0 : carré éteint, gardé pour le mode pluie).
-            l: score?.level ?? 0,
-            p: score?.chance ?? 0,
-            c: !host ? -1 : lit ? round2(host.cover) : 0,
-          },
-          geometry: boxPolygon(box),
-        });
-      };
-      for (const c of cells) {
-        const s = series.get(c.id);
-        if (!s) continue;
-        const w = summarize(s, today);
-        if (w.lastDate && w.lastDate >= day) {
-          estimated = w.lastDate > day ? w.estimated : estimated || w.estimated;
-          day = w.lastDate;
-        }
-        count++;
-        if (subdivide && s.subAltitudes) {
-          detailed = true;
-          s.subAltitudes.forEach((z, k) => {
-            if (z === null) return;
-            const host = hosts && shown ? hostCover(c.id, k, shown) : null;
-            add(`${c.id}/${k}`, () => summaryAtAltitude(w, z), subBox(c, k), 1, host, !host || isLit(host));
-          });
-        } else {
-          const cell = hosts && shown ? hostCoverOfCell(c.id, shown) : null;
-          // Allumée dès qu'un de ses carrés l'est (sa teinte suit la moyenne) : une case de plaine avec
-          // une seule vraie forêt ne doit pas s'éteindre en vue d'ensemble puis réapparaître en zoomant.
-          const lit = !cell || cell.best >= 0;
-          const host = cell && lit ? { cover: Math.max(cell.cover, HOST_MIN_COVER), quality: cell.quality } : cell;
-          // Case entière : à l'altitude médiane de ses carrés plutôt qu'à celle du point de relevé.
-          add(c.id, () => summaryAtAltitude(w, medianAltitude(s)), c, 0, host, lit, cell && cell.best >= 0 ? subBox(c, cell.best) : c);
-        }
-      }
-      this.setSource(SOURCES.meteo, features);
-      const best = this.showHotspots(index ? features : [], view.east - view.west);
-      const fine: FineStatus = state.weatherMode === 'indice' ? { state: 'loading' } : { state: 'off' };
-      this.setStatus({ state: 'ok', cells: count, day, estimated, shared: weather.shared, sub: detailed, hosts, best, fine });
-      if (state.weatherMode === 'indice') await this.updateFine(series, controller.signal);
-      else this.showFine(false);
+      this.data = { cells, series: weather.series, shared: weather.shared, hosts, width: view.east - view.west };
+      const index = this.store.state.weatherMode === 'indice';
+      this.drawGrid(index ? { state: 'loading' } : { state: 'off' });
+      if (index) await this.updateFine(weather.series, controller.signal);
+      else this.dropFine();
     } catch (error) {
       if (controller.signal.aborted || isAbort(error)) return;
       this.setStatus({ state: 'error', message: error instanceof Error ? error.message : String(error) });
     }
   }
 
+  /**
+   * Dessine la grille à partir du dernier relevé (`data`) et de l'état du moment : cases entières ou
+   * carrés de 4,5 km, pluie ou indice du champignon montré. `fine` : état des carrés de 500 m à
+   * annoncer avec.
+   */
+  private drawGrid(fine: FineStatus): void {
+    const data = this.data;
+    const state = this.store.state;
+    if (!data || state.weatherMode === 'off') return;
+    const { series, hosts } = data;
+    const month = new Date().getMonth() + 1;
+    const today = todayKey();
+    const index = state.weatherMode === 'indice';
+    // L'indice se détaille par carrés de 4,5 km ; la pluie, elle, est la même dans toute la case.
+    const subdivide = index && this.map.getZoom() >= WEATHER_SUB_MIN_ZOOM;
+    const shown = MUSHROOM_BY_ID.get(indexMushroom(state));
+    let day = '';
+    let estimated = false;
+    let count = 0;
+    let detailed = false;
+    const features: Feature[] = [];
+    /**
+     * `host` : arbres hôtes du champignon montré dans ce carré (null : inconnus, météo seule) ;
+     * `lit` : le carré est allumé (assez d'arbres hôtes, pas d'abord une ville : `isLit`).
+     */
+    const add = (id: string, weatherOf: () => WeatherSummary, box: Box, sub: 0 | 1, host: { cover: number; quality: number } | null, lit: boolean, spot: Box = box): void => {
+      // En mode indice un carré éteint n'est pas dessiné du tout : il n'est ni calculé ni envoyé.
+      if (index && !lit) return;
+      const w = weatherOf();
+      const properties: Record<string, number> = {
+        rain20: Math.round(w.rain20),
+        elevation: Math.round(w.elevation),
+        sub,
+        // Où poser la pastille de la vue d'ensemble : au centre, ou sur le carré le plus boisé d'une case.
+        x: +((spot.west + spot.east) / 2).toFixed(4),
+        y: +((spot.south + spot.north) / 2).toFixed(4),
+      };
+      if (index) {
+        // Champignon montré seulement : niveau, chance estimée, part d'arbres hôtes (−1 : inconnue).
+        // Arbres hôtes connus : l'indice vaut pour eux (qualité moyenne des hôtes du carré). En mode
+        // pluie, rien de tout cela : changer de champignon n'y change pas le contenu de la source.
+        const score = shown ? scoreMushroom(shown, w, month, host ? { hostQuality: host.quality } : {}) : null;
+        properties['l'] = score?.level ?? 0;
+        properties['p'] = score?.chance ?? 0;
+        properties['c'] = host ? round2(host.cover) : -1;
+      }
+      features.push({ type: 'Feature', id, properties, geometry: boxPolygon(box) });
+    };
+    for (const c of data.cells) {
+      const s = series.get(c.id);
+      if (!s) continue;
+      const w = summarize(s, today);
+      if (w.lastDate && w.lastDate >= day) {
+        estimated = w.lastDate > day ? w.estimated : estimated || w.estimated;
+        day = w.lastDate;
+      }
+      count++;
+      if (subdivide && s.subAltitudes) {
+        detailed = true;
+        s.subAltitudes.forEach((z, k) => {
+          if (z === null) return;
+          const host = hosts && shown ? hostCover(c.id, k, shown) : null;
+          add(`${c.id}/${k}`, () => summaryAtAltitude(w, z), subBox(c, k), 1, host, !host || isLit(host));
+        });
+      } else {
+        const cell = index && hosts && shown ? hostCoverOfCell(c.id, shown) : null;
+        // Allumée dès qu'un de ses carrés l'est (sa teinte suit la moyenne) : une case de plaine avec
+        // une seule vraie forêt ne doit pas s'éteindre en vue d'ensemble puis réapparaître en zoomant.
+        const lit = !cell || cell.best >= 0;
+        const host = cell && lit ? { cover: Math.max(cell.cover, HOST_MIN_COVER), quality: cell.quality } : cell;
+        // Case entière : à l'altitude médiane de ses carrés plutôt qu'à celle du point de relevé.
+        add(c.id, () => summaryAtAltitude(w, medianAltitude(s)), c, 0, host, lit, cell && cell.best >= 0 ? subBox(c, cell.best) : c);
+      }
+    }
+    this.setSource(SOURCES.meteo, features);
+    const best = this.showHotspots(index ? features : [], data.width);
+    this.setStatus({ state: 'ok', cells: count, day, estimated, shared: data.shared, sub: detailed, hosts, best, fine });
+  }
+
   /** Carrés de 500 m : relevé des forêts et des sols, altitudes IGN, indice de chaque carré. */
   private async updateFine(series: ReadonlyMap<string, DailySeries>, signal: AbortSignal): Promise<void> {
     if (this.map.getZoom() < FINE_MIN_ZOOM) {
-      this.showFine(false);
+      this.dropFine();
       this.setFine({ state: 'zoom' });
       return;
     }
     const b = this.map.getBounds();
     const cells = fineCellsForBounds({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() });
     if (!cells) {
-      this.showFine(false);
+      this.dropFine();
       this.setFine({ state: 'many' });
       return;
     }
@@ -483,8 +532,9 @@ export class MeteoLayer {
     const missing = forested.filter((c) => !altitudes.has(c.id)).sort((a, z) => distance(a) - distance(z));
     track('ign.altitude.cacheHits', forested.length - missing.length);
 
-    let count = this.renderFine(forested, samples, series, false);
-    let altitudeOk = true;
+    const fine: FineData = { cells: forested, samples, series, fallback: false };
+    this.fineData = fine;
+    let count = this.renderFine(fine);
     if (missing.length) {
       try {
         // Les altitudes arrivent par lots : redessiner à chacun ferait refaire toutes les tuiles des
@@ -498,29 +548,24 @@ export class MeteoLayer {
           saveAltitudes();
           if (signal.aborted || performance.now() - drawn < FINE_RENDER_EVERY_MS) return;
           drawn = performance.now();
-          count = this.renderFine(forested, samples, series, false);
+          count = this.renderFine(fine);
         });
-        if (!signal.aborted) count = this.renderFine(forested, samples, series, false);
+        if (!signal.aborted) count = this.renderFine(fine);
       } catch (error) {
         if (signal.aborted || isAbort(error)) return;
         console.warn('[grille fine]', error);
-        altitudeOk = false;
-        count = this.renderFine(forested, samples, series, true); // à l'altitude du carré de 4,5 km
+        fine.fallback = true; // à l'altitude du carré de 4,5 km
+        count = this.renderFine(fine);
       }
     }
-    if (!signal.aborted) this.setFine({ state: 'ok', count, altitude: altitudeOk });
+    if (!signal.aborted) this.setFine({ state: 'ok', count, altitude: !fine.fallback });
   }
 
   /**
-   * Dessine les carrés dont l'altitude est connue (ou tous, avec `fallback`, à l'altitude de la
-   * case). Renvoie le nombre de carrés dessinés : ceux qui ont des arbres hôtes du champignon montré.
+   * Dessine les carrés du relevé dont l'altitude est connue (ou tous, avec `fallback`, à l'altitude
+   * de la case), pour le champignon montré. Renvoie le nombre de carrés dessinés.
    */
-  private renderFine(
-    cells: readonly FineCell[],
-    samples: ReadonlyMap<string, Sample[]>,
-    series: ReadonlyMap<string, DailySeries>,
-    fallback: boolean,
-  ): number {
+  private renderFine({ cells, samples, series, fallback }: FineData): number {
     const altitudes = altitudeCache();
     const month = new Date().getMonth() + 1;
     const today = todayKey();
@@ -537,7 +582,6 @@ export class MeteoLayer {
             const built = hostCover(c.parentId, subIndexAt(c.lat, c.lon), shown)?.built ?? 0;
             return [{ id: c.id, share, town: built >= BUILT_MAX_COVER }];
           }),
-          new Set(samples.keys()),
         )
       : new Set<string>();
     for (const c of cells) {
