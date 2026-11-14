@@ -22,11 +22,13 @@ const jourAvant = (jour, k) => new Date(Date.parse(`${jour}T00:00:00Z`) - k * 86
 const BLOC = 8;
 
 /**
- * Fichiers météo de toute la France dans `dossier`, les 31 jours finissant à `jour` : une grosse
- * pluie il y a `pluieIlYA` jours (aucune si négatif), 14 °C le jour et 8 °C la nuit à 500 m, toutes
- * les cases pareilles, leurs seize carrés à 500 m (null là où le fichier des parts n'a pas de terre).
+ * Fichiers météo dans `dossier` pour toutes les cases du fichier des parts `fichier`, les 31 jours
+ * finissant à `jour` : une grosse pluie il y a `pluieIlYA` jours (aucune si négatif), 14 °C le jour
+ * et 8 °C la nuit au point de relevé (500 m), toutes les cases pareilles, leurs seize carrés à
+ * `altitude` (null là où le fichier des parts n'a pas de terre).
  */
-function fabriquer(dossier, jour, pluieIlYA) {
+function fabriquer(dossier, jour, pluieIlYA, fichier = parts, altitude = 500) {
+  const cases = Object.keys(fichier.cases);
   mkdirSync(join(dossier, 'b'), { recursive: true });
   const dates = Array.from({ length: 31 }, (_, k) => jourAvant(jour, 30 - k));
   const pluie = dates.map((_, k) => (30 - k === pluieIlYA ? 40 : pluieIlYA >= 0 && 30 - k === pluieIlYA + 2 ? 20 : 0));
@@ -45,7 +47,7 @@ function fabriquer(dossier, jour, pluieIlYA) {
       p: pluie,
       x: dates.map(() => 14),
       n: dates.map(() => 8),
-      a: parts.cases[id].map((square) => (square ? 500 : null)),
+      a: fichier.cases[id].map((square) => (square ? altitude : null)),
     };
   }
   for (const [bloc, cells] of blocs) writeFileSync(join(dossier, 'b', `${bloc}.json`), JSON.stringify({ v: 1, dates, cells }));
@@ -54,12 +56,18 @@ function fabriquer(dossier, jour, pluieIlYA) {
   return index;
 }
 
-function calculer(jour, pluieIlYA) {
+/** `fichier` : un autre fichier des parts que celui du dépôt (essai) ; `altitude` : celle des carrés. */
+function calculer(jour, pluieIlYA, { fichier = null, altitude = 500 } = {}) {
   const dossier = mkdtempSync(join(tmpdir(), 'france-'));
   try {
-    const index = fabriquer(dossier, jour, pluieIlYA);
+    const index = fabriquer(dossier, jour, pluieIlYA, fichier ?? parts, altitude);
     const sortie = join(dossier, 'france.json');
-    const journal = execFileSync(process.execPath, [join(racine, 'scripts/meteo/france.mjs'), '--meteo', dossier, '--parts', join(racine, 'public/foret/parts.json'), '--sortie', sortie, '--jour', jour], { encoding: 'utf8' });
+    let chemin = join(racine, 'public/foret/parts.json');
+    if (fichier) {
+      chemin = join(dossier, 'parts.json');
+      writeFileSync(chemin, JSON.stringify(fichier));
+    }
+    const journal = execFileSync(process.execPath, [join(racine, 'scripts/meteo/france.mjs'), '--meteo', dossier, '--parts', chemin, '--sortie', sortie, '--jour', jour], { encoding: 'utf8' });
     return { index, journal, file: JSON.parse(readFileSync(sortie, 'utf8')), octets: readFileSync(sortie).length };
   } finally {
     rmSync(dossier, { recursive: true, force: true });
@@ -102,6 +110,36 @@ check(
   avril.file.mois === 4 && avril.file.moyennes.morille > 0 && !('cepe' in avril.file.moyennes),
   JSON.stringify(avril.file.moyennes),
 );
+
+// ── L'altitude de chaque carré compte : les mêmes fichiers, carrés à 2 500 m au lieu de 500 m
+// (16 °C et 13 °C de moins : gel). Un calcul qui prendrait l'altitude du point de relevé pour tous
+// les carrés rendrait les mêmes moyennes dans les deux cas.
+const haut = calculer('2026-10-20', 9, { altitude: 2500 });
+check(
+  'altitude des carrés : à 2 500 m les moyennes s’effondrent (températures ramenées à l’altitude de chaque carré), mêmes carrés comptés',
+  ['cepe', 'girolle', 'trompette', 'chanterelle'].every((id) => haut.file.moyennes[id] < m[id] / 2 && haut.file.carres[id] === n[id]),
+  `500 m : ${JSON.stringify(m)} ; 2 500 m : ${JSON.stringify(haut.file.moyennes)}`,
+);
+
+// ── La qualité des arbres hôtes compte : deux cases d'essai, tous leurs carrés couverts à 100 % par
+// des chênes décidus (hôte typique des cèpes, poids 1) ou par des chênes sempervirents (poids 0,6).
+// Un calcul qui tiendrait tous les hôtes pour parfaits rendrait la même moyenne dans les deux cas.
+const essai = (code) => {
+  const deux = cases.slice(0, 2);
+  return { v: 1, pasLat: parts.pasLat, pasLon: parts.pasLon, codes: [code], cases: Object.fromEntries(deux.map((id) => [id, Array.from({ length: 16 }, () => [0, 100])])), bati: Object.fromEntries(deux.map((id) => [id, Array(16).fill(0)])) };
+};
+const typique = calculer('2026-10-20', 9, { fichier: essai('FF1G01-01') });
+const moinsBon = calculer('2026-10-20', 9, { fichier: essai('FF1G06-06') });
+check(
+  'qualité des hôtes : sous des chênes sempervirents (poids 0,6) la moyenne des cèpes est plus basse que sous des chênes décidus (poids 1), à météo égale',
+  typique.file.carres.cepe === 32 && moinsBon.file.carres.cepe === 32 && moinsBon.file.moyennes.cepe < typique.file.moyennes.cepe - 5 && moinsBon.file.moyennes.cepe > 0,
+  `chênes décidus : ${typique.file.moyennes.cepe} % ; chênes sempervirents : ${moinsBon.file.moyennes.cepe} % (${typique.file.carres.cepe} carrés)`,
+);
+// Une ville : mêmes carrés boisés à 100 %, mais bâtis à 15 % : aucun n'est compté, pas de moyenne.
+const ville = essai('FF1G01-01');
+for (const id of Object.keys(ville.bati)) ville.bati[id] = Array(16).fill(15);
+const urbain = calculer('2026-10-20', 9, { fichier: ville });
+check('carrés bâtis à 15 % ou plus : aucun n’est compté, le champignon n’a pas de moyenne', !('cepe' in urbain.file.moyennes) && !('cepe' in urbain.file.carres), JSON.stringify(urbain.file));
 
 const failed = results.filter((ok) => !ok).length;
 console.log(`\n${results.length - failed}/${results.length} vérifications OK`);

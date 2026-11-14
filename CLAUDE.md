@@ -425,8 +425,10 @@ la fluidité.
 15/11/2026 ; `chooseHint.ts`, `franceStats.ts`, `mushroomChip` et `pickMushroom` de
 `legendExtras.ts`, `scripts/meteo/france.mjs`).
 - **Bandeau** (`#choose-hint`, à l'emplacement des bandeaux du haut) : tant qu'aucun champignon
-  n'est choisi, que la grille d'indice est éteinte **et que la légende est fermée**, à tous les
-  zooms. Les cinq puces sont dedans (un geste, sans ouvrir la légende) ; on n'écrit pas « à
+  n'est choisi, que la grille d'indice n'a rien à montrer **et que la légende est fermée**, à tous
+  les zooms. (Grille d'indice allumée sans champignon : elle montre les cèpes, donc pas de bandeau,
+  sauf de janvier à avril où, hors saison, elle ne dessine rien.) Quand il se retire alors que le
+  clavier y était (puce choisie, croix), le clavier passe au bouton de la légende. Les cinq puces sont dedans (un geste, sans ouvrir la légende) ; on n'écrit pas « à
   gauche », faux sur téléphone. Il se ferme pour la visite (croix). Légende ouverte, pas de bandeau :
   elle porte les mêmes puces (c'est le cas à la première visite sur grand écran ; le bandeau sert
   surtout sur téléphone, où la légende est un tiroir fermé). Il recouvre le haut de la carte : un
@@ -465,6 +467,11 @@ la fluidité.
 - Le chiffre date de la dernière publication (une par jour, la nuit d'ordinaire) : la carte, elle,
   calcule avec le jour courant ; entre deux publications les deux peuvent différer d'un jour de
   délai après la pluie.
+- Relecture du 15/11/2026 (deux relecteurs, chaque constat contre-vérifié) : 4 constats, tous
+  mineurs, tous traités ; aucun sur l'étape de publication. Le test du calcul passait avec un calcul
+  faux (carrés tous à l'altitude du point de relevé) : il fait maintenant varier l'altitude des
+  carrés, la qualité des hôtes et le bâti, et échoue si l'on fausse l'un des trois (vérifié sur une
+  copie).
 - **« La carte en 3 gestes »** : un trait fléché (`.tour-link`) part de l'épingle du coin touché et
   mène à son bilan, à droite sur le schéma grand écran, vers le tiroir du bas sur le schéma
   téléphone ; de la couleur de l'épingle, pas en vert (le vert y est une forêt).
@@ -1032,8 +1039,8 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   feuillus. Part bâtie : zones généralisées du Plan IGN au zoom 10, pas les bâtiments un à un.
 - Accueil : tant qu'une de ses deux fenêtres est ouverte, l'îlot ne répond pas ; sans stockage du
   navigateur, l'avertissement revient à chaque visite et la présentation n'est pas montrée d'office ;
-  sur téléphone, une fois fermée, la légende reste fermée et rien à l'écran ne dit de choisir un
-  champignon. Rien n'a été essayé sur un vrai téléphone ni avec un lecteur d'écran.
+  sur téléphone, une fois fermée, la légende reste fermée (le bandeau « Choisissez un champignon »
+  dit alors par où commencer, tant qu'on ne l'a pas fermé). Rien n'a été essayé sur un vrai téléphone ni avec un lecteur d'écran.
 - Fluidité : sans carte graphique (machine virtuelle, vieux téléphone), choisir un champignon à partir
   du zoom 10 prend encore plus d'une seconde, à cause du filtre des forêts, et un zoom occupe encore
   le processeur 2,5 à 4,5 s (voir « Fluidité »). Mesures faites dans Chromium sans carte graphique

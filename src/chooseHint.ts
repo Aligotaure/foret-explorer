@@ -9,14 +9,19 @@
  *    téléphone la légende est un tiroir en bas, et sur grand écran elle peut être fermée.
  *  - Mêmes puces que la légende (`mushroomChip`) : moyenne de France, champignon hors saison grisé.
  *  - Il se ferme (qui ne veut que la carte des forêts ne l'a pas sous les yeux toute la visite), et
- *    s'efface dès qu'un champignon est choisi ou que la grille d'indice est allumée : l'emplacement
- *    est alors celui du champignon de chargement et du bandeau « risque de chou blanc ».
+ *    s'efface dès qu'un champignon est choisi, ou que la grille d'indice a quelque chose à montrer :
+ *    l'emplacement est alors celui du champignon de chargement et du bandeau « risque de chou
+ *    blanc ». Sans champignon choisi, la grille d'indice montre les cèpes ; s'ils sont hors saison
+ *    (janvier à avril) elle ne dessine rien et ces deux-là ne s'affichent jamais : le bandeau reste.
+ *  - Quand il se retire alors que le clavier y était (une puce choisie, la croix), le clavier passe
+ *    au bouton de la légende : masqué sous lui, il repartirait du début de la page.
  */
 import { h } from './dom';
 import { loadFranceStats } from './franceStats';
 import { icon } from './icons';
 import { mushroomChip, pickMushroom, type FranceAverages } from './legendExtras';
-import { MUSHROOMS, currentMonth, noEstimate } from './mushrooms';
+import { indexMushroom } from './meteoLayer';
+import { MUSHROOMS, MUSHROOM_BY_ID, currentMonth, noEstimate } from './mushrooms';
 import type { Store } from './state';
 
 export function initChooseHint(el: HTMLElement, store: Store): void {
@@ -48,9 +53,16 @@ export function initChooseHint(el: HTMLElement, store: Store): void {
   let averages: FranceAverages = null;
   const render = (): void => {
     const state = store.state;
-    el.hidden = dismissed || state.mushroom !== null || state.weatherMode === 'indice';
-    if (el.hidden) return;
     const month = currentMonth();
+    // La grille d'indice a-t-elle quelque chose à montrer ? (Sans champignon choisi : les cèpes.)
+    const shown = MUSHROOM_BY_ID.get(indexMushroom(state));
+    const gridBusy = state.weatherMode === 'indice' && Boolean(shown) && !noEstimate(shown as NonNullable<typeof shown>, month);
+    const hadFocus = el.contains(document.activeElement);
+    el.hidden = dismissed || state.mushroom !== null || gridBusy;
+    if (el.hidden) {
+      if (hadFocus) document.getElementById('legend-toggle')?.focus({ preventScroll: true });
+      return;
+    }
     for (const chip of all) chip.sync(state, month, averages);
     caption.hidden = !averages || !MUSHROOMS.some((m) => !noEstimate(m, month) && averages?.[m.id] !== undefined);
   };

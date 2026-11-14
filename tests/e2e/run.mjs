@@ -2154,6 +2154,39 @@ async function chooseTests(browser, base) {
     await p.close();
   }
   check('moyennes de France : un fichier trop ancien, d’un autre mois ou d’un autre format n’affiche aucun chiffre', stale.every((t) => /aucun chiffre$/.test(t)), stale.join(' ; '));
+  // Janvier : sans champignon choisi, la grille d'indice montrerait les cèpes, hors saison. Elle ne
+  // dessine rien (ni champignon de chargement, ni « risque de chou blanc ») : le bandeau reste, pour
+  // dire de choisir. Puis au clavier : la puce choisie, ou la croix, retirent le bandeau sous le
+  // clavier, qui passe au bouton de la légende au lieu de repartir du début de la page.
+  const winter = await context.newPage();
+  await installMocks(winter, { tms: [], wmts: [], geocode: [], other: [] }, { mois: 1 });
+  await winter.goto(`${base}#carte=5.5/46.5/2.5`);
+  await waitForMap(winter);
+  await winter.evaluate(() => window.store.update({ mushroom: null, weatherMode: 'indice', legendOpen: false }));
+  await winter.waitForTimeout(400);
+  const january = await read(winter);
+  const keyboard = async (selector) => {
+    await winter.locator(selector).focus();
+    await winter.keyboard.press('Enter');
+    await winter.waitForTimeout(300);
+    return winter.evaluate(() => ({ focus: document.activeElement?.id ?? '', mushroom: window.store.state.mushroom, shown: document.getElementById('choose-hint').getClientRects().length > 0 }));
+  };
+  const chosen = await keyboard('#choose-hint .chip--mushroom:nth-of-type(3)');
+  await winter.evaluate(() => window.store.update({ mushroom: null }));
+  await winter.waitForTimeout(300);
+  const reshown = await read(winter);
+  const crossed = await keyboard('#choose-hint .grid-verdict__close');
+  check(
+    'janvier, grille d’indice allumée sans champignon (les cèpes, hors saison, ne dessinent rien) : le bandeau reste affiché',
+    january.shown && january.state.mode === 'indice' && january.state.mushroom === null && reshown.shown,
+    `bandeau : ${january.shown}, puis de nouveau : ${reshown.shown}`,
+  );
+  check(
+    'clavier : la puce choisie, ou la croix, retirent le bandeau ; le clavier passe au bouton de la légende',
+    chosen.mushroom === 'trompette' && !chosen.shown && chosen.focus === 'legend-toggle' && !crossed.shown && crossed.focus === 'legend-toggle',
+    `après la puce : ${JSON.stringify(chosen)} ; après la croix : ${JSON.stringify(crossed)}`,
+  );
+  await winter.close();
   check('bandeau et puces : aucune erreur de page', errors.length === 0, errors.join(' | '));
   await context.close();
 

@@ -1036,7 +1036,7 @@ li.is-off .swatch {
     display: none;
   }
 
-  /* Sous la recherche, et arrêté avant la colonne de boutons (qui cachait « Zoomer ici »). */
+  /* Sous la recherche, et arrêté avant la colonne de boutons. */
   .grid-loader {
     top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
   }
@@ -1324,8 +1324,9 @@ li.is-off .swatch {
 }
 
 /* Entre 641 et 1127 px, la première rangée ne peut pas porter la recherche, l'îlot et le bilan :
-   le bilan s'ouvre une rangée plus bas, comme la légende. Le bandeau « Zoomez… » descend d'une
-   rangée lui aussi : il passe sous l'en-tête du bilan, comme avant, sans lui prendre sa place. */
+   le bilan s'ouvre une rangée plus bas, comme la légende. Le champignon de chargement descend d'une
+   rangée lui aussi ; les bandeaux du haut (« Choisissez un champignon », « risque de chou blanc »)
+   se retirent tant que le bilan est ouvert (voir plus bas). */
 @media (min-width: 641px) and (max-width: 1127px) {
   .panel--spot {
     top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
