@@ -405,6 +405,12 @@ carré, c'est une chance estimée d'au moins 35 %**.
   est sous 50 % (certitude) ; sinon il attend le relevé.
 - **Recherche de lieu** : choisir un lieu ferme le bilan ouvert (il parlait d'un autre coin, et les
   deux épingles se ressemblent).
+Mesuré le 14/11/2026 sur une vue où tout est défavorable (Bourges, cèpes, échelle 1 km, écran de
+1850 × 940, ancienne et nouvelle version en alternance, `vide.mjs`) : carrés envoyés à la carte, 19 de
+4,5 km et 104 de 500 m → aucun ; altitudes demandées, 45 → aucune. **Le coût d'une image, lui, ne
+change pas de façon mesurable** (156 à 282 ms avant, 143 à 321 ms après, machine chargée : les forêts
+pèsent bien plus que cent petits carrés). Le gain est dans les appels et dans la lisibilité, pas dans
+la fluidité.
 
 Ce qui reste : à partir du zoom 10, une image coûte encore 125 ms, dont 68 pour les forêts ; choisir
 un champignon y change aussi le filtre des forêts, et MapLibre refait alors toutes les tuiles de la
