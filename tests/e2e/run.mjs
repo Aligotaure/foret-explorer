@@ -1800,6 +1800,38 @@ async function surveyCacheTests(browser, base) {
   const lost = { ...(await stored(page4)), ...(await squares(page4)) };
   check('tuiles des forêts en panne : aucun relevé gardé dans le navigateur', lost.entries === 0, `${lost.entries} carré(s) gardé(s), ${lost.surveyed} relevé(s) à l’écran`);
   await broken.close();
+
+  // Fond de carte lent (8 s par image) sur une vue jamais relevée : le relevé ne lit que les forêts et
+  // les sols, il ne doit attendre qu'eux. Avant le 14/11/2026 il attendait toutes les tuiles de la
+  // vue : une image du fond en retard retenait tous les carrés de 500 m.
+  let slowBase = 0;
+  const lazy = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await preAccept(lazy);
+  const page5 = await lazy.newPage();
+  await installMocks(page5, { tms: [], wmts: [], geocode: [], other: [] }, { delaiFond: () => slowBase });
+  await page5.goto(`${base}#carte=10.5/45.92/6.19`);
+  await waitForMap(page5);
+  await indexOn(page5);
+  await page5.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 0, null, { timeout: 15000 });
+  slowBase = 8000;
+  await page5.evaluate(() => {
+    window.__t0 = performance.now();
+    window.map.jumpTo({ zoom: 13.2 });
+  });
+  const beforeBase = await page5
+    .waitForFunction(() => window.map.querySourceFeatures('meteo-fin').length > 0, null, { timeout: 5000 })
+    .then(() => true, () => false);
+  const lazyState = await page5.evaluate(() => ({ after: Math.round(performance.now() - window.__t0), tiles: window.map.areTilesLoaded() }));
+  // Le fond arrivé, rien n'a manqué au relevé : autant de carrés que sur la même vue en temps normal.
+  await page5.waitForFunction(() => window.map.loaded() && window.map.areTilesLoaded() && window.meteo.status.fine.state === 'ok', null, { timeout: 30000 }).catch(() => {});
+  await page5.waitForTimeout(800);
+  const lazyDone = await squares(page5);
+  check(
+    'fond de carte lent : les carrés de 500 m n’attendent que les tuiles des forêts et des sols, et le relevé est complet',
+    beforeBase && !lazyState.tiles && lazyState.after < 5000 && lazyDone.count === first.count,
+    `carrés après ${lazyState.after} ms, fond de carte ${lazyState.tiles ? 'arrivé' : 'en route'} ; ${lazyDone.count} carré(s) annoncé(s) (vue de référence : ${first.count})`,
+  );
+  await lazy.close();
 }
 
 /**

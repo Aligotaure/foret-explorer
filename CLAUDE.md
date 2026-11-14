@@ -412,6 +412,19 @@ change pas de façon mesurable** (156 à 282 ms avant, 143 à 321 ms après, mac
 pèsent bien plus que cent petits carrés). Le gain est dans les appels et dans la lisibilité, pas dans
 la fluidité.
 
+**Le relevé n'attend que les forêts et les sols** (`waitForSurveyTiles`, 14/11/2026). Il attendait
+le repos de toute la carte (`idle`), donc aussi le fond de carte et les zones protégées, qu'il ne lit
+pas : une image du fond en retard retenait tous les carrés de 500 m (vu une fois sur quatre captures,
+les carrés absents plus de 40 s, sans que la cause de ce cas-là soit établie ; le mécanisme, lui,
+l'est par un test : fond retardé de 8 s, carrés à plus de 5 s avant, 0,7 s après). Trois temps,
+parce que MapLibre ne demande les tuiles d'une nouvelle vue qu'en la dessinant : une image (sinon
+`isSourceLoaded` parle encore de la vue d'avant et le relevé lirait des forêts absentes, qu'il
+garderait 30 jours), l'arrivée des tuiles des deux sources (`sourcedata`, et `error` : une tuile en
+panne n'émet pas `sourcedata`), une image encore pour qu'elles soient à l'écran. Mesuré sur de
+vraies données, réseau normal, en alternance : zoom de 11,3 à 12,3 sur une vue jamais vue, 3,0 et
+3,4 s → 2,6 et 2,2 s ; déplacement d'un demi-écran, 1,9 et 1,8 s → 1,9 et 2,0 s (inchangé). Même
+nombre de carrés avant et après (347, 389).
+
 Ce qui reste : à partir du zoom 10, une image coûte encore 125 ms, dont 68 pour les forêts ; choisir
 un champignon y change aussi le filtre des forêts, et MapLibre refait alors toutes les tuiles de la
 BD Forêt (≈ 1 s à lui seul au zoom 11 sans carte graphique). Au zoom 9,2 les zones protégées et les
@@ -502,7 +515,8 @@ Grille fine (`fineGrid.ts`, zoom ≥ `FINE_MIN_ZOOM` = 12, mode indice) : chaque
 (0,04° × 0,056°) est découpée en 9 × 9 carrés (id « I:J ») ; une case météo commune en contient
 exactement 36 × 36 (parent : `cellOfBase`). Forêt et sol relevés sur 3 × 3 points par
 carré, en une seule requête `queryRenderedFeatures` sur toute la vue puis test point-dans-polygone (un
-appel par point serait bien plus lent) ; relevés gardés d'une visite à l'autre (voir « Relevés gardés »). Altitude IGN au centre, gardée
+appel par point serait bien plus lent), dès que les tuiles des forêts et des sols sont à l'écran, sans
+attendre le fond de carte ; relevés gardés d'une visite à l'autre (voir « Relevés gardés »). Altitude IGN au centre, gardée
 dans `localStorage` (`foret-explorer:altitudes`, 40 000 carrés au plus, écrit une fois par relevé),
 demandée seulement pour les carrés **à dessiner pour le champignon montré** (`fineToDraw` ; avant le
 14/11/2026 : pour tout carré boisé, lande ou parc de ville compris), par lots de 200 points. Un carré

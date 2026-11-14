@@ -233,20 +233,68 @@ const sameBox = (a: Box, b: Box): boolean => a.west === b.west && a.south === b.
 
 const isAbort = (error: unknown): boolean => error instanceof DOMException && error.name === 'AbortError';
 
-/** Attend que la carte ait fini de charger ses tuiles (relevés des forêts et des sols). */
-function waitForIdle(map: MapLibreMap, signal: AbortSignal): Promise<void> {
-  if (map.loaded() && map.areTilesLoaded()) return Promise.resolve();
+/** Sources que lit le relevé des carrés de 500 m : les forêts et les sols, rien d'autre. */
+const SURVEY_SOURCES = [SOURCES.bdForet, SOURCES.geologie] as const;
+
+/**
+ * Attend que les tuiles des forêts et des sols de la vue soient arrivées et dessinées : c'est tout ce
+ * que lit le relevé des carrés de 500 m. Avant le 14/11/2026 il attendait le repos de toute la carte
+ * (`idle`), donc aussi le fond de carte et les zones protégées : une seule image du fond en retard
+ * retenait tous les carrés.
+ * Trois temps, parce que MapLibre ne demande les tuiles d'une nouvelle vue qu'en la dessinant :
+ *  1. une image, pour qu'il ait demandé les tuiles de la vue en cours (sinon « chargé » parlerait
+ *     encore de la vue d'avant, et le relevé lirait des forêts absentes) ;
+ *  2. l'arrivée des tuiles des deux sources (une tuile en panne compte comme arrivée : ses carrés
+ *     sont relevés avec ce qu'on a, mais pas gardés, voir `noteSurveyTile`) ;
+ *  3. une image encore, pour qu'elles soient à l'écran quand `queryRenderedFeatures` les lit.
+ */
+function waitForSurveyTiles(map: MapLibreMap, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    const onIdle = (): void => {
+    let stop = (): void => {};
+    const onAbort = (): void => {
+      stop();
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    if (signal.aborted) return onAbort();
+    signal.addEventListener('abort', onAbort, { once: true });
+    const frame = (then: () => void): void => {
+      map.once('render', then);
+      stop = () => map.off('render', then);
+      map.triggerRepaint();
+    };
+    // (Source inconnue de la carte : rien à attendre d'elle.)
+    const loaded = (): boolean =>
+      SURVEY_SOURCES.every((id) => {
+        try {
+          return map.isSourceLoaded(id) !== false;
+        } catch {
+          return true;
+        }
+      });
+    const done = (): void => {
+      // Un déplacement entre-temps relance tout (`MeteoLayer.load` abandonne ce relevé) ; si des tuiles
+      // sont redemandées d'ici là, on attend de nouveau.
+      if (!loaded()) return watch();
       signal.removeEventListener('abort', onAbort);
       resolve();
     };
-    const onAbort = (): void => {
-      map.off('idle', onIdle);
-      reject(new DOMException('Aborted', 'AbortError'));
+    const watch = (): void => {
+      if (loaded()) return frame(done);
+      // (Une tuile qui échoue ne passe pas par `sourcedata` : on écoute aussi les erreurs.)
+      const unwatch = (): void => {
+        map.off('sourcedata', onData);
+        map.off('error', onData);
+      };
+      const onData = (): void => {
+        if (!loaded()) return;
+        unwatch();
+        frame(done);
+      };
+      map.on('sourcedata', onData);
+      map.on('error', onData);
+      stop = unwatch;
     };
-    map.once('idle', onIdle);
-    signal.addEventListener('abort', onAbort, { once: true });
+    frame(watch);
   });
 }
 
@@ -904,7 +952,7 @@ export class MeteoLayer {
         this.renderFine(early);
         drawn(true);
       }
-      await waitForIdle(this.map, signal);
+      await waitForSurveyTiles(this.map, signal);
       samples = sampleCells(this.map, toSurvey);
     }
     const forested = cells.filter((c) => hasForest(samples.get(c.id)));

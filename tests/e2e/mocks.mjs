@@ -368,7 +368,7 @@ function forestShare() {
  * (dans les deux cas, la carte se rabat sur Open-Meteo) ; `'provisoire'` : le passage du jour n'a
  * pas encore eu lieu, hier n'est connu que par l'estimation de la veille.
  */
-export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0, foret = true, mois = 10, delaiForet = () => 0, panneForet = () => false, sec = false } = {}) {
+export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0, foret = true, mois = 10, delaiForet = () => 0, panneForet = () => false, sec = false, delaiFond = () => 0 } = {}) {
   log.meteo ??= [];
   log.foret ??= [];
   // Mois figé (octobre par défaut) dans toutes les pages des tests : la saison des champignons en
@@ -452,7 +452,10 @@ export async function installMocks(page, log, { meteoCommune = true, altitudeLen
       log.wmts.push(`${layer}|${url.searchParams.get('TILEMATRIXSET')}|${url.searchParams.get('TILEMATRIX')}`);
       const body =
         layer === 'ORTHOIMAGERY.ORTHOPHOTOS' ? PNG.ortho : layer === 'LANDCOVER.FORESTINVENTORY.V2' ? PNG.overview : PNG.plan;
-      return route.fulfill({ status: 200, contentType: 'image/png', headers: CORS, body });
+      // `delaiFond()` : les images du fond de carte mettent ce délai (ms) à arriver.
+      const image = () => route.fulfill({ status: 200, contentType: 'image/png', headers: CORS, body });
+      const wait = layer === 'LANDCOVER.FORESTINVENTORY.V2' ? 0 : delaiFond();
+      return wait ? new Promise((r) => setTimeout(r, wait)).then(image) : image();
     }
     if (url.pathname.startsWith('/altimetrie/')) {
       log.altitude.push(url.search);
