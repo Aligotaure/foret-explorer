@@ -113,7 +113,7 @@ export function zonesAt(map: MapLibreMap, point: PointLike, lngLat: LngLat): Zon
   if (lngLat.lng < west || lngLat.lng > east || lngLat.lat < south || lngLat.lat > north) {
     return unknown(`hors de la zone couverte (${ZONES.coverage})`);
   }
-  if (map.getZoom() < ZONES.queryMinZoom) return unknown(`zoomez (niveau ${ZONES.queryMinZoom} ou plus) pour le connaître`);
+  if (map.getZoom() < ZONES.queryMinZoom) return unknown(`zoomez au niveau ${ZONES.queryMinZoom} ou plus pour le connaître`);
   if (infoState === 'loading') return unknown('données en cours de chargement');
   if (infoState === 'missing' || networkTrouble || !map.getLayer(LAYERS.protectedHit)) {
     return unknown('données des zones indisponibles pour le moment');

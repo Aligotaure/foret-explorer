@@ -211,12 +211,17 @@ async function disclaimerTests(browser, base) {
     tour.text.slice(0, 110),
   );
   // Double appui : « Voir la carte » apparaît là où l'on vient d'accepter ; il est ignoré une demi-seconde.
+  await page.keyboard.press('Escape');
   await page.locator('.tour__close').click();
-  const guarded = await page.evaluate(() => Boolean(document.querySelector('dialog.tour[open]')));
+  const guarded = await page.evaluate(() => Boolean(document.querySelector('dialog.tour[open]')) && document.querySelectorAll('dialog.tour').length === 1);
   await page.waitForTimeout(600);
   await page.locator('.tour__close').click();
-  const closed = await page.evaluate(() => ({ tour: Boolean(document.querySelector('dialog.tour')), inert: document.getElementById('app').inert, dialogs: document.querySelectorAll('dialog').length }));
-  check('présentation : un second appui immédiat ne la ferme pas, « Voir la carte » la ferme ensuite', guarded && !closed.tour && !closed.inert && closed.dialogs === 0, JSON.stringify({ guarded, ...closed }));
+  const closed = await page.evaluate(() => ({ tour: Boolean(document.querySelector('dialog.tour')), inert: document.getElementById('app').inert, dialogs: document.querySelectorAll('dialog').length, focus: document.activeElement?.id }));
+  check(
+    'présentation : ni Échap ni un second appui immédiats ne la ferment, « Voir la carte » la ferme ensuite et rend le clavier au bouton de la légende',
+    guarded && !closed.tour && !closed.inert && closed.dialogs === 0 && closed.focus === 'legend-toggle',
+    JSON.stringify({ guarded, ...closed }),
+  );
   await waitForMap(page);
   // À la demande, depuis la légende : elle se rouvre seule, se ferme par Échap ou par un clic à côté,
   // et rend le clavier au bouton ; l'accord gardé n'est pas touché.
@@ -225,11 +230,14 @@ async function disclaimerTests(browser, base) {
   await page.waitForSelector('dialog.tour[open]');
   await page.waitForTimeout(600);
   await page.keyboard.press('Escape');
+  // La fenêtre se retire à l'événement « close », un instant après la touche.
+  await page.waitForSelector('dialog.tour', { state: 'detached', timeout: 3000 }).catch(() => {});
   const byEscape = await page.evaluate(() => ({ tour: Boolean(document.querySelector('dialog.tour')), focus: document.activeElement?.textContent }));
   await how.click();
   await page.waitForSelector('dialog.tour[open]');
   await page.waitForTimeout(600);
   await page.mouse.click(20, 400);
+  await page.waitForSelector('dialog.tour', { state: 'detached', timeout: 3000 }).catch(() => {});
   const byBackdrop = await page.evaluate((t) => ({ tour: Boolean(document.querySelector('dialog.tour')), disclaimer: Boolean(document.querySelector('dialog.disclaimer')), same: JSON.parse(localStorage.getItem('foret-explorer:avertissement')).t === t }), after.saved.t);
   check(
     'légende : « Comment ça marche ? » rouvre la présentation, fermée par Échap ou par un clic à côté, sans redemander l’accord',
@@ -291,12 +299,43 @@ async function disclaimerTests(browser, base) {
   await page.waitForSelector('dialog.disclaimer[open]', { timeout: 10000 });
   check('après effacement : l’avertissement revient', await disclaimerOpen(page));
   check('avertissement et À propos : aucune erreur JavaScript', errors.length === 0, errors.slice(0, 3).join(' | '));
+
+  for (const [name, saved, expected] of [
+    ['accord de la version en cours vieux de 31 jours', { v: TERMS_VERSION, t: Date.now() - 31 * 86_400_000 }, false],
+    ['accord d’une version d’avant la refonte', { v: '2026-11-03', t: Date.now() - 86_400_000 }, true],
+  ]) {
+    const again = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+    // Posé une seule fois : le rechargement ne doit pas effacer l'accord que la page vient d'enregistrer.
+    await again.addInitScript((value) => {
+      if (sessionStorage.getItem('accord-pose')) return;
+      sessionStorage.setItem('accord-pose', '1');
+      localStorage.setItem('foret-explorer:avertissement', JSON.stringify(value));
+    }, saved);
+    const page2 = await again.newPage();
+    await installMocks(page2, { tms: [], wmts: [], geocode: [], other: [] });
+    await page2.goto(base);
+    const asked = await page2.waitForSelector('dialog.disclaimer[open]', { timeout: 10000 }).then(() => true, () => false);
+    if (asked) {
+      await page2.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
+      await page2.locator('.disclaimer__accept').click();
+      await page2.waitForTimeout(700);
+    }
+    const tourShown = await page2.evaluate(() => Boolean(document.querySelector('dialog.tour[open]')));
+    check(`accueil, ${name} : accord redemandé, présentation ${expected ? 'montrée une fois' : 'non remontrée'}`, asked && tourShown === expected, JSON.stringify({ asked, tourShown }));
+    await again.close();
+  }
   await context.close();
 }
 
 async function desktopTests(browser, base) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await preAccept(context);
+  // Mois figé en octobre : sans cela, de janvier à avril les cèpes sont hors saison, tous les carrés
+  // valent 0 et les vérifications de la grille passeraient sans rien prouver. Seule la saison en
+  // dépend ; les dates des fichiers météo simulés restent celles du jour.
+  await context.addInitScript(() => {
+    Date.prototype.getMonth = () => 9;
+  });
   const page = await context.newPage();
   const log = { tms: [], wmts: [], geocode: [], other: [] };
   const errors = [];
@@ -550,7 +589,7 @@ async function desktopTests(browser, base) {
 
     // Du plus probable au moins probable, sans exception ; le champignon recherché est signalé à son rang.
     const wanted = spot.verdicts[spot.verdicts.length - 1] === 'Morilles' ? 'girolle' : 'morille';
-    const ranking = await page.evaluate((id) => {
+    const ranking = await page.evaluate(async (id) => {
       const read = () => ({
         chances: [...document.querySelectorAll('#spot .level-pill')].map((p) => Number(/≈ (\d+) %/.exec(p.textContent)?.[1])),
         chosen: [...document.querySelectorAll('#spot .verdict--chosen')].map((v) => `${v.querySelector('strong')?.textContent} · ${v.querySelector('.verdict__tag')?.textContent}`),
@@ -558,12 +597,20 @@ async function desktopTests(browser, base) {
         cards: document.querySelectorAll('#spot details.verdict__card').length,
         off: [...document.querySelectorAll('#spot .verdict--off .verdict__why')].map((w) => w.textContent),
       });
+      // Un instant entre chaque changement : un <details> créé ouvert émet « toggle » après coup.
+      const tick = () => new Promise((resolve) => setTimeout(resolve, 60));
+      const opened = () => [...document.querySelectorAll('#spot details.verdict__card[open]')].map((d) => d.querySelector('strong')?.textContent);
       const before = read();
       const previous = window.store.state.mushroom;
       window.store.update({ mushroom: id });
-      const during = read();
+      await tick();
+      const during = { ...read(), opened: opened() };
+      window.store.update({ mushroom: id === 'girolle' ? 'cepe' : 'girolle' });
+      await tick();
+      const other = { opened: opened(), chosen: [...document.querySelectorAll('#spot .verdict--chosen strong')].map((s) => s.textContent) };
       window.store.update({ mushroom: previous });
-      return { before, during, after: read() };
+      await tick();
+      return { before, during, other, after: read() };
     }, wanted);
     const descending = (list) => list.length === 5 && list.every((v, i) => i === 0 || list[i - 1] >= v);
     check(
@@ -575,6 +622,11 @@ async function desktopTests(browser, base) {
       'bilan : le champignon recherché est signalé sans recliquer la carte, puis ne l’est plus',
       ranking.before.chosen.length === 0 && ranking.during.chosen.length === 1 && / · recherché$/.test(ranking.during.chosen[0]) && ranking.after.chosen.length === 0,
       `${ranking.during.chosen.join(', ')}`,
+    );
+    check(
+      'bilan : la ligne dépliée suit le champignon recherché (une seule à la fois, l’ancienne se replie)',
+      ranking.during.opened.length === 1 && ranking.other.opened.length === 1 && ranking.other.opened[0] === ranking.other.chosen[0] && ranking.during.opened[0] !== ranking.other.opened[0] && ranking.after.open <= 1,
+      `${ranking.during.opened.join()} puis ${ranking.other.opened.join()} ; ensuite ${ranking.after.open} dépliée(s)`,
     );
     check(
       'bilan : raisons repliées (une carte dépliée au plus), champignon exclu sur une ligne avec sa raison',
@@ -639,14 +691,25 @@ async function desktopTests(browser, base) {
         const p = by.get(centre(k));
         return p ? { c: p.c_cepe, p: p.p_cepe, l: p.l_cepe } : null;
       };
-      const labels = new Set(window.map.queryRenderedFeatures({ layers: ['meteo-etiquettes'] }).map((f) => key(f.properties)));
+      // Ce que MapLibre applique à chaque carré : ses expressions évaluées sur les propriétés du carré
+      // (compter les étiquettes dessinées ne prouverait rien, la police simulée est vide).
+      const fill = window.map.style.getLayer('meteo-cellules').paint.get('fill-opacity');
+      const line = window.map.style.getLayer('meteo-contours').paint.get('line-opacity');
+      const label = window.map.style.getLayer('meteo-etiquettes').layout.get('text-field');
+      const drawn = (k) => {
+        const p = by.get(centre(k));
+        if (!p) return null;
+        const feature = { type: 'Polygon', properties: p };
+        return { fill: +fill.evaluate(feature, {}).toFixed(3), line: +line.evaluate(feature, {}).toFixed(3), label: String(label.evaluate(feature, {})) };
+      };
       return {
         unlit: squares.map(pick),
         wooded: pick(0),
         opacity: JSON.stringify(window.map.getPaintProperty('meteo-cellules', 'fill-opacity')),
         lines: JSON.stringify(window.map.getPaintProperty('meteo-contours', 'line-opacity')),
-        labelled: squares.filter((k) => labels.has(centre(k))),
-        labels: labels.size,
+        unlitDrawn: squares.map(drawn),
+        woodedDrawn: drawn(0),
+        zoom: window.map.getZoom(),
         caveat: [...document.querySelectorAll('#legend .legend-hint--caveat')].filter((p) => !p.hidden).map((p) => p.textContent).join(' '),
       };
     },
@@ -654,16 +717,99 @@ async function desktopTests(browser, base) {
   );
   check(
     'carrés : sans arbre hôte du champignon (aucun arbre, 3 % de hêtres, robiniers), ni chance ni niveau',
-    hosts.unlit.every((u) => u && u.p === 0 && u.l === 0) && hosts.unlit.map((u) => u?.c).join() === '0,0.03,0' && hosts.wooded?.c === 0.6,
+    hosts.unlit.every((u) => u && u.p === 0 && u.l === 0) && hosts.unlit.map((u) => u?.c).join() === '0,0.03,0' && hosts.wooded?.c === 0.6 && hosts.wooded.p >= 50 && hosts.wooded.l > 0,
     JSON.stringify({ unlit: hosts.unlit, wooded: hosts.wooded }),
   );
   check(
-    'carrés : teinte et quadrillage éteints sous 5 % d’arbres hôtes, aucune étiquette sur ces carrés',
-    hosts.opacity.includes('"c_cepe"') && hosts.opacity.includes('0.05') && hosts.lines.includes('"c_cepe"') && hosts.labelled.length === 0,
-    `${hosts.labels} étiquette(s) dans la vue, ${hosts.labelled.length} sur un carré éteint`,
+    'carrés : ni teinte, ni quadrillage, ni étiquette sous 5 % d’arbres hôtes ; teinte et étiquette sur le carré boisé',
+    hosts.opacity.includes('"c_cepe"') && hosts.lines.includes('"c_cepe"') &&
+      hosts.unlitDrawn.every((d) => d && d.fill === 0 && d.line === 0 && d.label === '') &&
+      hosts.woodedDrawn?.fill > 0 && hosts.woodedDrawn.line > 0 && (hosts.zoom < 10 || hosts.zoom >= 12 || /^\d+ %$/.test(hosts.woodedDrawn.label)),
+    JSON.stringify({ zoom: +hosts.zoom.toFixed(1), eteints: hosts.unlitDrawn, boise: hosts.woodedDrawn }),
   );
   check('légende : « seuls les secteurs où poussent ses arbres hôtes sont colorés », estimation rappelée', /arbres hôtes sont colorés/.test(hosts.caveat) && /estimées, pas mesurées/.test(hosts.caveat), hosts.caveat.slice(0, 80));
   check('parts de forêt : un seul chargement du fichier', log.foret.length === 1, `${log.foret.length} requête(s)`);
+
+  // Vue d'ensemble (zoom 9) : pastilles à 50 % et plus seulement, jamais sur un carré sans arbre hôte.
+  const viewBefore = await viewOf(page);
+  await page.evaluate(() => window.map.jumpTo({ center: [6.16, 45.98], zoom: 9 }));
+  await page.waitForFunction(() => window.map.getZoom() < 10 && window.map.querySourceFeatures('meteo-points').length > 0, null, { timeout: 15000 }).catch(() => {});
+  await idle(page);
+  const spots = await page.evaluate(
+    ({ cell, squares }) => {
+      const [ci, cj] = cell.split(':').map(Number);
+      const unlit = squares.map((k) => `${((cj * 4 + (k % 4) + 0.5) * 0.056).toFixed(3)},${((ci * 4 + Math.floor(k / 4) + 0.5) * 0.04).toFixed(3)}`);
+      const points = window.map.querySourceFeatures('meteo-points');
+      return {
+        chances: points.map((f) => f.properties.p),
+        onUnlit: points.filter((f) => unlit.includes(`${f.geometry.coordinates[0].toFixed(3)},${f.geometry.coordinates[1].toFixed(3)}`)).length,
+        status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '',
+      };
+    },
+    { cell: SHARE_CELL, squares: [SHARE_BARE, SHARE_THIN, SHARE_OTHER] },
+  );
+  check(
+    'vue d’ensemble : des pastilles, toutes à 50 % et plus, aucune sur un carré sans arbre hôte ; meilleure chance « estimée » annoncée',
+    spots.chances.length > 0 && spots.chances.every((p) => p >= 50) && spots.onUnlit === 0 && /Meilleure chance estimée dans la vue : ≈ \d+ %/.test(spots.status),
+    `${spots.chances.length} pastille(s) ${spots.chances.slice(0, 5).join(', ')} ; ${spots.status.slice(0, 120)}`,
+  );
+  // Bilan sous le zoom 10 : la forêt y est inconnue (pas absente), l'indice ne retombe pas à zéro.
+  await page.mouse.click(760, 470);
+  await page.waitForSelector('#spot .verdict', { timeout: 10000 });
+  const lowSpot = await page.evaluate(() => ({
+    forest: document.querySelector('#spot .spot__row dd')?.textContent ?? '',
+    status: [...document.querySelectorAll('#spot .spot__row')].find((r) => r.querySelector('dt')?.textContent === 'Statut')?.querySelector('dd')?.textContent ?? '',
+    chances: [...document.querySelectorAll('#spot .level-pill')].map((p) => Number(/≈ (\d+) %/.exec(p.textContent)?.[1])),
+    reasons: [...document.querySelectorAll('#spot .verdict__reasons li')].map((li) => li.textContent),
+    off: [...document.querySelectorAll('#spot .verdict__why')].map((w) => w.textContent),
+  }));
+  check(
+    'bilan sous le zoom 10 : forêt « à connaître en zoomant », chance non nulle, « forêt inconnue » dans les raisons, jamais « pas de forêt »',
+    /zoomez pour la connaître/.test(lowSpot.forest) && Math.max(...lowSpot.chances) > 0 && lowSpot.reasons.some((r) => /Forêt inconnue à ce zoom/.test(r)) && ![...lowSpot.reasons, ...lowSpot.off].some((r) => /pas de forêt/i.test(r)),
+    `${lowSpot.forest} ; chances ${lowSpot.chances.join(', ')}`,
+  );
+  check('bilan sous le zoom 10 : statut inconnu, accord du propriétaire rappelé, sans parenthèses imbriquées', /^Inconnu : il faut l’accord du propriétaire \(zoomez au niveau 10 ou plus pour le connaître\)$/.test(lowSpot.status.trim()), lowSpot.status);
+  check('bilan sous le zoom 10 : la raison dit que la chance est celle des forêts hôtes du secteur', lowSpot.reasons.some((r) => /chance des forêts hôtes du secteur/.test(r)), lowSpot.reasons.find((r) => /Forêt inconnue/.test(r)) ?? '');
+  const bare = await page.evaluate(({ cell, k }) => {
+    const [ci, cj] = cell.split(':').map(Number);
+    const p = window.map.project([(cj * 4 + (k % 4) + 0.5) * 0.056, (ci * 4 + Math.floor(k / 4) + 0.5) * 0.04]);
+    return { x: p.x, y: p.y };
+  }, { cell: SHARE_CELL, k: SHARE_BARE });
+  await page.mouse.click(bare.x, bare.y);
+  await page.waitForFunction(() => [...document.querySelectorAll('#spot .verdict__why')].some((w) => /peu d’arbres hôtes/.test(w.textContent)), null, { timeout: 10000 }).catch(() => {});
+  const bareSpot = await page.evaluate(() => ({
+    lines: [...document.querySelectorAll('#spot .verdict')].map((v) => `${v.querySelector('strong')?.textContent} : ${v.querySelector('.verdict__why')?.textContent ?? ''} ${v.querySelector('.level-pill')?.textContent}`),
+    chances: [...document.querySelectorAll('#spot .level-pill')].map((p) => Number(/≈ (\d+) %/.exec(p.textContent)?.[1])),
+  }));
+  check(
+    'bilan sous le zoom 10, secteur sans arbres (comme une ville) : aucune chance annoncée, « peu d’arbres hôtes dans ce secteur »',
+    bareSpot.chances.length === 5 && bareSpot.chances.every((c) => c === 0) && bareSpot.lines.filter((l) => /peu d’arbres hôtes dans ce secteur/.test(l)).length >= 4,
+    bareSpot.lines.join(' | ').slice(0, 200),
+  );
+  await page.locator('#spot .panel__close').click();
+  await page.evaluate((v) => window.map.jumpTo({ center: [v.lng, v.lat], zoom: v.zoom }), viewBefore);
+  await page.waitForTimeout(900);
+  await idle(page);
+
+  // Phrase de pluie : une vieille pluie « dépassée » ne masque plus la pluie récente qui va faire pousser.
+  const [rainReasons, modestRain, rightTime] = await page.evaluate(async () => {
+    const { MUSHROOM_BY_ID, scoreMushroom } = await import('/src/mushrooms.ts');
+    const reasons = (recent, old) => {
+      const weather = { days: Array.from({ length: 30 }, () => ({})), events: [{ date: 'a', ...recent }, { date: 'b', ...old }], rain30: 60, rain20: 60, tmean7: 14, tmin5: 8, frost: false, elevation: 500 };
+      return scoreMushroom(MUSHROOM_BY_ID.get('cepe'), weather, 10).reasons;
+    };
+    return [reasons({ amount: 30, daysAgo: 2 }, { amount: 30, daysAgo: 17 }), reasons({ amount: 16, daysAgo: 2 }, { amount: 45, daysAgo: 17 }), reasons({ amount: 16, daysAgo: 10 }, { amount: 45, daysAgo: 17 })];
+  });
+  check(
+    'phrase de pluie : petite pluie récente → « pousse incertaine » ; pluie récente dans le bon délai → c’est elle qui est citée',
+    modestRain.some((r) => /Pluie de 16 mm il y a 2 jours : encore tôt, et pluie modeste : pousse incertaine/.test(r)) && rightTime.some((r) => /Pluie de 16 mm il y a 10 jours : bon délai pour le cèpe/.test(r)) && ![...modestRain, ...rightTime].some((r) => /délai dépassé|pousse attendue/.test(r)),
+    `${modestRain[0]} | ${rightTime[0]}`,
+  );
+  check(
+    'phrase de pluie : la pluie récente « encore tôt, pousse attendue d’ici 5 jours », pas la vieille pluie « dépassée » ; « idéal » dit une fois',
+    rainReasons.some((r) => /Pluie de 30 mm il y a 2 jours : encore tôt, pousse attendue d’ici 5 jours/.test(r)) && !rainReasons.some((r) => /délai dépassé/.test(r)) && rainReasons.some((r) => /: idéal \(10 à 19 °C\)/.test(r)),
+    rainReasons.join(' | '),
+  );
   check(
     'grille météo lue dans les fichiers communs, sans appel à Open-Meteo',
     log.meteo.length === 0 && log.meteoCommune.some((p) => p.endsWith('/meteo/index.json')) && log.meteoCommune.some((p) => /\/b\/\d+_\d+\.json$/.test(p)),
@@ -702,7 +848,7 @@ async function desktopTests(browser, base) {
   });
   check(
     'chance estimée en % dans chaque case, pastilles seulement à 50 % et plus',
-    top.chances && top.points.every((p) => p >= 50) && top.points.length > 0 === top.above && (top.above ? /Meilleure chance dans la vue : \d+ %/ : /Aucun secteur à 50 %/).test(top.status),
+    top.chances && top.points.every((p) => p >= 50) && top.points.length > 0 === top.above && (top.above ? /Meilleure chance estimée dans la vue : ≈ \d+ %/ : /Aucun secteur à 50 %/).test(top.status),
     `${top.points.length} pastille(s) ${top.points.slice(0, 5).join(', ')} ; ${top.status.slice(0, 130)}`,
   );
   await page.evaluate((z) => window.map.jumpTo({ zoom: z }), zoomBefore);
@@ -802,7 +948,7 @@ async function desktopTests(browser, base) {
     sheet: [...document.querySelectorAll('.mushroom-card a[target="_blank"]')].map((a) => ({ href: a.getAttribute('href'), rel: a.getAttribute('rel'), text: a.textContent })),
     order: [...document.querySelectorAll('.mushroom-card > *')].map((el) => el.className.split(' ').pop()),
   }));
-  const springNow = [3, 4, 5, 6].includes(new Date().getMonth() + 1);
+  const springNow = false; // la page croit être en octobre (mois figé en tête de ces tests)
   check('morilles : frênaies, peupleraies et coupes affichées', morel.mushroom === 'morille' && ['FF1-49-49', 'FP', 'FF0'].every((c) => morel.filter.includes(c)), morel.filter.slice(0, 90));
   check('morilles : encadré gyromitre et cuisson', /gyromitre/i.test(morel.caution) && /20 minutes/.test(morel.caution) && /pas ce qui se mange/i.test(morel.caution), morel.caution.slice(0, 60));
   check('morilles : saison de mars à juin, hors saison signalé', /mars à juin/.test(morel.facts) && (springNow || /Hors saison/.test(morel.season)), morel.season || morel.facts.slice(-30));
@@ -833,7 +979,7 @@ async function desktopTests(browser, base) {
       totals['ign.altitude.points'] > 20 &&
       totals['pages.geology'] > 0 &&
       totals['pages.zones'] > 0 &&
-      totals['app.spots'] === 4,
+      totals['app.spots'] === 6,
     JSON.stringify(totals),
   );
   await page.evaluate(() => window.metrics.flush());
@@ -1052,6 +1198,41 @@ async function mobileTests(browser, base) {
   await waitForMap(page);
   await idle(page);
   check('mobile : légende fermée au démarrage', await page.evaluate(() => document.getElementById('legend').hidden));
+  // Très petit écran et téléphone couché : le schéma, décoratif, se retire pour que les trois gestes
+  // et la mise en garde tiennent sans défiler.
+  const tight = [];
+  for (const [width, height] of [[320, 568], [844, 390]]) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(() => window.store.update({ legendOpen: true }));
+    await page.getByRole('button', { name: 'Comment ça marche ?' }).click();
+    await page.waitForSelector('dialog.tour[open]');
+    tight.push(
+      await page.evaluate(() => {
+        const d = document.querySelector('dialog.tour');
+        const body = d.querySelector('.tour__body');
+        const note = d.querySelector('.tour__note').getBoundingClientRect();
+        const box = body.getBoundingClientRect();
+        return {
+          size: `${innerWidth}×${innerHeight}`,
+          scrolls: body.scrollHeight > body.clientHeight + 1,
+          noteSeen: note.bottom <= box.bottom + 1,
+          screens: [...d.querySelectorAll('.tour__screen')].filter((s) => getComputedStyle(s).display !== 'none').length,
+          steps: d.querySelectorAll('.tour__steps li').length,
+        };
+      }),
+    );
+    await page.waitForTimeout(600);
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('dialog.tour', { state: 'detached' });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => window.store.update({ legendOpen: false }));
+  await idle(page);
+  check(
+    'présentation à 320 × 568 et sur téléphone couché (844 × 390) : sans schéma ni défilement, trois gestes et mise en garde visibles',
+    tight.every((t) => !t.scrolls && t.noteSeen && t.screens === 0 && t.steps === 3),
+    JSON.stringify(tight),
+  );
   const topbar = await page.evaluate(() => ({
     searchRight: Math.round(document.querySelector('.search').getBoundingClientRect().right),
     toolbarLeft: Math.round(document.getElementById('toolbar-top').getBoundingClientRect().left),

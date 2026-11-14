@@ -161,7 +161,8 @@ et carrés ne regardaient que la météo (Paris affichait « 78 % · favorable �
 « ≈ 0 % »). Désormais un carré n'est coloré que si les arbres hôtes du champignon y couvrent au moins
 `HOST_MIN_COVER` (5 %) de la surface, et d'autant plus qu'ils en couvrent (teinte pleine à
 `HOST_FULL_COVER`, 50 %) ; son indice est multiplié par la qualité moyenne de ces hôtes (pas par le
-sol, inconnu à cette échelle : le bilan peut donc être plus bas). Propriété `c_<champignon>` : part
+sol, inconnu à cette échelle : le bilan, qui regarde la forêt et le sol du point, peut différer dans
+les deux sens). Propriété `c_<champignon>` : part
 d'hôtes (0 à 1), −1 si le fichier manque (la grille se dessine alors comme avant et la légende le
 dit). Sous le seuil : ni teinte, ni quadrillage, ni étiquette, ni pastille. Case entière (zoom < 8) :
 moyenne de ses carrés, pastille posée sur le plus boisé. Aux zooms des carrés de 500 m, la grille des

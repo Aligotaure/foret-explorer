@@ -1664,13 +1664,15 @@ a.btn-square {
   font-size: 13px;
 }
 
+/* Bleu un peu plus soutenu que --accent : texte blanc à 5,5 pour 1. La bordure transparente devient
+   visible en contraste élevé, où le fond disparaît. */
 .disclaimer__accept,
 .tour__close {
   min-height: var(--btn);
   padding: 0 18px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: var(--radius);
-  background: var(--accent);
+  background: #5555e6;
   color: #fff;
   font-size: 15px;
   font-weight: 700;
@@ -1679,7 +1681,7 @@ a.btn-square {
 
 .disclaimer__accept:not(:disabled):hover,
 .tour__close:hover {
-  background: #7d7df6;
+  background: #4b4bd8;
 }
 
 .disclaimer__accept:disabled {
@@ -2034,6 +2036,39 @@ a.btn-square {
 
   .tour__layout {
     display: block;
+  }
+}
+
+/* Écran bas (téléphone couché) ou très étroit : le schéma, décoratif, repousserait les trois gestes
+   et la mise en garde sous le bas de la fenêtre. On le retire, la liste dit tout. */
+@media (max-height: 520px), (max-width: 340px) {
+  .tour__screen--wide,
+  .tour__screen--phone {
+    display: none;
+  }
+
+  .tour__layout {
+    display: block;
+  }
+}
+
+/* Téléphone : ce qui se touche dans la légende et au pied de l'avertissement fait 44 px de haut. */
+@media (max-width: 640px) {
+  .legend-footer__btn {
+    min-height: 44px;
+  }
+
+  .legend-help > summary {
+    padding: 13px 0;
+  }
+
+  .disclaimer__links a {
+    padding: 12px 0;
+  }
+
+  .mushroom-card__link a {
+    display: inline-block;
+    padding: 12px 0;
   }
 }
 

@@ -1,13 +1,14 @@
 import maplibregl, { type LngLat, type Map as MapLibreMap, type PointLike } from 'maplibre-gl';
-import { BDFORET, DIRECT_PAST_DAYS, GEOLOGY, SPOT_ALTITUDE_TIMEOUT_MS, SPOT_ALTITUDE_WAIT_MS } from './config';
+import { BDFORET, DIRECT_PAST_DAYS, GEOLOGY, HOST_MIN_COVER, SPOT_ALTITUDE_TIMEOUT_MS, SPOT_ALTITUDE_WAIT_MS } from './config';
 import { h, toast } from './dom';
+import { hostCover, loadForestShare } from './forestShare';
 import { forestAt, soilAt, type ForestAtPoint, type SoilAtPoint } from './geology';
 import { icon } from './icons';
 import { ABOUT_URL } from './legal';
 import { track } from './metrics';
 import { CHANCE_THRESHOLD, LEVELS, MUSHROOMS, MUSHROOM_BY_ID, scoreMushroom, type MushroomId, type MushroomScore, type SpotContext } from './mushrooms';
-import { setHighlight } from './mapStyle';
-import { CELL_KM, KEPT_DAYS } from './meteoGrid';
+import { SOURCES, setHighlight } from './mapStyle';
+import { CELL_KM, KEPT_DAYS, cellAt, cellId, subIndexAt } from './meteoGrid';
 import { patternImageId, drawPattern } from './soils';
 import type { Store } from './state';
 import { fetchAltitude, summarize, weatherAt, type WeatherSummary } from './weather';
@@ -86,9 +87,13 @@ const huntingSeason = (month = new Date().getMonth() + 1): boolean => month >= 9
  */
 function statusValue(zones: ZonesAtPoint, forest: ForestAtPoint | null): HTMLElement {
   const value = (...parts: (Node | string)[]): HTMLElement => h('span', { class: 'spot__value spot__status-value' }, ...parts);
-  if (!zones.known) return value(`inconnu ici (${zones.reason ?? 'données absentes'})`);
+  // Inconnu : la règle par défaut reste vraie, autant la dire (le pourcentage s'affiche juste dessous).
+  if (!zones.known) return value(h('strong', {}, 'Inconnu'), ` : il faut l’accord du propriétaire (${zones.reason ?? 'données absentes'})`);
   if (zones.publicForest) {
-    return value(h('strong', {}, zones.publicForest.name), ` : forêt publique${zones.publicForest.domaniale ? ' (domaniale)' : ''}`);
+    return value(
+      h('strong', {}, zones.publicForest.name),
+      ` : forêt publique${zones.publicForest.domaniale ? ' (domaniale)' : ''}, cueillette familiale en général tolérée sauf interdiction`,
+    );
   }
   if (zones.protections.some((z) => z.type === 'cdl')) return value(h('strong', {}, 'Propriété publique'), ' (Conservatoire du littoral)');
   // Dans une zone protégée, le propriétaire peut être public ou privé : on ne devine pas.
@@ -154,8 +159,10 @@ function rulesText(zones: ZonesAtPoint, forest: ForestAtPoint | null): HTMLEleme
 /** Ce qu'il faut pour dessiner le bilan ; gardé pour le redessiner sans rien redemander. */
 interface View {
   forest: ForestAtPoint | null;
-  /** Forêt non chargée à ce zoom : inconnue, pas absente. */
-  forestUnknown: boolean;
+  /** Forêt inconnue, pas absente : zoom trop petit pour ses tuiles, ou tuiles pas encore arrivées. */
+  forestUnknown: 'zoom' | 'loading' | false;
+  /** Carré de 4,5 km qui contient le point : ses arbres hôtes servent quand la forêt est inconnue. */
+  sector: { cell: string; k: number };
   soil: SoilAtPoint | null;
   zones: ZonesAtPoint;
   altitude: number | null;
@@ -243,8 +250,10 @@ export class SpotPanel {
     this.helpOpen = false;
     const view: View = {
       forest,
-      // Sous le zoom des tuiles de forêt, rien n'est chargé sous le point : la forêt est inconnue.
-      forestUnknown: !forest && this.map.getZoom() < BDFORET.minZoom,
+      // Sous le zoom des tuiles de forêt, ou tant qu'elles ne sont pas arrivées (clic juste après un
+      // zoom, réseau lent), rien n'est chargé sous le point : la forêt est inconnue, pas absente.
+      forestUnknown: forest ? false : this.map.getZoom() < BDFORET.minZoom ? 'zoom' : this.forestLoading() ? 'loading' : false,
+      sector: { cell: cellId(cellAt(lngLat.lat, lngLat.lng).i, cellAt(lngLat.lat, lngLat.lng).j), k: subIndexAt(lngLat.lat, lngLat.lng) },
       soil,
       zones,
       altitude: null,
@@ -259,6 +268,9 @@ export class SpotPanel {
     };
     show({});
     this.body.scrollTop = 0;
+    // Arbres hôtes du secteur (même fichier que la grille de la carte) : sans eux, forêt inconnue
+    // voulait dire « météo seule », et le bilan annonçait « favorable » en pleine ville.
+    const shares = loadForestShare();
 
     try {
       // Altitude exacte (IGN) : la demande s'arrête d'elle-même si le service ne répond pas.
@@ -276,6 +288,8 @@ export class SpotPanel {
       if (first === late) {
         const early = await weatherAt(lngLat.lat, lngLat.lng, null, controller.signal, true);
         if (controller.signal.aborted) return;
+        await shares;
+        if (controller.signal.aborted) return;
         if (early) show({ weather: summarize(early.series), status: 'ok', shared: true, altitudePending: true });
       }
       const altitude = await exact;
@@ -283,6 +297,7 @@ export class SpotPanel {
       // Case météo commune (températures ramenées à l'altitude du point) ; Open-Meteo n'est appelé
       // que hors de France ou si les fichiers communs sont injoignables.
       const weather = await weatherAt(lngLat.lat, lngLat.lng, altitude, controller.signal);
+      await shares;
       if (controller.signal.aborted) return;
       show({ altitude, weather: weather ? summarize(weather.series) : null, status: 'ok', shared: weather?.shared ?? false });
     } catch (error) {
@@ -292,12 +307,21 @@ export class SpotPanel {
     }
   }
 
+  /** Les tuiles de la BD Forêt de la vue ne sont pas toutes arrivées. */
+  private forestLoading(): boolean {
+    try {
+      return !this.map.isSourceLoaded(SOURCES.bdForet);
+    } catch {
+      return false;
+    }
+  }
+
   /** Règles de cueillette, repliées : le statut du terrain, lui, est déjà dit dans le tableau du haut. */
   private rulesSection(zones: ZonesAtPoint, forest: ForestAtPoint | null): HTMLElement {
     const details = h(
       'details',
       { class: 'spot__section spot__rules', open: this.rulesOpen },
-      h('summary', { class: 'spot__title spot__fold' }, 'Droit de cueillir : les règles'),
+      h('summary', { class: 'spot__title spot__fold', 'data-focus': 'rules' }, 'Droit de cueillir : les règles'),
       rulesText(zones, forest),
       h(
         'p',
@@ -345,10 +369,16 @@ export class SpotPanel {
       const card = h(
         'details',
         { class: 'verdict__card', open: this.cards.get(s.id) ?? s.id === opened },
-        h('summary', { class: 'verdict__head' }, h('span', { class: 'verdict__name' }, name, tag), pill),
+        h('summary', { class: 'verdict__head', 'data-focus': `verdict:${s.id}` }, h('span', { class: 'verdict__name' }, name, tag), pill),
         h('ul', { class: 'verdict__reasons' }, ...s.reasons.map((r) => h('li', {}, r))),
       );
-      card.addEventListener('toggle', () => this.cards.set(s.id, card.open));
+      // On ne retient que ce qui s'écarte de l'état d'office : un <details> créé ouvert émet lui aussi
+      // « toggle », et la ligne dépliée d'office resterait dépliée quand le champignon recherché change.
+      const auto = s.id === opened;
+      card.addEventListener('toggle', () => {
+        if (card.open === auto) this.cards.delete(s.id);
+        else this.cards.set(s.id, card.open);
+      });
       list.append(h('li', { class: classes }, card));
     }
 
@@ -356,7 +386,7 @@ export class SpotPanel {
     const helpId = 'spot-chance-help';
     const help = h(
       'button',
-      { class: 'help-btn', type: 'button', 'aria-expanded': String(this.helpOpen), 'aria-controls': helpId, 'aria-label': 'Comment la chance estimée est calculée' },
+      { class: 'help-btn', type: 'button', 'data-focus': 'help', 'aria-expanded': String(this.helpOpen), 'aria-controls': helpId, 'aria-label': 'Comment la chance estimée est calculée' },
       '?',
     );
     const note = h(
@@ -411,7 +441,7 @@ export class SpotPanel {
         'Forêt',
         ...(forest
           ? [h('span', { class: 'swatch', style: `--swatch: ${forest.cls?.color ?? '#999'}` }), h('span', { class: 'spot__value' }, forest.label)]
-          : [v.forestUnknown ? 'zoomez pour la connaître' : 'pas de forêt cartographiée']),
+          : [v.forestUnknown === 'zoom' ? 'zoomez pour la connaître' : v.forestUnknown ? 'pas encore chargée : touchez à nouveau dans un instant' : 'pas de forêt cartographiée']),
       ),
       row(
         'Sol',
@@ -441,10 +471,22 @@ export class SpotPanel {
     } else {
       const month = new Date().getMonth() + 1;
       const context: SpotContext = {
-        ...(forest ? { forestCode: forest.code } : v.forestUnknown ? { forestUnknown: true } : { forestCode: null }),
+        ...(forest ? { forestCode: forest.code } : v.forestUnknown ? { forestUnknown: v.forestUnknown } : { forestCode: null }),
         soil: soil?.soil.id ?? null,
       };
-      parts.push(this.mushroomSection(MUSHROOMS.map((m) => scoreMushroom(m, weather, month, context))));
+      parts.push(
+        this.mushroomSection(
+          MUSHROOMS.map((m) => {
+            if (!v.forestUnknown) return scoreMushroom(m, weather, month, context);
+            // Forêt inconnue sous le point : même règle que le carré de la carte. Sans arbres hôtes dans
+            // le secteur, pas de chance annoncée ; sinon, celle de ses forêts hôtes. Fichier absent : météo seule.
+            const host = hostCover(v.sector.cell, v.sector.k, m);
+            if (!host) return scoreMushroom(m, weather, month, context);
+            if (host.cover < HOST_MIN_COVER) return { ...scoreMushroom(m, weather, month, { ...context, hostQuality: 0 }), blocker: 'peu d’arbres hôtes dans ce secteur' };
+            return scoreMushroom(m, weather, month, { ...context, hostQuality: host.quality });
+          }),
+        ),
+      );
 
       const last = weather.events[0];
       const yesterday = weather.days[weather.days.length - 1]?.date ?? '';
@@ -481,7 +523,7 @@ export class SpotPanel {
 
     const lat = this.coords.textContent?.split(', ')[0] ?? '';
     const lng = this.coords.textContent?.split(', ')[1] ?? '';
-    const copy = h('button', { type: 'button', class: 'popup-btn' }, 'Copier les coordonnées');
+    const copy = h('button', { type: 'button', class: 'popup-btn', 'data-focus': 'copy' }, 'Copier les coordonnées');
     copy.addEventListener('click', () => {
       navigator.clipboard
         .writeText(`${lat}, ${lng}`)
@@ -495,7 +537,7 @@ export class SpotPanel {
         copy,
         h(
           'a',
-          { class: 'popup-btn', href: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, target: '_blank', rel: 'noopener' },
+          { class: 'popup-btn', 'data-focus': 'route', href: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, target: '_blank', rel: 'noopener' },
           'Itinéraire ↗',
         ),
       ),
@@ -505,9 +547,11 @@ export class SpotPanel {
         `Estimation : elle dit où chercher, pas ce qui se mange ni si l’on peut cueillir. Météo : Open-Meteo, ${shared ? `case de ${CELL_KM} km mise à jour une fois par jour` : 'interrogé directement pour ce point'}.`,
       ),
     );
-    // Le clavier ne doit pas perdre sa place quand le bilan est redessiné sous lui (bouton « ? »).
-    const helpFocused = document.activeElement instanceof HTMLElement && document.activeElement.classList.contains('help-btn') && this.body.contains(document.activeElement);
+    // Le clavier ne doit pas perdre sa place quand le bilan est redessiné sous lui (l'altitude peut
+    // arriver douze secondes après le clic) : on retrouve l'élément par sa clé `data-focus`.
+    const active = document.activeElement;
+    const focused = active instanceof HTMLElement && this.body.contains(active) ? active.dataset['focus'] : undefined;
     this.body.replaceChildren(...parts.filter((p): p is Node => p !== null));
-    if (helpFocused) this.body.querySelector<HTMLElement>('.help-btn')?.focus();
+    if (focused) this.body.querySelector<HTMLElement>(`[data-focus="${focused}"]`)?.focus({ preventScroll: true });
   }
 }

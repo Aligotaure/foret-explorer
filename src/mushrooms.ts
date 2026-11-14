@@ -247,8 +247,12 @@ export interface MushroomScore {
 export interface SpotContext {
   /** Code BD Forêt au point (null : hors forêt ; undefined : inconnu). */
   forestCode?: string | null;
-  /** La forêt n'est pas connue à ce zoom (tuiles pas encore chargées) : le dire, sans rien retrancher. */
-  forestUnknown?: boolean;
+  /**
+   * La forêt sous le point n'est pas connue : zoom trop petit pour ses tuiles (`zoom`), ou tuiles pas
+   * encore arrivées (`loading`). Le dire ; avec `hostQuality`, l'indice vaut alors pour les forêts
+   * hôtes du secteur (carré de 4,5 km), sinon pour la météo seule.
+   */
+  forestUnknown?: 'zoom' | 'loading';
   /** Nature du sol au point (null : hors de la zone couverte). */
   soil?: SoilId | null;
   /**
@@ -292,11 +296,15 @@ function rainFactor(m: Mushroom, w: WeatherSummary, reasons: string[]): number {
     // La pluie qui pèse le plus dans l'indice peut être une vieille pluie dont le délai est dépassé,
     // alors qu'une plus récente n'a pas encore fait pousser : c'est elle qu'on commente (le bloc météo
     // du bilan la cite aussi, et « revenez dans N jours » sert plus que « le sol sèche »).
-    const coming = w.events.find((x) => x.daysAgo < start);
+    // « Plus récente » : la dernière dont le délai n'est pas dépassé, qu'elle soit encore trop
+    // fraîche ou déjà dans le bon délai. Une pluie modeste ne promet rien.
+    const coming = w.events.find((x) => x.daysAgo <= end);
     const e = bestEvent.daysAgo > end && coming ? coming : bestEvent;
     const head = `Pluie de ${mm(e.amount)} il y a ${days(e.daysAgo)}`;
-    if (e.daysAgo < start) reasons.push(`${head} : encore tôt, pousse attendue d’ici ${days(start - e.daysAgo)}.`);
-    else if (e.daysAgo <= end) reasons.push(`${head} : bon délai pour ${m.singular} (${start} à ${end} jours).`);
+    const modest = clamp((e.amount - 10) / 25) < 0.5;
+    if (e.daysAgo < start) {
+      reasons.push(modest ? `${head} : encore tôt, et pluie modeste : pousse incertaine.` : `${head} : encore tôt, pousse attendue d’ici ${days(start - e.daysAgo)}.`);
+    } else if (e.daysAgo <= end) reasons.push(`${head} : bon délai pour ${m.singular} (${start} à ${end} jours).`);
     else reasons.push(`${head} : délai dépassé, le sol sèche.`);
   }
   return clamp(0.7 * best + 0.3 * moisture);
@@ -335,10 +343,13 @@ export function scoreMushroom(m: Mushroom, w: WeatherSummary, month: number, ctx
     else if (host >= 0.8) reasons.push(`Forêt hôte : ${forest?.toLowerCase()}.`);
     else if (host > 0) reasons.push(`Forêt peu typique (${forest?.toLowerCase()}).`);
     else reasons.push(`Pas un arbre hôte (${forest?.toLowerCase()}).`);
-    if (host === 0) blocker ??= ctx.forestCode ? 'pas un arbre hôte ici' : 'pas de forêt ici';
+    // Mêmes mots que la ligne « Forêt » du bilan : sous le point, pas alentour (un chemin, une clairière).
+    if (host === 0) blocker ??= ctx.forestCode ? 'pas un arbre hôte ici' : 'pas de forêt cartographiée sous ce point';
     score *= host;
   } else if (ctx.forestUnknown) {
-    reasons.push('Forêt inconnue à ce zoom : météo seule. Zoomez pour en tenir compte.');
+    const why = ctx.forestUnknown === 'zoom' ? 'Forêt inconnue à ce zoom' : 'Forêt pas encore chargée';
+    const then = ctx.forestUnknown === 'zoom' ? 'Zoomez pour un point précis.' : 'Touchez à nouveau dans un instant.';
+    reasons.push(ctx.hostQuality !== undefined ? `${why} : chance des forêts hôtes du secteur. ${then}` : `${why} : météo seule. ${then}`);
   }
   if (ctx.soil) {
     const pref = m.soils[ctx.soil];

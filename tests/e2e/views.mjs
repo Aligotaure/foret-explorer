@@ -398,13 +398,16 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     await page.waitForSelector('dialog.disclaimer[open]', { timeout: 10000 });
     await page.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
     await page.locator('.disclaimer__accept').click();
-    await closeTour(page);
+    // Sans stockage, rien ne dirait à la visite suivante que la présentation a été vue : elle n'est
+    // pas montrée d'office (elle reste dans la légende).
+    await page.waitForTimeout(700);
+    const tour = await page.evaluate(() => Boolean(document.querySelector('dialog.tour')));
     await island(page, 'analytics').click();
     await page.waitForSelector('#analytics h1');
     await island(page, 'map').click();
     await page.waitForTimeout(400);
     const again = await page.evaluate(() => ({ dialog: Boolean(document.querySelector('dialog')), stored: localStorage.getItem('foret-explorer:avertissement') }));
-    check('avertissement : accepté une fois par visite, même sans stockage du navigateur', !again.dialog && again.stored === null && (await view(page)) === 'map', JSON.stringify(again));
+    check('avertissement : accepté une fois par visite, même sans stockage du navigateur ; pas de présentation d’office', !tour && !again.dialog && again.stored === null && (await view(page)) === 'map', JSON.stringify({ tour, ...again }));
     await context.close();
   }
 

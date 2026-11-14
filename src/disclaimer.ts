@@ -55,11 +55,13 @@ function savedVersion(): string | null {
   }
 }
 
-function remember(): void {
+/** Enregistre l'accord ; rend faux si le navigateur refuse de le garder. */
+function remember(): boolean {
   try {
     localStorage.setItem(DISCLAIMER_KEY, JSON.stringify({ v: TERMS_VERSION, t: Date.now() }));
+    return true;
   } catch {
-    /* navigation privée : l'avertissement reviendra à la prochaine visite */
+    return false; // navigation privée, stockage bloqué : l'avertissement reviendra à la prochaine visite
   }
 }
 
@@ -175,7 +177,7 @@ export function showDisclaimer(force = false): Promise<boolean> {
     const dismiss = (): void => {
       done = true;
       pending = null;
-      dialog.close();
+      if (dialog.open) dialog.close(); // (un très vieux navigateur n'a ni `open` ni `close()`)
       dialog.remove();
       if (app) app.inert = false;
     };
@@ -229,9 +231,11 @@ export function showDisclaimer(force = false): Promise<boolean> {
       // Premier accord sur cet appareil (ou premier depuis la refonte) : lu avant de l'enregistrer.
       const before = savedVersion();
       acceptedThisVisit = true;
-      remember();
+      // Sans stockage, on ne saurait jamais que la présentation a été vue : elle reviendrait à chaque
+      // visite. Elle n'est donc montrée d'office que si l'accord a pu être gardé (elle reste dans la légende).
+      const kept = remember();
       dismiss();
-      resolve(before === null || before < TOUR_SINCE);
+      resolve(kept && (before === null || before < TOUR_SINCE));
     });
     withdraw = dismiss;
   });

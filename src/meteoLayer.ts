@@ -339,8 +339,10 @@ export class MeteoLayer {
       let count = 0;
       let detailed = false;
       const features: Feature[] = [];
-      // Arbres hôtes de chaque carré (mode indice) : sans eux, le pourcentage ne regardait que la météo.
-      const hosts = state.weatherMode === 'indice' && (await loadForestShare());
+      // Arbres hôtes de chaque carré : sans eux, le pourcentage ne regardait que la météo. Chargés
+      // en mode pluie aussi : en passant à la chance estimée, les carrés déjà là sont repeints tout
+      // de suite, et ils doivent déjà savoir où sont les arbres (sinon les villes s'allument un instant).
+      const hosts = await loadForestShare();
       if (controller.signal.aborted) return;
       const add = (id: string, w: WeatherSummary, box: Box, sub: 0 | 1, hostsOf: (m: Mushroom) => HostCover | null, spot: Box = box): void => {
         const properties: Record<string, number> = {
@@ -383,7 +385,13 @@ export class MeteoLayer {
         } else {
           // Case entière : à l'altitude médiane de ses carrés plutôt qu'à celle du point de relevé.
           const best = hosts && shown ? hostCoverOfCell(c.id, shown)?.best : undefined;
-          add(c.id, summaryAtAltitude(w, medianAltitude(s)), c, 0, (m) => hostCoverOfCell(c.id, m), best !== undefined && best >= 0 ? subBox(c, best) : c);
+          // Allumée dès qu'un de ses carrés l'est (sa teinte suit la moyenne) : une case de plaine avec
+          // une seule vraie forêt ne doit pas s'éteindre en vue d'ensemble puis réapparaître en zoomant.
+          const whole = (m: Mushroom): HostCover | null => {
+            const host = hostCoverOfCell(c.id, m);
+            return host && host.bestCover >= HOST_MIN_COVER ? { cover: Math.max(host.cover, HOST_MIN_COVER), quality: host.quality } : host;
+          };
+          add(c.id, summaryAtAltitude(w, medianAltitude(s)), c, 0, whole, best !== undefined && best >= 0 ? subBox(c, best) : c);
         }
       }
       this.map.getSource<GeoJSONSource>(SOURCES.meteo)?.setData({ type: 'FeatureCollection', features });

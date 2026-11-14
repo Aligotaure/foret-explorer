@@ -64,7 +64,7 @@ export function mushroomSection(store: Store): { el: HTMLElement; sync(state: Ap
         h(
           'p',
           { class: 'legend-hint' },
-          'Choisissez un champignon : la carte colore les secteurs où ses conditions sont réunies. Touchez-la ensuite pour le bilan d’un coin.',
+          'Choisissez un champignon : la carte estime sa chance là où poussent ses arbres hôtes, d’après la météo des derniers jours. Touchez-la ensuite pour le bilan d’un coin.',
         ),
       );
       return;
@@ -283,7 +283,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
       h(
         'p',
         {},
-        `Un carré de 4,5 km n’est coloré que si les arbres hôtes du champignon y couvrent au moins ${Math.round(HOST_MIN_COVER * 100)} % de la surface (BD Forêt de l’IGN), et d’autant plus qu’ils en couvrent ; son pourcentage vaut pour ces forêts, sans tenir compte du sol. Le bilan d’un coin, lui, regarde la forêt et le sol du point touché : son chiffre peut être plus bas.`,
+        `Un carré de 4,5 km n’est coloré que si les arbres hôtes du champignon y couvrent au moins ${Math.round(HOST_MIN_COVER * 100)} % de la surface (BD Forêt de l’IGN), et d’autant plus qu’ils en couvrent ; son pourcentage vaut pour ces forêts, sans tenir compte du sol. Le bilan d’un coin, lui, regarde la forêt et le sol du point touché : son chiffre peut différer, plus haut ou plus bas.`,
       ),
       h(
         'p',

@@ -31,13 +31,21 @@ export interface HostCover {
 
 let file: ShareFile | null = null;
 let loading: Promise<boolean> | null = null;
+/** Fichier lu mais d'un autre format ou d'une autre grille : inutile de le redemander. */
+let unusable = false;
+/** Dernier échec de réseau : on attend un peu avant de redemander (pas à chaque déplacement de la carte). */
+let failedAt = 0;
+const RETRY_MS = 30_000;
 const cache = new Map<string, (HostCover | null)[]>();
 
 /**
- * Charge le fichier (une seule fois par visite). Rend faux s'il manque ou n'est pas à ce format : la
- * grille se dessine alors comme avant, sans tenir compte de la forêt, et la légende le dit.
+ * Charge le fichier (une seule fois par visite s'il arrive). Rend faux s'il manque ou n'est pas à ce
+ * format : la grille se dessine alors comme avant, sans tenir compte de la forêt, et la légende le
+ * dit. Un échec de réseau (fréquent en forêt) est retenté au plus toutes les 30 secondes.
  */
 export function loadForestShare(): Promise<boolean> {
+  if (file) return Promise.resolve(true);
+  if (unusable || (failedAt && Date.now() - failedAt < RETRY_MS)) return Promise.resolve(false);
   loading ??= fetch(FOREST_SHARE_URL)
     .then((response) => {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -45,6 +53,7 @@ export function loadForestShare(): Promise<boolean> {
     })
     .then((data) => {
       if (data.v !== 1 || data.pasLat !== BASE_STEP_LAT || data.pasLon !== BASE_STEP_LON || !Array.isArray(data.codes) || !data.cases) {
+        unusable = true;
         throw new Error('format ou grille inattendus');
       }
       file = data;
@@ -52,6 +61,8 @@ export function loadForestShare(): Promise<boolean> {
     })
     .catch((error: unknown) => {
       console.warn('[parts de forêt]', error);
+      failedAt = Date.now();
+      loading = null;
       return false;
     });
   return loading;
@@ -92,9 +103,10 @@ export function hostCover(cellId: string, k: number, m: Mushroom): HostCover | n
 
 /**
  * Arbres hôtes d'une case entière : moyenne de ses carrés (ceux sans terre française ne comptent
- * pas), et numéro de son carré le plus boisé en hôtes (où poser une pastille). null : inconnu.
+ * pas), numéro et couverture de son carré le plus boisé en hôtes (où poser une pastille, et de quoi
+ * ne pas éteindre une case dont un seul carré est une vraie forêt). null : inconnu.
  */
-export function hostCoverOfCell(cellId: string, m: Mushroom): (HostCover & { best: number }) | null {
+export function hostCoverOfCell(cellId: string, m: Mushroom): (HostCover & { best: number; bestCover: number }) | null {
   const list = coversOf(cellId, m);
   if (!list) return null;
   let count = 0;
@@ -113,5 +125,5 @@ export function hostCoverOfCell(cellId: string, m: Mushroom): (HostCover & { bes
     }
   });
   if (!count) return null;
-  return { cover: cover / count, quality: cover > 0 ? weighted / cover : 0, best };
+  return { cover: cover / count, quality: cover > 0 ? weighted / cover : 0, best, bestCover };
 }

@@ -139,8 +139,15 @@ export function showTour(): Promise<boolean> {
       if (dialog.open) dialog.close(); // rend le clavier à l'élément qui avait ouvert la fenêtre
       dialog.remove();
       if (app) app.inert = false;
+      // Après un premier accord, il n'y a plus d'élément à qui le rendre : on le pose sur le bouton
+      // de la légende, le geste 1 de la présentation, plutôt que de le laisser tomber en haut de page.
+      if (seen && (!(opener instanceof HTMLElement) || opener === document.body || !opener.isConnected)) {
+        document.getElementById('legend-toggle')?.focus({ preventScroll: true });
+      }
       resolve(seen);
     };
+    // D'où l'on vient : le bouton de la légende, ou rien d'utile (l'avertissement vient d'être retiré).
+    const opener = document.activeElement;
     document.body.append(dialog);
     if (typeof dialog.showModal === 'function') dialog.showModal();
     else {
@@ -157,11 +164,30 @@ export function showTour(): Promise<boolean> {
       if (settled()) finish(true);
     });
     // Clic à côté : il arrive sur la fenêtre elle-même (son voile), pas sur son contenu.
-    dialog.addEventListener('click', (event) => {
-      if (event.target === dialog && settled()) finish(true);
+    // On ne ferme que si l'appui a commencé sur le voile : sélectionner un texte et relâcher la
+    // souris à côté envoie aussi un clic à la fenêtre.
+    let downOnBackdrop = false;
+    dialog.addEventListener('pointerdown', (event) => {
+      downOnBackdrop = event.target === dialog;
     });
-    // Échap (fermeture native) ou bouton Précédent d'Android.
-    dialog.addEventListener('close', () => finish(true));
+    dialog.addEventListener('click', (event) => {
+      if (downOnBackdrop && event.target === dialog && settled()) finish(true);
+    });
+    // Échap (fermeture native) ou bouton Précédent d'Android. Trop tôt, Échap est ignoré (frappé en
+    // boucle sur l'avertissement, qui l'ignore, il ne doit pas fermer ce qui vient d'apparaître) ; et
+    // si la fenêtre se ferme quand même, elle se rouvre.
+    dialog.addEventListener('cancel', (event) => {
+      if (!settled()) event.preventDefault();
+    });
+    dialog.addEventListener('close', () => {
+      if (done) return;
+      if (!settled() && typeof dialog.showModal === 'function') {
+        dialog.showModal();
+        heading.focus({ preventScroll: true });
+        return;
+      }
+      finish(true);
+    });
     withdraw = () => finish(false);
   });
   current = { promise, withdraw };
