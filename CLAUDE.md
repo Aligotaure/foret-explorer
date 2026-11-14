@@ -110,7 +110,7 @@ nouvelle dépendance sans raison.
 | `geology.ts` | Motifs fournis à MapLibre (`styleimagemissing`), forêt et sol sous un point |
 | `meteoGrid.ts` | Grille météo commune (cases de 0,16° × 0,224°, blocs de 8 × 8, 16 carrés de 4,5 km par case : `subBox`, `subIndexAt`), format des fichiers, dates ; lu aussi par Node (scripts) : aucun import |
 | `weather.ts` | Fichiers météo communs (index, blocs), résumé de 30 jours daté (épisodes de pluie, gel, `rain20` pour l'humidité, jour estimé), `atAltitude`, `summaryAtAltitude`, Open-Meteo en secours (cache du jour), altitude IGN |
-| `meteoLayer.ts` | Grille météo sur la vue, à tous les zooms (toute la France d'un coup en vue d'ensemble) : pluie cumulée ou indice du champignon choisi, détaillé par carrés de 4,5 km à partir du zoom 8, allumés à la mesure de leurs arbres hôtes, hors des villes ; carrés fins en mode indice. Règles de fluidité en tête de classe |
+| `meteoLayer.ts` | Grille météo sur la vue, à tous les zooms (toute la France d'un coup en vue d'ensemble) : pluie cumulée ou indice du champignon choisi : cases de 18 km et pastilles sous le zoom 10, carrés de 4,5 km à partir du zoom 10, allumés à la mesure de leurs arbres hôtes, hors des villes ; carrés fins en mode indice ; rien pour un champignon hors saison. Règles de fluidité en tête de classe |
 | `fineGrid.ts` | Carrés de 500 m : découpage, relevé forêt/sol (index spatial sur `queryRenderedFeatures`), altitudes en cache permanent, choix des carrés à dessiner (`fineCellsToDraw` : plus sévère en ville), indice par carré |
 | `metrics.ts` | Compteurs de consommation des API (en mémoire) et envoi groupé au serveur de mesure |
 | `metricsSchema.ts` | Liste des compteurs, partagée avec `worker/` (un compteur absent est refusé par le serveur) |
@@ -150,12 +150,30 @@ statut sous un clic, zoom ≥ 10), `meteo-cellules`, `meteo-contours`, `meteo-fi
 `meteo-fin-etiquettes`, `zones-protegees-contours`, `zones-protegees-etiquettes` (au-dessus de
 l'indice), `bdforet-highlight-casing`, `bdforet-highlight`.
 
-Carrés de 4,5 km (`meteoLayer.ts`, zoom ≥ `WEATHER_SUB_MIN_ZOOM` = 8, mode indice) : chaque case
+Carrés de 4,5 km (`meteoLayer.ts`, zoom ≥ `WEATHER_SUB_MIN_ZOOM` = 10, mode indice) : chaque case
 commune est dessinée en 16 carrés (id « I:J/k », propriété `sub` = 1), même pluie, températures
 ramenées à l'altitude de chaque carré (`a` dans les fichiers, `summaryAtAltitude`) ; un carré sans
-terre française n'est pas dessiné. En deçà du zoom 8, et en mode pluie, cases entières (`sub` = 0, à
-l'altitude médiane de leurs carrés). Étiquettes des carrés à partir du zoom 10 (une expression de
-zoom dans une propriété `layout` n'est évaluée qu'aux zooms entiers).
+terre française n'est pas dessiné. En deçà du zoom 10, et en mode pluie, cases entières (`sub` = 0, à
+l'altitude médiane de leurs carrés), sans quadrillage en mode indice (`setLayerZoomRange`). Seuls
+les carrés (`sub` = 1) portent une étiquette, dès leur arrivée au zoom 10 (une expression de zoom
+dans une propriété `layout` n'est évaluée qu'aux zooms entiers : garder un seuil entier) ; une case
+entière encore dans la source au passage du zoom 10 n'affiche donc rien. Avant le 14/11/2026 les
+carrés arrivaient au zoom 8 (demande de Clément : à l'échelle 20 km leur couleur ne se lit pas ; ils
+font 17 à 26 pixels de large quand la règle affiche 20 km). La règle d'échelle (120 px au plus)
+affiche 30 km du zoom 7,0 à 7,8, 20 km jusqu'à 8,35, 10 km jusqu'à 9,35, 5 km jusqu'à 10,35 (à 46°
+de latitude) : entre 9,35 et 10 elle dit déjà 5 km et les cases restent de 18 km, écart assumé pour
+n'avoir qu'un seuil (carrés, étiquettes et forêts détaillées arrivent ensemble).
+
+Pastilles (`meteo-points`, zoom < 10, mode indice ; `pickHotspots`, `bestSquare`) : une par case où
+la chance estimée atteint `HOTSPOT_MIN_CHANCE` (70 %, le niveau « favorable » ; 50 % avant le
+14/11/2026), 12 au plus, espacées d'un septième de la vue. Leur chiffre est celui du **meilleur carré
+de 4,5 km de la case** (à son altitude, pour ses arbres hôtes), où elles sont posées : celui que son
+étiquette affichera au zoom 10. La chance de la case entière ne vaut qu'à son altitude médiane : en
+montagne (Annecy : 447 à 2 351 m dans une case) les pastilles disparaissaient des vallées. Les seize
+carrés d'une case ne sont calculés que si saison × pluie (`weatherCeiling`) permet d'atteindre 50 %.
+« Meilleure chance estimée dans la vue » (légende) lit les mêmes candidats, au seuil de 50 %
+(`CHANCE_THRESHOLD`), et précise « (pastilles à partir de 70 %) » quand aucune n'est posée. À
+partir du zoom 10, la source des pastilles est vidée une fois pour toutes.
 
 Arbres hôtes (`forestShare.ts`, `public/foret/parts.json`, mode indice) : avant le 14/11/2026, cases
 et carrés ne regardaient que la météo (Paris affichait « 78 % · favorable », le bilan au même point
@@ -171,8 +189,8 @@ centre). Avec 10 % et 15 % : 20 025 carrés (68 %). Les parts s'additionnent en 
 teinte, ni quadrillage, ni étiquette, ni pastille. Propriétés d'un carré : celles du champignon
 montré seulement, sous des noms fixes (`l` niveau, `p` chance estimée, `c` part d'hôtes de 0 à 1 ;
 `c` = −1 si le fichier manque : la grille se dessine alors comme avant et la légende le dit). Les
-cases du mode pluie n'en portent aucune. Case entière (zoom < 8) :
-moyenne de ses carrés, pastille posée sur son carré allumé le plus boisé. Aux zooms des carrés de 500 m, la grille des
+cases du mode pluie n'en portent aucune. Case entière (zoom < 10) :
+moyenne de ses carrés (pastille : voir ci-dessus). Aux zooms des carrés de 500 m, la grille des
 cases reste en fond sans étiquette dès que le relevé fin est fait (`fineDone`), même s'il n'a trouvé
 aucun arbre hôte. Fichier : par case commune, 16 carrés `[rang du code, part en %, …]` (null : pas de
 terre française) dans `cases`, et leur part bâtie en % dans `bati` (champ ajouté le 14/11/2026, même
@@ -237,10 +255,13 @@ bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
   l'accord du propriétaire », « X : forêt publique »), jamais « autorisé ». C'est le garde-fou qui
   permet de replier les règles : ne pas le déplacer sous les champignons. Un test e2e vérifie qu'il se
   voit sans rien déplier.
-- **Champignons** : du plus probable au moins probable (tri sur l'indice, sans exception) ; le
+- **Champignons** : du plus probable au moins probable (tri sur l'indice, sans exception parmi les
+  champignons de saison ; ceux qui sont hors saison de plus d'un mois viennent ensuite, grisés et sans
+  pourcentage, voir « Hors saison ») ; le
   champignon recherché est signalé à son rang (liseré, « recherché ») et sa ligne dépliée, sinon la
-  première si elle atteint 50 % ; les raisons sont dans un `<details>` par champignon ; exclu par la
-  saison ou la forêt (`MushroomScore.blocker`) : une ligne avec la raison. Le bilan ouvert suit le
+  première si elle atteint 50 % ; les raisons sont dans un `<details>` par champignon ; écarté par la
+  saison, la forêt ou le secteur (`SpotPanel.exclusion`) : une ligne avec la raison, sans calcul
+  (`scoreMushroom` n'est appelé que pour les champignons qu'on peut estimer). Le bilan ouvert suit le
   champignon recherché (`SpotPanel.refresh()`). Il est redessiné jusqu'à trois fois par clic : tout ce
   qui se déplie garde son état dans un champ de `SpotPanel`, remis à zéro à chaque nouveau coin.
 - **« ? »** (un seul, près du titre « Champignons ») : un bouton `aria-expanded` qui déplie un encart
@@ -255,6 +276,28 @@ bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
   des carrés de 500 m jusque dans les massifs en ville, et le bilan les contredirait ; sinon celle
   de ses forêts hôtes, et la raison le dit. Fichier des parts absent :
   météo seule. Sans cela, le bilan annonçait « favorable » en pleine ville dès qu'on dézoomait.
+  (Sous le zoom 10 la carte ne montre plus que des cases de 18 km, allumées dès qu'un de leurs carrés
+  l'est : le bilan, au carré de 4,5 km, y est plus précis qu'elle, c'est voulu.)
+- **Pas d'appel là où rien n'est à estimer** (demande de Clément du 14/11/2026 : « pas besoin d'appel
+  pour les villes ou les parcs »). `SpotPanel.open` décide une fois par clic, avant tout appel, ce qui
+  écarte chaque champignon (`exclusion`, gardé dans `View.excluded`), dans cet ordre : la saison
+  (`noEstimate`) ; la forêt sous le point quand elle est connue (« pas de forêt cartographiée sous ce
+  point », « pas un arbre hôte ici ») ; puis le secteur. Ville, forêt connue : sous le zoom 12,
+  « secteur urbanisé : zoomez pour juger ce bois » (la carte n'y allume rien non plus) ; à partir du
+  zoom 12, le bilan suit le relevé des carrés de 500 m de la carte (`MeteoLayer.townSquareKept`, passé
+  à `SpotPanel` par `mapView.ts`) : « secteur urbanisé, trop peu de bois autour du point » si la carte
+  n'y dessinerait pas de carré, estimation si elle en dessine un ; relevé absent ou incomplet (grille
+  éteinte, mode pluie, bord de l'écran) : on estime, quitte à demander une altitude de trop. Si les
+  cinq champignons sont écartés : **ni altitude IGN, ni Open-Meteo de secours**
+  (`weatherAt(…, sharedOnly)`) ; les lignes s'affichent tout de suite, l'altitude est celle de la
+  grille météo (« ≈ N m (d'après la grille météo) », ou « non demandée (rien à estimer ici) » sans
+  fichiers météo), terrain, statut, pluie et règles restent. Le fichier des parts n'est attendu que
+  s'il peut changer la décision, et 2,5 s au plus (`SPOT_ALTITUDE_WAIT_MS`, un seul délai compté
+  depuis le clic, qui vaut aussi pour l'altitude) : s'il ne répond pas, on estime sans lui.
+- En secteur urbanisé, sous la liste : « cueillez loin des routes, des zones industrielles et des
+  décharges, les champignons absorbent les polluants », avec un lien vers `a-propos.html#identifier`,
+  qui porte déjà ce conseil (Anses ; relu le 14/11/2026 sur service-public.gouv.fr, fiche A15186 du
+  14/10/2026). Le bilan ne fait pas partie des conditions : `TERMS_VERSION` ne change pas.
 - La phrase de pluie d'un champignon commente la pluie la plus récente dont le délai n'est pas
   dépassé, plutôt qu'une vieille pluie « dépassée » qui pèse plus dans l'indice (sinon elle contredit
   le bloc météo) ; une pluie modeste encore fraîche ne promet rien (« pousse incertaine »).
@@ -280,8 +323,12 @@ Grille fine (`fineGrid.ts`, zoom ≥ `FINE_MIN_ZOOM` = 12, mode indice) : chaque
 exactement 36 × 36 (parent : `cellOfBase`). Forêt et sol relevés sur 3 × 3 points par
 carré, en une seule requête `queryRenderedFeatures` sur toute la vue puis test point-dans-polygone (un
 appel par point serait bien plus lent) ; relevés gardés pour la visite. Altitude IGN au centre, gardée
-dans `localStorage` (`foret-explorer:altitudes`, 40 000 carrés au plus), demandée seulement pour les
-carrés boisés, par lots de 200 points (service en panne : altitude du carré de 4,5 km). Températures
+dans `localStorage` (`foret-explorer:altitudes`, 40 000 carrés au plus, écrit une fois par relevé),
+demandée seulement pour les carrés **à dessiner pour le champignon montré** (`fineToDraw` ; avant le
+14/11/2026 : pour tout carré boisé, lande ou parc de ville compris), par lots de 200 points. Un carré
+dont l'altitude n'est pas encore arrivée est dessiné tout de suite à celle de son carré de 4,5 km,
+puis corrigé (de même si le service est en panne) : au changement de champignon les carrés ne
+disparaissent pas, et `fineDone` ne bascule pas. Températures
 de la case commune corrigées de −0,65 °C par 100 m ; la pluie reste celle de la case. Carré dessiné
 seulement si trois de ses neuf points au moins sont sous un arbre hôte du champignon montré
 (`FINE_MIN_HOST_SHARE`) ; en ville (son carré de 4,5 km est bâti à 15 % ou plus), il en faut cinq et

@@ -218,5 +218,5 @@ map.on('error', (event) => {
   }
 });
 
-// En développement, `map`, `store`, `spot` et `metrics.totals()` sont accessibles depuis la console.
-if (import.meta.env.DEV) Object.assign(window, { map, store, spot, metrics: { totals: sessionTotals, flush } });
+// En développement, `map`, `store`, `spot`, `meteo` et `metrics.totals()` sont accessibles depuis la console.
+if (import.meta.env.DEV) Object.assign(window, { map, store, spot, meteo, metrics: { totals: sessionTotals, flush } });

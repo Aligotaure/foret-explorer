@@ -1081,6 +1081,24 @@ async function desktopTests(browser, base) {
     fine.coarseOpacity.slice(0, 40),
   );
   check('grille fine : état dans la légende', Boolean(fine.status) && fine.coverage, fine.status);
+  // Le bilan d'un coin en ville suit ce relevé : la règle de ville du carré de 500 m qui contient le
+  // point, connue seulement si ses neuf carrés (lui et ses voisins) sont relevés en entier.
+  const survey = await page.evaluate(async () => {
+    const { MUSHROOM_BY_ID } = await import('/src/mushrooms.ts');
+    const cepe = MUSHROOM_BY_ID.get('cepe');
+    const c = window.map.getCenter();
+    const b = window.map.getBounds();
+    return {
+      centre: typeof window.meteo.townSquareKept(c.lat, c.lng, cepe),
+      edge: window.meteo.townSquareKept(b.getNorth() - 0.0001, b.getEast() - 0.0001, cepe),
+      outside: window.meteo.townSquareKept(c.lat + 1, c.lng + 1, cepe),
+    };
+  });
+  check(
+    'bilan en ville : la règle des carrés de 500 m est connue au centre de la vue relevée, inconnue au bord de l’écran et hors de la vue (le bilan estime alors)',
+    survey.centre === 'boolean' && survey.edge === null && survey.outside === null,
+    JSON.stringify(survey),
+  );
   // Changer de champignon : les nouvelles valeurs partent tout de suite, à partir du dernier relevé,
   // sans attendre ni le réseau ni le repos de la carte (sinon les carrés gardent un instant les
   // valeurs de l'ancien champignon sous le nom du nouveau).
@@ -1359,6 +1377,36 @@ async function fallbackTests(browser, base) {
   check('secours : bilan d’un coin, coordonnées arrondies à 0,01°, altitude exacte', /latitude=\d+\.\d\d00&/.test(query) && /longitude=\d+\.\d\d00&/.test(query) && /elevation=930/.test(query), query.slice(0, 70));
   const totals = await page.evaluate(() => window.metrics.totals());
   check('secours : appels Open-Meteo comptés (1,5 appel par point sur 21 jours)', totals['openMeteo.requests'] >= 2 && totals['openMeteo.calls10'] === totals['openMeteo.locations'] * 15 && totals['pages.meteo.errors'] >= 1, JSON.stringify(totals).slice(0, 160));
+  // Un coin sans forêt sous le point : rien à estimer, donc rien n'est demandé, pas même en secours.
+  const empty = await page.evaluate(() => {
+    for (let y = 150; y < 700; y += 6) {
+      for (let x = 500; x < 1150; x += 6) {
+        if (!window.map.queryRenderedFeatures([x, y], { layers: ['bdforet-hit'] }).length) return { x, y };
+      }
+    }
+    return null;
+  });
+  if (empty) {
+    const meteoBefore = log.meteo.length;
+    const altitudeBefore = log.altitude.length;
+    await page.mouse.click(empty.x, empty.y);
+    await page.waitForFunction(() => [...document.querySelectorAll('#spot .verdict__why')].some((w) => /pas de forêt cartographiée sous ce point/.test(w.textContent)), null, { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(1200);
+    const nothing = await page.evaluate(() => ({
+      off: [...document.querySelectorAll('#spot .verdict--off .verdict__why')].map((w) => w.textContent),
+      pills: [...document.querySelectorAll('#spot .level-pill')].map((p) => p.textContent),
+      altitude: [...document.querySelectorAll('#spot .spot__row')].find((r) => r.querySelector('dt')?.textContent === 'Altitude')?.querySelector('dd')?.textContent ?? '',
+      text: document.querySelector('#spot .spot__body')?.textContent ?? '',
+    }));
+    check(
+      'secours, coin sans forêt : cinq lignes écartées sans calcul, ni altitude IGN ni Open-Meteo demandés, pas de « météo indisponible »',
+      nothing.off.length === 5 && nothing.off.filter((w) => /pas de forêt cartographiée sous ce point/.test(w)).length === 4 && nothing.pills.length === 4 && nothing.pills.every((t) => /^≈ 0 % · /.test(t)) &&
+        log.meteo.length === meteoBefore && log.altitude.length === altitudeBefore && /non demandée \(rien à estimer ici\)/.test(nothing.altitude) && !/réseau \?/.test(nothing.text),
+      `${nothing.off.join(' | ')} ; altitude : ${nothing.altitude} ; ${log.meteo.length - meteoBefore} appel(s) Open-Meteo, ${log.altitude.length - altitudeBefore} altitude(s)`,
+    );
+  } else {
+    check('secours, coin sans forêt : un point sans forêt à l’écran', false, 'aucun point trouvé');
+  }
   check('secours : aucune erreur JavaScript', errors.length === 0, errors.slice(0, 3).join(' | '));
 
   // Fichiers communs en retard de 6 jours (tâche GitHub en panne) : même repli.
@@ -1423,6 +1471,26 @@ async function fallbackTests(browser, base) {
     `c = ${blind.covers.join()} ; ${blind.status.slice(-90)}`,
   );
   await page5.close();
+
+  // Fichier des parts de forêt qui ne répond jamais (réseau qui pend) : le bilan ne l'attend pas plus de
+  // 2,5 s ; il fait sans (météo et forêt du point) et demande l'altitude.
+  const page6 = await context.newPage();
+  const log6 = { tms: [], wmts: [], geocode: [], other: [] };
+  await installMocks(page6, log6, { foret: 'suspendu' });
+  await page6.goto(`${base}#carte=10.5/45.92/6.19`);
+  await waitForMap(page6);
+  await page6.mouse.click(640, 400);
+  const shown = await page6.waitForSelector('#spot .rain-chart', { timeout: 6000 }).then(
+    () => true,
+    () => false,
+  );
+  const hung = await page6.evaluate(() => [...document.querySelectorAll('#spot .level-pill')].map((p) => p.textContent));
+  check(
+    'parts de forêt qui ne répondent pas : bilan affiché en moins de 6 s, altitude demandée, chances estimées quand même',
+    shown && log6.altitude.length === 1 && log6.foret.length >= 1 && hung.length === 4 && hung.some((t) => !/^≈ 0 %/.test(t)),
+    `${hung.join(' | ')} ; ${log6.altitude.length} altitude(s)`,
+  );
+  await page6.close();
 
   // Altitude IGN lente : la météo s'affiche sans l'attendre, puis le bilan est refait.
   const page4 = await context.newPage();
