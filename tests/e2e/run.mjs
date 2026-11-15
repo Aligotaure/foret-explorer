@@ -914,7 +914,7 @@ async function desktopTests(browser, base) {
     `${lowSpot.forest} ; chances ${lowSpot.chances.join(', ')} ; ${[...lowSpot.off, ...lowSpot.reasons].join(' | ').slice(0, 200)}`,
   );
   check('bilan sous le zoom 10 : statut inconnu, accord du propriétaire rappelé, sans parenthèses imbriquées', /^Inconnu : il faut l’accord du propriétaire \(zoomez au niveau 10 ou plus pour le connaître\)$/.test(lowSpot.status.trim()), lowSpot.status);
-  check('bilan sous le zoom 10 : la raison dit que la chance est celle des forêts hôtes du secteur', lowSpot.reasons.some((r) => /chance des forêts hôtes du secteur/.test(r)), lowSpot.reasons.find((r) => /Forêt inconnue/.test(r)) ?? '');
+  check('bilan sous le zoom 10 : la raison dit que la chance est celle de la meilleure forêt hôte du secteur', lowSpot.reasons.some((r) => /chance de la meilleure forêt hôte du secteur/.test(r)), lowSpot.reasons.find((r) => /Forêt inconnue/.test(r)) ?? '');
   const bare = await page.evaluate(({ cell, k }) => {
     const [ci, cj] = cell.split(':').map(Number);
     const p = window.map.project([(cj * 4 + (k % 4) + 0.5) * 0.056, (ci * 4 + Math.floor(k / 4) + 0.5) * 0.04]);

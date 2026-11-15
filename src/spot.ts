@@ -622,8 +622,8 @@ export class SpotPanel {
         const out = excluded?.get(m.id);
         if (out) return [{ id: m.id, score: 0, chance: 0, level: 0, reasons: [], blocker: out.why, dormant: out.dormant, bare: out.dormant || !out.zero }];
         if (!w) return [];
-        // Forêt inconnue sous le point : la chance vaut pour les forêts hôtes du secteur (carré de
-        // 4,5 km), à leur qualité moyenne. Fichier des parts absent : météo seule.
+        // Forêt inconnue sous le point : la chance vaut pour la meilleure forêt hôte du secteur
+        // (carré de 4,5 km), comme sur la carte. Fichier des parts absent : météo seule.
         const host = v.forestUnknown ? hostCover(v.sector.cell, v.sector.k, m) : null;
         return [scoreMushroom(m, w, month, host ? { ...context, hostQuality: host.quality } : context)];
       });

@@ -88,6 +88,17 @@ export const FOREST_SHARE_URL = new URL('foret/parts.json', PAGE).href;
 export const HOST_MIN_COVER = 0.1;
 export const HOST_FULL_COVER = 0.5;
 /**
+ * Le pourcentage d'un carré de 4,5 km est celui de sa meilleure forêt hôte, pourvu qu'elle couvre au
+ * moins cette part du carré, en % comme dans le fichier (2 % ≈ 40 ha, soit deux carrés de 500 m).
+ *
+ * Avant le 15/11/2026 : la qualité moyenne de tous ses hôtes. Retour de Clément : des carrés de
+ * 500 m à 70 % et plus sans pastille en vue d'ensemble. Mesuré au nord-est d'Annecy, trompettes : un
+ * carré de 4,5 km fait de 28 % de sapin-épicéa (poids 0,3) et de 4 % de hêtraie (poids 1) valait
+ * 57 %, alors que 14 de ses carrés de 500 m, sur la hêtraie, atteignaient 70 à 77 %. Le seuil pèse
+ * peu : 266 cases à pastille pour les trompettes à 1 %, 259 à 2 %, 242 à 5 % (181 avec la moyenne).
+ */
+export const HOST_BEST_MIN_PERCENT = 2;
+/**
  * Part bâtie d'un carré de 4,5 km (zones bâties et zones d'activité du Plan IGN, même fichier) à
  * partir de laquelle il reste éteint : c'est d'abord une ville, même s'il contient un bois. Les
  * carrés de 500 m, eux, montrent ce bois quand on zoome.
