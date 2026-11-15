@@ -11,6 +11,7 @@ import './style.css';
 import './analytics.css';
 import { showDisclaimer, withdrawDisclaimer } from './disclaimer';
 import { byId, h } from './dom';
+import { showHunting, withdrawHunting } from './hunting';
 import { showTour, withdrawTour } from './tour';
 import { currentView, initViewSwitch, onViewChange, type ViewId } from './view';
 
@@ -33,7 +34,7 @@ function reportFailure(view: ViewId, error: unknown): void {
   box.hidden = false;
 }
 
-/** L'alerte affichée pendant l'avertissement (fenêtre modale) n'a pas été lue : on la redit après. */
+/** L'alerte affichée pendant l'accueil (fenêtres modales) n'a pas été lue : on la redit après. */
 function repeatFailure(): void {
   const box = byId('view-error');
   if (!box.hidden) box.replaceChildren(...box.childNodes);
@@ -43,12 +44,14 @@ function repeatFailure(): void {
 let tourDue = false;
 
 /**
- * Accueil de la carte : l'avertissement à accepter, puis, pour un premier accord seulement, « La carte
- * en 3 gestes ». Quittée sans avoir été fermée (passage à la vue Analytics), la présentation revient
- * avec la carte, directement : l'accord, lui, est déjà donné.
+ * Accueil de la carte : l'avertissement à accepter, puis, pendant l'ouverture de la chasse, le rappel
+ * de sécurité (bloquant lui aussi, au plus une fois toutes les 12 heures), puis, pour un premier
+ * accord seulement, « La carte en 3 gestes ». Quittée sans avoir été fermée (passage à la vue
+ * Analytics), la présentation revient avec la carte, directement : l'accord, lui, est déjà donné.
  */
 async function welcome(): Promise<void> {
   if (await showDisclaimer()) tourDue = true;
+  if (currentView() === 'map') await showHunting();
   if (tourDue && currentView() === 'map' && (await showTour())) tourDue = false;
   repeatFailure();
 }
@@ -77,6 +80,7 @@ function show(view: ViewId): void {
   else {
     // Une fenêtre modale restée ouverte couvrirait la vue Analytics et la figerait.
     withdrawDisclaimer();
+    withdrawHunting();
     withdrawTour();
   }
 }

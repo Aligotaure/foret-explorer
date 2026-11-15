@@ -6,7 +6,8 @@ choisir les types affichés, enrichie pour la cueillette : nature du sol (géolo
 altitude (IGN) et indice de pousse par champignon, en cases de 18 km, puis en carrés de 4,5 km et de
 500 m quand on zoome ; zones protégées et forêts publiques (droit de cueillir). **Toute la France métropolitaine** :
 ne rien coder pour une région en particulier.
-Accueil à l'ouverture : un avertissement bloquant (3 s, moins de 100 mots) puis, au premier accord,
+Accueil à l'ouverture : un avertissement bloquant (3 s, moins de 100 mots), puis, pendant l'ouverture
+de la chasse, un rappel de sécurité bloquant lui aussi (3 s), puis, au premier accord,
 « La carte en 3 gestes » ; page « À propos » (conseils, conditions, mentions légales,
 confidentialité). Interface inspirée du panneau « Légendes » de cartes.gouv.fr
 (thème sombre bleu nuit, icônes lavande, légende sur carte blanche). Une page privée (serveur
@@ -100,6 +101,8 @@ nouvelle dépendance sans raison.
 | `analyticsData.ts` | **Le** fichier de contenu de la vue Analytics, modifié à la main (guide en tête du fichier) |
 | `analyticsTypes.ts`, `analyticsCheck.ts` | Format de ce contenu (types stricts : dates, adresse https) et relecture de ce que les types ne voient pas (date impossible, texte vide, valeur négative) |
 | `disclaimer.ts` | Avertissement bloquant (`<dialog>` modal, ni Échap ni clic à côté), moins de 100 mots : bouton actif 3 s après le premier affichage (horloge, pas minuteries ; il attend aussi la fin du texte si la fenêtre défile), mémorisé par version des conditions, 30 jours au plus ; dit si c'est un premier accord |
+| `gate.ts` | Fenêtre bloquante à compte à rebours, commune à l'avertissement et au rappel « période de chasse » : `<dialog>` modal que ni Échap ni un clic à côté ne ferment, bouton actif 3 s après l'affichage réel (horloge), retrait sans validation |
+| `hunting.ts` | Rappel « période de chasse » (`huntingSeason` : du premier dimanche de septembre au dernier jour de février), bloquant 3 s, montré après l'avertissement et avant la présentation, au plus toutes les 12 heures (`foret-explorer:chasse`) ; rien de mars à août |
 | `tour.ts` | « La carte en 3 gestes » : fenêtre libre montrée après un premier accord et depuis la légende, schéma de l'écran dessiné en HTML/CSS (grand écran et téléphone) ; chargé avec l'entrée, n'importe rien de la carte |
 | `legal.ts` | Version des conditions (`TERMS_VERSION`), jour de la refonte (`TOUR_SINCE`), adresse de « À propos », données gardées dans le navigateur, effacement |
 | `apropos.ts`, `apropos.css` | Page `a-propos.html` (conseils, règles, conditions, mentions légales, confidentialité) : état de la mesure, « Effacer mes données » |
@@ -985,7 +988,7 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
 - Changer `TERMS_VERSION` (`src/legal.ts`) dès que le texte de l'avertissement ou des conditions
   (`a-propos.html`) change : la carte redemande alors l'accord. Garder les deux textes cohérents, et
   regrouper les retouches de texte dans une seule version (un seul nouvel accord demandé).
-- Accueil en deux fenêtres, jamais un carrousel. (1) L'avertissement (`disclaimer.ts`) reste une
+- Accueil en deux fenêtres, trois pendant l'ouverture de la chasse, jamais un carrousel. (1) L'avertissement (`disclaimer.ts`) reste une
   porte : bloquant, 3 s, un seul bouton « J'ai compris et j'accepte », accord enregistré à ce clic,
   ni points de progression ni « Suivant ». Moins de 100 mots, lisibles sans défiler à 1280 × 860 et
   390 × 844 (tests e2e) : les consignes de premier rang de l'Anses (connaître parfaitement, doute →
@@ -1000,6 +1003,28 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   schéma se retire, la liste suffit. Son texte ne fait pas partie des conditions. Un schéma dessiné,
   pas une capture (illisible à cette taille, à refaire à chaque retouche) ; sur téléphone il n'y a ni
   gauche ni droite : on décrit les gestes.
+- **Rappel « période de chasse »** (`hunting.ts`, demande de Clément du 15/11/2026 : « un autre écran
+  avec un blocage de 3 secondes […] consacré à dire qu'on est en période de chasse »). Entre
+  l'avertissement et la présentation, bloquant comme l'avertissement (`gate.ts` : 3 s, ni Échap ni
+  clic à côté), bouton « J'ai compris ». Texte de Clément, orthographe et ponctuation corrigées
+  seulement : « ATTENTION : PÉRIODE DE CHASSE du … au … » en rouge et en gras (`#ff8080`, 7,3 pour 1
+  sur le fond), chasubles, danger réel, « demandez au propriétaire (s'il est sympa) ».
+  - **Dates** : Code de l'environnement, article R424-7 (en vigueur depuis le 05/05/2012, relu sur
+    Légifrance le 15/11/2026). L'ouverture générale doit tenir entre le premier dimanche de septembre
+    (Corse ; deuxième dimanche pour les anciennes régions du Sud, troisième pour celles du Nord) et le
+    dernier jour de février ; le préfet fixe les dates de chaque département dans ces bornes. Le
+    tableau ne nomme pas l'Alsace et exclut la Moselle (leur régime n'a pas été relu). L'écran affiche
+    les bornes nationales, calculées pour la saison en cours (2026-2027 : du 6 septembre 2026 au
+    28 février 2027) : rien à mettre à jour chaque année, et rien de propre à une région. Une ligne
+    en petit dit d'où elles viennent, et que sanglier et chevreuil peuvent être chassés dès le
+    1er juin selon le département (article R424-8). Arrêtés 2026-2027 vus pour recoupement : Tarn,
+    13 septembre ; Hauts-de-Seine, 20 septembre ; clôture le 28 février dans les deux.
+  - **Quand** : seulement pendant cette période (le jour est lu par `getMonth` et `getDate`, comme la
+    saison des champignons : les tests figent le mois) ; au plus une fois toutes les 12 heures
+    (`REMIND_HOURS`, clé `foret-explorer:chasse` : une fois par sortie, pas à chaque ouverture de la
+    carte) ; une fois par visite sans stockage ; retiré quand on quitte la carte, il revient avec
+    elle. Jamais avec la vue Analytics.
+  - Ce n'est pas un accord : rien dans les conditions, `TERMS_VERSION` inchangée.
 - Textes vérifiés le 13/11/2026 : communiqué de l'Anses du 20/10/2026 (liste courte et bilan 2025),
   sa liste complète (article du 04/09/2025, d'où viennent cuisson, quantités, délai des symptômes et
   la raison de la séparation des espèces), Santé.fr ; numéro national (01 45 42 59 59) et numéros des
@@ -1134,10 +1159,18 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   retrouve qu'aux carrés de 500 m ; en ville, un bois de moins de trois carrés de 500 m n'est pas
   montré. Pour les chanterelles en tube (hôtes surtout résineux) la carte se vide en plaine de
   feuillus. Part bâtie : zones généralisées du Plan IGN au zoom 10, pas les bâtiments un à un.
-- Accueil : tant qu'une de ses deux fenêtres est ouverte, l'îlot ne répond pas ; sans stockage du
-  navigateur, l'avertissement revient à chaque visite et la présentation n'est pas montrée d'office ;
+- Accueil : tant qu'une de ses fenêtres est ouverte, l'îlot ne répond pas ; sans stockage du
+  navigateur, l'avertissement et le rappel « période de chasse » reviennent à chaque visite et la
+  présentation n'est pas montrée d'office ;
   sur téléphone, une fois fermée, la légende reste fermée (le bandeau « Choisissez un champignon »
   dit alors par où commencer, tant qu'on ne l'a pas fermé). Rien n'a été essayé sur un vrai téléphone ni avec un lecteur d'écran.
+- Rappel « période de chasse » : bornes nationales, pas les dates du département du visiteur (il
+  s'affiche donc dès le 6 septembre 2026 là où la chasse n'ouvre que le 20) ; rien de mars à août,
+  alors que sanglier et chevreuil peuvent être chassés dès le 1er juin, et le sanglier en mars ;
+  régime de l'Alsace et de la Moselle non relu. Pendant la période, une première visite passe deux
+  fenêtres bloquantes de 3 s, puis la présentation. `a-propos.html` ne parle pas de la chasse, et sa
+  phrase « Sur votre appareil… » ne cite pas la clé du rappel (seule la liste « Gardé dans ce
+  navigateur » la nomme) : à regrouper avec les autres retouches de texte en attente.
 - Fluidité : sans carte graphique (machine virtuelle, vieux téléphone), choisir un champignon à partir
   du zoom 10 prend encore plus d'une seconde, à cause du filtre des forêts, et un zoom occupe encore
   le processeur 2,5 à 4,5 s (voir « Fluidité »). Mesures faites dans Chromium sans carte graphique

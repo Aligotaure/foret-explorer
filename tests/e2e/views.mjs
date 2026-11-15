@@ -91,7 +91,7 @@ const geometry = (page) =>
     };
   });
 
-export async function viewTests({ browser, base, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour }) {
+export async function viewTests({ browser, base, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour, passHunting }) {
   const errors = [];
   const watch = (page) => {
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
@@ -300,6 +300,22 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     );
     await page.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
     await page.locator('.disclaimer__accept').click();
+    // Octobre (mois figé) : le rappel « période de chasse » suit l'accord. Quitté sans être validé, il
+    // se retire avec la carte et revient avec elle, compte à rebours repris, sans redemander l'accord.
+    await page.waitForSelector('dialog.hunting[open]', { timeout: 5000 });
+    await page.goBack();
+    await page.waitForFunction(() => document.documentElement.dataset.view === 'analytics');
+    await page.waitForTimeout(300);
+    const huntLeft = await page.evaluate(() => ({ dialogs: document.querySelectorAll('dialog').length, inert: document.getElementById('app').inert, seen: localStorage.getItem('foret-explorer:chasse') }));
+    await page.goForward();
+    await page.waitForSelector('dialog.hunting[open]', { timeout: 5000 });
+    const huntBack = await page.evaluate(() => ({ hunting: document.querySelectorAll('dialog.hunting').length, others: document.querySelectorAll('dialog:not(.hunting)').length, disabled: document.querySelector('.hunting__accept').disabled }));
+    check(
+      'chasse : rappel retiré en quittant la carte sans l’avoir validé, de retour avec elle (bouton de nouveau bloqué), sans nouvel accord',
+      huntLeft.dialogs === 0 && !huntLeft.inert && huntLeft.seen === null && huntBack.hunting === 1 && huntBack.others === 0 && huntBack.disabled,
+      JSON.stringify({ huntLeft, huntBack }),
+    );
+    await passHunting(page);
     // Premier accord : la présentation suit. Quittée sans être fermée, elle se retire avec la carte
     // (elle couvrirait la vue Analytics) et revient avec elle, directement, sans redemander l'accord.
     await page.waitForSelector('dialog.tour[open]', { timeout: 5000 });
@@ -399,6 +415,8 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     await page.waitForSelector('dialog.disclaimer[open]', { timeout: 10000 });
     await page.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
     await page.locator('.disclaimer__accept').click();
+    // (Le rappel « période de chasse » suit l'accord ; sans stockage lui non plus ne revient pas de la visite.)
+    await passHunting(page);
     // Sans stockage, rien ne dirait à la visite suivante que la présentation a été vue : elle n'est
     // pas montrée d'office (elle reste dans la légende).
     await page.waitForTimeout(700);
@@ -408,7 +426,7 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     await island(page, 'map').click();
     await page.waitForTimeout(400);
     const again = await page.evaluate(() => ({ dialog: Boolean(document.querySelector('dialog')), stored: localStorage.getItem('foret-explorer:avertissement') }));
-    check('avertissement : accepté une fois par visite, même sans stockage du navigateur ; pas de présentation d’office', !tour && !again.dialog && again.stored === null && (await view(page)) === 'map', JSON.stringify({ tour, ...again }));
+    check('avertissement et rappel « période de chasse » : une fois par visite, même sans stockage du navigateur ; pas de présentation d’office', !tour && !again.dialog && again.stored === null && (await view(page)) === 'map', JSON.stringify({ tour, ...again }));
     await context.close();
   }
 

@@ -1,6 +1,7 @@
 /**
- * Avertissement bloquant à l'ouverture de la carte : il reste au moins WAIT_SECONDS secondes avant
- * qu'on puisse l'accepter, et rien d'autre ne le ferme (ni Échap, ni un clic à côté).
+ * Avertissement bloquant à l'ouverture de la carte : il reste au moins GATE_WAIT_SECONDS secondes
+ * avant qu'on puisse l'accepter, et rien d'autre ne le ferme (ni Échap, ni un clic à côté ; la
+ * mécanique est dans src/gate.ts, partagée avec l'écran « période de chasse » de src/hunting.ts).
  *
  * Il dit en quelques lignes, lisibles pendant le compte à rebours, que la carte aide à choisir où
  * chercher mais n'identifie aucun champignon et ne donne aucun droit de cueillir, et que le visiteur
@@ -10,13 +11,11 @@
  * (src/tour.ts) ne vient qu'après, pour qui accepte pour la première fois.
  */
 import { h } from './dom';
+import { GATE_WAIT_SECONDS, openGate, waitLabel } from './gate';
 import { icon } from './icons';
 import { ABOUT_URL, STORAGE_PREFIX, TERMS_DATE_LABEL, TERMS_VERSION, TOUR_SINCE } from './legal';
 
 export const DISCLAIMER_KEY = `${STORAGE_PREFIX}avertissement`;
-const WAIT_SECONDS = 3;
-/** Si le texte ne tient pas dans la fenêtre, le bouton attend qu'on l'ait fait défiler, au plus ce temps-là. */
-const MAX_WAIT_SECONDS = 12;
 const MAX_AGE_MS = 30 * 24 * 3600 * 1000;
 
 /** Vrai si la version actuelle des conditions a été acceptée sur cet appareil il y a moins de 30 jours. */
@@ -120,7 +119,7 @@ export function showDisclaimer(force = false): Promise<boolean> {
   if (pending) return pending.promise;
   if (!force && (acceptedThisVisit || hasAccepted())) return Promise.resolve(false);
 
-  const accept = h('button', { class: 'disclaimer__accept', type: 'button', disabled: true }, `Lisez d’abord… ${WAIT_SECONDS}`);
+  const accept = h('button', { class: 'disclaimer__accept', type: 'button', disabled: true }, waitLabel(GATE_WAIT_SECONDS));
   // Les lecteurs d'écran n'apprenaient pas que le bouton était devenu actif : on le leur dit, une fois.
   const ready = h('p', { class: 'visually-hidden', role: 'status' });
   const body = content();
@@ -162,82 +161,26 @@ export function showDisclaimer(force = false): Promise<boolean> {
 
   let withdraw = (): void => {};
   const promise = new Promise<boolean>((resolve) => {
-    let done = false; // accepté ou retiré : ne plus le rouvrir
-    const app = document.getElementById('app');
-    const open = (): void => {
-      if (dialog.open) return;
-      if (typeof dialog.showModal === 'function') dialog.showModal();
-      else {
-        // Très vieux navigateur sans <dialog> modal : on fige la carte nous-mêmes.
-        dialog.setAttribute('open', '');
-        if (app) app.inert = true;
-      }
-    };
-    // `done` d'abord : l'événement « close » arrive après coup, et ne doit pas rouvrir la fenêtre.
-    const dismiss = (): void => {
-      done = true;
-      pending = null;
-      if (dialog.open) dialog.close(); // (un très vieux navigateur n'a ni `open` ni `close()`)
-      dialog.remove();
-      if (app) app.inert = false;
-    };
-    // Rien d'autre que le bouton ne ferme l'avertissement : Échap est ignoré, et s'il se ferme
-    // quand même (double Échap sur certains navigateurs), il se rouvre aussitôt.
-    dialog.addEventListener('cancel', (event) => event.preventDefault());
-    dialog.addEventListener('close', () => {
-      if (!done) open();
+    withdraw = openGate({
+      dialog,
+      body,
+      accept,
+      acceptLabel: 'J’ai compris et j’accepte',
+      ready,
+      readyLabel: 'Vous pouvez maintenant accepter.',
+      onGone: () => {
+        pending = null;
+      },
+      onAccept: () => {
+        // Premier accord sur cet appareil (ou premier depuis la refonte) : lu avant de l'enregistrer.
+        const before = savedVersion();
+        acceptedThisVisit = true;
+        // Sans stockage, on ne saurait jamais que la présentation a été vue : elle reviendrait à chaque
+        // visite. Elle n'est donc montrée d'office que si l'accord a pu être gardé (elle reste dans la légende).
+        const kept = remember();
+        resolve(kept && (before === null || before < TOUR_SINCE));
+      },
     });
-    document.body.append(dialog);
-    open();
-    dialog.dataset['ouvert'] = String(Date.now()); // instants lus par les tests de bout en bout
-    body.focus({ preventScroll: true });
-
-    // Compte à rebours sur l'horloge (et non en additionnant des minuteries, qui prennent du retard
-    // pendant le chargement de la carte). Il part quand l'avertissement est vraiment à l'écran : deux
-    // images après l'ouverture, donc après un éventuel blocage du chargement, et seulement quand
-    // l'onglet est visible.
-    let started = 0;
-    const tick = (): void => {
-      if (done) return;
-      const left = Math.ceil((WAIT_SECONDS * 1000 - (Date.now() - started)) / 1000);
-      if (left > 0) {
-        accept.textContent = `Lisez d’abord… ${left}`;
-        window.setTimeout(tick, 200);
-        return;
-      }
-      // Petit écran ou police agrandie : si le texte ne tient pas dans la fenêtre, le bouton attend
-      // qu'on l'ait fait défiler jusqu'en bas (au plus MAX_WAIT_SECONDS, pour ne bloquer personne).
-      const unread = body.scrollHeight - body.clientHeight - body.scrollTop > 8;
-      if (unread && Date.now() - started < MAX_WAIT_SECONDS * 1000) {
-        accept.textContent = 'Lisez jusqu’en bas…';
-        window.setTimeout(tick, 200);
-        return;
-      }
-      accept.disabled = false;
-      accept.textContent = 'J’ai compris et j’accepte';
-      ready.textContent = 'Vous pouvez maintenant accepter.';
-      dialog.dataset['actif'] = String(Date.now());
-    };
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        started = Date.now();
-        dialog.dataset['debut'] = String(started);
-        tick();
-      }),
-    );
-
-    accept.addEventListener('click', () => {
-      if (accept.disabled) return;
-      // Premier accord sur cet appareil (ou premier depuis la refonte) : lu avant de l'enregistrer.
-      const before = savedVersion();
-      acceptedThisVisit = true;
-      // Sans stockage, on ne saurait jamais que la présentation a été vue : elle reviendrait à chaque
-      // visite. Elle n'est donc montrée d'office que si l'accord a pu être gardé (elle reste dans la légende).
-      const kept = remember();
-      dismiss();
-      resolve(kept && (before === null || before < TOUR_SINCE));
-    });
-    withdraw = dismiss;
   });
   pending = { promise, withdraw };
   return promise;

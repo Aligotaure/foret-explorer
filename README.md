@@ -26,7 +26,9 @@ dernière vue (ou celle de l'adresse, `#carte=zoom/lat/lon`).
 
 À l'ouverture, un avertissement court reste affiché au moins 3 secondes : la carte aide à choisir où
 chercher, elle n'identifie aucun champignon et ne donne aucun droit de cueillir. Il revient à chaque
-nouvelle version des conditions et au plus tard après 30 jours. Après un premier accord, « La carte
+nouvelle version des conditions et au plus tard après 30 jours. Pendant l'ouverture générale de la
+chasse (du premier dimanche de septembre au dernier jour de février), un rappel de sécurité le suit,
+bloqué 3 secondes lui aussi, au plus une fois toutes les 12 heures. Après un premier accord, « La carte
 en 3 gestes » présente l'écran (à revoir depuis la légende : « Comment ça marche ? »). La page
 **À propos** (bouton ⓘ)
 réunit les conseils avant de cueillir, les règles, les conditions d'utilisation, les mentions
