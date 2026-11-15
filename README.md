@@ -188,7 +188,8 @@ Autres automatismes : `verification.yml` teste chaque pull request (dont celles 
 configuré dans `.github/dependabot.yml` : une fois par semaine, versions d'au moins 7 jours) ;
 `surveillance.yml` vérifie chaque jour que les services IGN, Open-Meteo et le site répondent (archives
 des tuiles comprises), et que la météo commune n'a pas plus de 36 heures de retard ; elle échoue (avec
-un e-mail de GitHub) sinon. GitHub
+un e-mail de GitHub) sinon. Exception : Open-Meteo, que la carte n'appelle qu'en secours, ne donne
+qu'un avertissement s'il est injoignable depuis GitHub (la tâche reste verte). GitHub
 suspend les tâches planifiées d'un dépôt public resté 60 jours sans activité : il suffit alors de
 les réactiver dans l'onglet **Actions**.
 
