@@ -27,7 +27,7 @@ de géologie (cache), archive des zones (cache, refaite chaque semaine), fichier
 publication de `dist/`). Autres workflows : `meteo.yml` (toutes les heures : fichiers météo communs,
 une demande par case et par jour, voir plus bas), `verification.yml` (chaque pull request, Dependabot
 compris), `surveillance.yml` (chaque jour : les services et les archives répondent-ils, la météo
-a-t-elle plus de 36 h de retard ?). Liste des risques du site (document à part) :
+a-t-elle plus de 36 h de retard ? Open-Meteo injoignable : simple avertissement). Liste des risques du site (document à part) :
 https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
 
 ## Commandes
@@ -892,6 +892,20 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   de 10 s de Node) : 5 essais de connexion (non comptés dans le budget), 3 envois au plus par requête
   (tous comptés), une requête abandonnée attend le passage suivant, 3 abandons de suite arrêtent le
   passage.
+- `surveillance.yml` et Open-Meteo (15/11/2026). Le 14/11 elle a échoué : trois délais de connexion de
+  30 s vers Open-Meteo, tout le reste répondait. Le 15/11 elle est restée 10 minutes sur Open-Meteo
+  sans rien écrire, jusqu'à son annulation, sans contrôler ni le site ni la météo commune. Reproduit
+  en local avec le curl de GitHub (8.18) : à une réponse 429 portant « Retry-After: 3600 »,
+  `curl --retry` attend une heure, et `-s` masque son avertissement (ce qu'Open-Meteo a répondu ce
+  jour-là n'est pas connu). Depuis : chaque vérification est bornée (`demander` : 10 s pour se
+  connecter, 30 s par essai, 5 essais, plus aucun passé une minute avec `--retry-max-time`, arrêt de
+  force à 100 s), donc la tâche va toujours au bout ; et Open-Meteo injoignable depuis GitHub (pas de
+  réponse, 429, 5xx) ne donne qu'un avertissement, la tâche reste verte : la carte ne l'appelle qu'en
+  secours, et c'est le retard de la météo commune qui fait échouer la tâche. Une réponse inattendue
+  d'Open-Meteo (autre code, texte attendu absent) reste une erreur, comme toute panne des autres
+  services. Éprouvé contre un faux serveur local (21 cas : 429 avec et sans attente, 503, panne
+  passagère, serveur muet, connexion impossible, curl bloqué ; l'ancien fichier y reste bloqué) ; ces
+  essais ne sont pas dans le dépôt.
 - État entre passages : cache Actions `meteo-<run_id>-<attempt>` (on restaure le plus récent), gardé
   seulement quand quelque chose a changé (`garder`) ; sans cache, on repart des fichiers du site en
   ligne (`--amorce`). `deploy.yml` restaure le même cache et réécrit les fichiers avec la liste des
