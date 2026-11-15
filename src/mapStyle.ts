@@ -363,8 +363,9 @@ export function buildStyle(state: AppState): StyleSpecification {
           visibility: 'none',
           'text-field': '',
           'text-font': [LABEL_FONT],
-          // Il grandit avec le carré : 10 px quand il fait 37 px de large, 18 px au zoom 16.
-          'text-size': ['interpolate', ['linear'], ['zoom'], FINE_MIN_ZOOM, 10, 14, 14, 16, 18],
+          // Il grandit avec le carré : 8,5 px quand il fait 18 px de large (zoom 11, chiffre seul),
+          // 10 px à 37 px (zoom 12), 18 px au zoom 16.
+          'text-size': ['interpolate', ['linear'], ['zoom'], 11, 8.5, 12, 10, 14, 14, 16, 18],
           'text-allow-overlap': false,
           'text-padding': 0,
         },

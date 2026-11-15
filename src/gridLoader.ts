@@ -1,5 +1,9 @@
 /**
- * Calcul des carrés en cours : un petit champignon qui se remplit, et le zoom en pause.
+ * Calcul des carrés en cours : un champignon qui tourne au milieu de la carte, et le zoom en pause.
+ *
+ * (Jusqu'au 15/11/2026 : un petit champignon qui se remplissait, en haut, à la place des bandeaux.
+ * Demande de Clément : « je veux que le champignon tourne pour que ça fasse vraiment loader […] au
+ * milieu de l'écran, plus visible et un peu plus gros ».)
  *
  * Aux échelles de 2 km et moins (voir GRID_BUSY_MIN_ZOOM), les carrés d'une nouvelle vue mettent un
  * moment à arriver : tuiles détaillées des forêts, puis relevé des carrés de 500 m. Pendant ce temps
@@ -40,8 +44,6 @@ import type { Store } from './state';
 
 /** Un calcul plus court que cela ne montre rien : pas de champignon qui clignote. */
 const SHOW_AFTER_MS = 250;
-/** Le champignon reste plein un instant avant de disparaître : on le voit finir de se remplir. */
-const FULL_MS = 220;
 
 /** Touches de zoom de MapLibre (codes du clavier : =, + du pavé numérique, −, selon le navigateur). */
 const ZOOM_KEY_CODES = new Set([61, 107, 171, 187, 189, 109, 173]);
@@ -113,11 +115,8 @@ export function initGridLoader(
   store: Store,
 ): void {
   const loaderShown = initGridVerdict(verdictEl, grid, store);
-  // Deux champignons superposés : le contour, et le même, plein, dans un cache dont la hauteur monte.
-  el.replaceChildren(
-    h('span', { class: 'grid-loader__icon' }, icon('mushroom'), h('span', { class: 'grid-loader__fill' }, icon('mushroom'))),
-    h('span', { class: 'grid-loader__text' }, 'Calcul des carrés…'),
-  );
+  // Le champignon tourne dans un anneau (styles : `.grid-loader`), son texte dessous.
+  el.replaceChildren(h('span', { class: 'grid-loader__spin' }, icon('mushroom')), h('span', { class: 'grid-loader__text' }, 'Calcul des carrés…'));
   const note = h('span', { id: 'zoom-pause-note', hidden: true }, 'Zoom en pause pendant le calcul des carrés.');
   el.after(note);
 
@@ -163,14 +162,11 @@ export function initGridLoader(
   };
 
   let showing: number | undefined;
-  let hiding: number | undefined;
   grid.onBusy((busy) => {
     window.clearTimeout(showing);
-    window.clearTimeout(hiding);
     pause(busy);
     if (busy) {
-      el.classList.remove('is-full');
-      // Affiché après un court délai seulement (l'animation de remplissage part alors de zéro).
+      // Affiché après un court délai seulement.
       if (el.hidden) {
         showing = window.setTimeout(() => {
           el.hidden = false;
@@ -180,11 +176,7 @@ export function initGridLoader(
       return;
     }
     if (el.hidden) return;
-    el.classList.add('is-full');
-    hiding = window.setTimeout(() => {
-      el.hidden = true;
-      el.classList.remove('is-full');
-      loaderShown(false);
-    }, FULL_MS);
+    el.hidden = true;
+    loaderShown(false);
   });
 }

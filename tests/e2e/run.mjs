@@ -1316,7 +1316,23 @@ async function desktopTests(browser, base) {
       prevented: wheel.defaultPrevented && pinch.defaultPrevented,
       focusable: !plus.disabled,
       loader: !loader.hidden,
-      fill: Boolean(loader.querySelector('.grid-loader__fill svg')),
+      // Un champignon qui tourne dans un anneau, au milieu de la carte laissée libre par la légende.
+      spin: (() => {
+        const ring = loader.querySelector('.grid-loader__spin');
+        const mushroom = ring?.querySelector('.icon');
+        if (!ring || !mushroom) return null;
+        const box = loader.getBoundingClientRect();
+        const legend = document.getElementById('legend').getBoundingClientRect();
+        const free = { left: document.getElementById('app').classList.contains('legend-open') ? legend.right : 0, right: innerWidth };
+        return {
+          size: Math.round(ring.getBoundingClientRect().width),
+          turns: getComputedStyle(mushroom).animationName,
+          ringTurns: getComputedStyle(ring, '::before').animationName,
+          offCentreX: Math.round(Math.abs(box.left + box.width / 2 - (free.left + free.right) / 2)),
+          offCentreY: Math.round(Math.abs(box.top + box.height / 2 - innerHeight / 2)),
+          takesClicks: getComputedStyle(loader).pointerEvents !== 'none',
+        };
+      })(),
       text: loader.querySelector('.grid-loader__text')?.textContent ?? '',
       hiddenFromReaders: loader.getAttribute('aria-hidden'),
     };
@@ -1332,9 +1348,18 @@ async function desktopTests(browser, base) {
     `arrivés à MapLibre : « ${ignored.reached} » ; zoom ${ignored.before} → ${ignored.after}`,
   );
   check(
-    'champignon de chargement : affiché après un quart de seconde, plein et contour superposés, « Calcul des carrés… », décoratif pour les lecteurs d’écran',
-    ignored.loader && ignored.fill && ignored.text === 'Calcul des carrés…' && ignored.hiddenFromReaders === 'true',
-    JSON.stringify({ affiche: ignored.loader, texte: ignored.text }),
+    'champignon de chargement : affiché après un quart de seconde, il tourne dans son anneau au milieu de la carte libre, 76 px, « Calcul des carrés… », décoratif pour les lecteurs d’écran, sans prendre les gestes',
+    ignored.loader &&
+      ignored.spin !== null &&
+      ignored.spin.size >= 70 &&
+      ignored.spin.turns === 'grid-loader-turn' &&
+      ignored.spin.ringTurns === 'grid-loader-turn' &&
+      ignored.spin.offCentreX <= 12 &&
+      ignored.spin.offCentreY <= 12 &&
+      !ignored.spin.takesClicks &&
+      ignored.text === 'Calcul des carrés…' &&
+      ignored.hiddenFromReaders === 'true',
+    JSON.stringify({ affiche: ignored.loader, texte: ignored.text, ...ignored.spin }),
   );
   await page.waitForFunction(() => window.map.querySourceFeatures('meteo-fin').length > 0, null, { timeout: 20000 });
   await page.waitForFunction(
@@ -1412,8 +1437,8 @@ async function desktopTests(browser, base) {
     visible: window.map.getLayoutProperty('meteo-fin-etiquettes', 'visibility'),
   }));
   check(
-    'grille fine : le pourcentage est écrit dans tous les carrés de 500 m dessinés, dès le zoom 12',
-    fineLabel.minzoom === 12 && fineLabel.visible === 'visible' && fineLabel.field === '["concat",["to-string",["coalesce",["get","p"],0]]," %"]',
+    'grille fine : le pourcentage est écrit dans tous les carrés de 500 m dessinés, dès leur arrivée au zoom 11 (le chiffre seul sous le zoom 12, où un carré fait 18 à 36 pixels)',
+    fineLabel.minzoom === 11 && fineLabel.visible === 'visible' && fineLabel.field === '["step",["zoom"],["to-string",["coalesce",["get","p"],0]],12,["concat",["to-string",["coalesce",["get","p"],0]]," %"]]',
     JSON.stringify(fineLabel),
   );
   check('grille fine : carrés de 500 m dessinés, tous avec au moins 3 points sur 9 sous un arbre hôte', fine.count > 20 && fine.visible === 'visible' && fine.coverage, `${fine.count} carrés, ${fine.levels.join(',')}`);
@@ -1940,7 +1965,8 @@ async function emptyViewTests(browser, base) {
   const page = await context.newPage();
   const log = { tms: [], wmts: [], geocode: [], other: [] };
   await installMocks(page, log, { sec: true });
-  await page.goto(`${base}#carte=11.5/45.92/6.19`);
+  // (Zoom 10,5 : les carrés de 4,5 km. À partir du zoom 11, ce sont les carrés de 500 m.)
+  await page.goto(`${base}#carte=10.5/45.92/6.19`);
   await waitForMap(page);
   await page.evaluate(() => window.store.update({ mushroom: 'cepe', weatherMode: 'indice' }));
   await settled(page);
@@ -1999,7 +2025,7 @@ async function emptyViewTests(browser, base) {
   await preAccept(winter);
   const page2 = await winter.newPage();
   await installMocks(page2, { tms: [], wmts: [], geocode: [], other: [] }, { mois: 12 });
-  await page2.goto(`${base}#carte=11.5/45.92/6.19`);
+  await page2.goto(`${base}#carte=10.5/45.92/6.19`);
   await waitForMap(page2);
   await page2.evaluate(() => window.store.update({ mushroom: 'girolle', weatherMode: 'indice' }));
   await settled(page2);
@@ -2041,7 +2067,7 @@ async function emptyViewTests(browser, base) {
   );
 
   // Recherche de lieu : le bilan ouvert parlait d'un autre coin, il se ferme.
-  await page2.evaluate(() => window.map.jumpTo({ zoom: 11.5 }));
+  await page2.evaluate(() => window.map.jumpTo({ zoom: 10.5 }));
   await settled(page2);
   await page2.mouse.click(700, 450);
   await page2.waitForSelector('#spot:not([hidden]) .verdict, #spot:not([hidden]) .spot__facts', { timeout: 10000 }).catch(() => {});
