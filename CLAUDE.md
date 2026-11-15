@@ -112,7 +112,7 @@ nouvelle dépendance sans raison.
 | `legendExtras.ts` | Sections « Je cherche… » (fiche, lien MycoDB), « Météo », « Nature du sol », « Droit de cueillir » |
 | `ui.ts` | Section repliable (chevron = bouton, titre cliquable aussi), interrupteur, titre avec icône (partagés par les panneaux) |
 | `mushrooms.ts` | Profils des 5 champignons (hôtes, sols, saison, températures, délai après pluie, précautions, fiche MycoDB) et indice (raisons, ce qui l'annule) |
-| `forestShare.ts` | Arbres hôtes et part bâtie de chaque carré de 4,5 km, lus dans `public/foret/parts.json` : part de surface et qualité moyenne des hôtes par champignon, et la règle d'allumage d'un carré (`isLit`) |
+| `forestShare.ts` | Arbres hôtes et part bâtie de chaque carré de 4,5 km, lus dans `public/foret/parts.json` : part de surface et qualité de la meilleure forêt hôte par champignon, et la règle d'allumage d'un carré (`isLit`) |
 | `soils.ts` | 8 natures de sol, champignons associés, motifs dessinés au canevas |
 | `geology.ts` | Motifs fournis à MapLibre (`styleimagemissing`), forêt et sol sous un point |
 | `meteoGrid.ts` | Grille météo commune (cases de 0,16° × 0,224°, blocs de 8 × 8, 16 carrés de 4,5 km par case : `subBox`, `subIndexAt`), format des fichiers, dates ; lu aussi par Node (scripts) : aucun import |
@@ -176,9 +176,18 @@ affiche 30 km du zoom 7,0 à 7,8, 20 km jusqu'à 8,35, 10 km jusqu'à 9,35, 5 km
 de latitude) : entre 9,35 et 10 elle dit déjà 5 km et les cases restent de 18 km, écart assumé pour
 n'avoir qu'un seuil (carrés, étiquettes et forêts détaillées arrivent ensemble).
 
-Pastilles (`meteo-points`, zoom < 10, mode indice ; `pickHotspots`, `bestSquare`) : une par case où
-la chance estimée atteint `HOTSPOT_MIN_CHANCE` (70 %, le niveau « favorable » ; 50 % avant le
-14/11/2026), 12 au plus, espacées d'un septième de la vue. Leur chiffre est celui du **meilleur carré
+Pastilles (`meteo-points`, zoom < 10, mode indice ; `showHotspots`, `pickHotspots`, `bestSquare`) :
+**une par case où la chance estimée atteint `HOTSPOT_MIN_CHANCE`** (70 %, le niveau « favorable » ;
+50 % avant le 14/11/2026), sans plafond. Avant le 15/11/2026 il y en avait 12 au plus, espacées d'un
+septième de la vue : en vue France, 6 des 75 secteurs à 70 % ou plus étaient marqués pour les cèpes
+(181 pour les trompettes, 125 pour les chanterelles en tube ; retour de Clément : « les grosses
+moyennes cachent des 70 % »). Deux tailles : les plus fortes de la vue, espacées, 12 au plus
+(`pickHotspots`, propriété `big`), grandes et chiffrées à tous les zooms ; les autres petites en vue
+large (rayon de 4,5 px au zoom 5, où une case de 18 km fait 10 px à l'écran ; 9 px avec leur chiffre
+sans « % » au zoom 6), toutes grandes à partir du zoom 7 (`mapStyle.ts`). Les pastilles sont toutes
+dessinées, les plus fortes par-dessus ; deux chiffres qui se touchent : celui de la plus forte se
+lit. Une pastille par case, posée sur son meilleur carré, pas une par carré de 4,5 km (ce serait
+redessiner les carrés que le zoom 10 montre). Leur chiffre est celui du **meilleur carré
 de 4,5 km allumé de la case** (à son altitude, pour ses arbres hôtes), où elles sont posées : celui
 que son étiquette affichera au zoom 10 (un test compare les deux). **La teinte de la case (`l`, `p`)
 est celle de ce même carré** : calculée pour la case entière, à son altitude médiane (Annecy : 447 à
@@ -198,8 +207,9 @@ et carrés ne regardaient que la météo (Paris affichait « 78 % · favorable �
 « ≈ 0 % »). Désormais un carré n'est coloré (`isLit`) que si les arbres hôtes du champignon y couvrent
 au moins `HOST_MIN_COVER` (10 %) de la surface et si moins de `BUILT_MAX_COVER` (15 %) est bâti, et
 d'autant plus qu'ils en couvrent (teinte pleine à `HOST_FULL_COVER`, 50 %) ; son indice est multiplié
-par la qualité moyenne de ces hôtes (pas par le sol, inconnu à cette échelle : le bilan, qui regarde
-la forêt et le sol du point, peut différer dans les deux sens). Seuils du 14/11/2026 : à 5 % d'hôtes
+par la qualité de sa meilleure forêt hôte (voir « Meilleure forêt du carré » ci-dessous ; pas par le
+sol, inconnu à cette échelle : le bilan, qui regarde la forêt et le sol du point, peut différer dans
+les deux sens). Seuils du 14/11/2026 : à 5 % d'hôtes
 et sans regarder le bâti, 85 % des carrés de France s'allumaient pour les cèpes (25 154 sur 29 483),
 dont 1 624 bâtis à 15 % ou plus : toutes les villes étaient colorées (Nancy : 80 à 84 % sur le
 centre). Avec 10 % et 15 % : 20 025 carrés (68 %). Les parts s'additionnent en pour cent entiers
@@ -223,6 +233,32 @@ entière est allumée dès qu'un de ses carrés l'est (sa teinte suit la moyenne
 étiquettes est vide dans les tests : aucune étiquette n'y est dessinée, on y évalue donc les
 expressions de MapLibre carré par carré (`map.style.getLayer(…).paint.get(…).evaluate(…)`). Le mois
 est figé en octobre dans les tests de bureau (saison des champignons).
+
+**Meilleure forêt du carré** (15/11/2026, retour de Clément : « on voit bien des 70 et plus [en
+zoomant] et pourtant aucune pastille » ; `HOST_BEST_MIN_PERCENT`, `coversOf` de `forestShare.ts`). La
+pastille d'une case reprend son meilleur carré de 4,5 km, et celui-ci faisait la moyenne de toutes
+ses forêts hôtes, alors qu'un carré de 500 m ne compte que la sienne. Mesuré au nord-est d'Annecy
+(case 287:28, trompettes) : meilleur carré de 4,5 km à 62 %, donc pas de pastille, et 29 carrés de
+500 m à 70-77 % dans la vue. Le carré qui en contient 14 a 28 % de sapin-épicéa (poids 0,3 pour les
+trompettes), 18 % de forêt mixte à conifères (0,6), 11 % de forêt mixte à feuillus (0,9) et 4 % de
+hêtraie (1) : moyenne 0,55, soit 57 %. Désormais la qualité d'un carré est le poids de son meilleur
+hôte **présent sur au moins 2 % du carré** (≈ 40 ha, deux carrés de 500 m), et jamais moins que
+l'ancienne moyenne (aucun carré ne baisse). Les trois carrés de cet exemple passent de 57, 62 et
+51 % à 78, 74 et 74 % ; leurs meilleurs carrés de 500 m sont à 77, 74 et 71 % : sous le zoom 12, un
+carré de 500 m ne dépasse plus son carré de 4,5 km (même altitude, et le sol ne fait que baisser).
+- **Tout suit la même valeur** (`HostCover.quality`) : étiquette du carré au zoom 10, teinte et
+  pastille de la case, bilan d'un coin dont la forêt est inconnue (« chance de la meilleure forêt
+  hôte du secteur »), proposition du bandeau « risque de chou blanc », moyenne de France des puces.
+  Changer les pastilles seules aurait posé une pastille à 78 % sur un carré affiché à 57 %.
+- **Effet mesuré le 15/11/2026, France entière** (`ecart-pastilles.mjs`, `ecart-moyennes.mjs`,
+  `apres-regle.mjs`) : cases à pastille, cèpes 75 → 110, girolles 0 → 41, trompettes 181 → 259,
+  chanterelles en tube 125 → 180 ; carrés de 4,5 km à 70 % ou plus, 447 → 891, 0 → 212, 1 493 →
+  2 145, 1 016 → 1 584. Le seuil pèse peu (trompettes : 266 cases à 1 %, 252 à 3 %, 242 à 5 %). Tout
+  carré allumé de France a au moins un hôte à 2 % ou plus.
+- Aucun fichier ni appel en plus (`parts.json` donne déjà la part de chaque type de forêt par
+  carré), aucune expression de la carte changée. Le fichier des parts simulé des tests e2e n'a
+  qu'un type de forêt par carré : la règle se vérifie dans `tests/france.mjs` (5 % d'un bon hôte
+  parmi 60 % d'un médiocre valent le bon ; 1 % ne compte pas ; échoue avec l'ancienne moyenne).
 
 ## Fluidité : ce que coûte un changement sur la carte
 
@@ -444,6 +480,8 @@ la fluidité.
   le même nom quand le bandeau est affiché, les tests visent ceux de `#legend`. `pickMushroom`
   choisit le champignon, ses forêts hôtes et la grille d'indice ; la proposition du bandeau « risque
   de chou blanc » passe par lui aussi (avant, elle ne changeait pas les forêts affichées).
+- (Depuis la règle « Meilleure forêt du carré » du 15/11/2026, ces moyennes montent un peu : ce
+  jour-là, cèpes 12 → 14 %, girolles 12 → 13 %, trompettes 39 → 42 %, chanterelles en tube 43 → 50 %.)
 - **Moyenne de France** : moyenne des chances estimées sur les carrés de 4,5 km que la carte peut
   allumer pour ce champignon (`isLit` : 10 % d'arbres hôtes, moins de 15 % de bâti), chaque carré
   comptant pour un, calculés comme la carte (`squareScore`). Villes, plaines sans hôtes et mer n'y
@@ -525,7 +563,8 @@ bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
   hôtes dans ce secteur ») ; secteur bâti à 15 % ou plus, de même (« secteur urbanisé », jamais
   « surtout bâti » : à 16 % ce serait faux), mais seulement sous le zoom 12 : au-delà la carte montre
   des carrés de 500 m jusque dans les massifs en ville, et le bilan les contredirait ; sinon celle
-  de ses forêts hôtes, et la raison le dit. Fichier des parts absent :
+  de sa meilleure forêt hôte, comme le carré de la carte, et la raison le dit (« chance de la
+  meilleure forêt hôte du secteur »). Fichier des parts absent :
   météo seule. Sans cela, le bilan annonçait « favorable » en pleine ville dès qu'on dézoomait.
   (Sous le zoom 10 la carte ne montre plus que des cases de 18 km, allumées dès qu'un de leurs carrés
   l'est : le bilan, au carré de 4,5 km, y est plus précis qu'elle, c'est voulu.)
@@ -971,7 +1010,7 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   (`HOTSPOT_MIN_CHANCE`), 12 au plus, espacées (voir « Pastilles ») ; à partir du zoom 10,
   pourcentage dans chaque carré ; bilan : « ≈ 62 % · possible ».
   Toujours écrire « estimée » ou « ≈ » : ce n'est pas une probabilité mesurée. Sur la carte, le
-  pourcentage d'un carré vaut pour ses forêts hôtes (voir « Arbres hôtes ») ; un carré éteint n'est
+  pourcentage d'un carré de 4,5 km vaut pour sa meilleure forêt hôte (voir « Arbres hôtes ») ; un carré éteint n'est
   pas « sans champignon », un carré coloré n'est ni une promesse ni un droit de cueillir.
 
 ## Conventions
@@ -1088,8 +1127,12 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   demande une altitude).
 - Montée en charge : première limite, le trafic de GitHub Pages (voir « Montée en charge ») ; aucun
   essai de charge n'a été fait, les chiffres viennent d'une visite jouée par un script.
-- Carrés de 4,5 km : pas de facteur de sol (inconnu à cette échelle), donc un pourcentage souvent
-  au-dessus de celui des carrés de 500 m et du bilan au même endroit. Non couvert par les tests : la
+- Carrés de 4,5 km : le pourcentage de leur meilleure forêt hôte, sans facteur de sol (inconnu à
+  cette échelle) : souvent au-dessus de celui de la plupart des carrés de 500 m et du bilan au même
+  endroit. À l'inverse, à partir du zoom 12 un carré de 500 m prend son altitude exacte et peut
+  encore dépasser son carré de 4,5 km en montagne (non chiffré). `a-propos.html` (« Ce que vaut la
+  carte ») dit encore « son pourcentage vaut pour ces forêts » : à préciser (« pour la meilleure de
+  ces forêts ») avec les autres retouches de texte en attente, dans une même version des conditions. Non couvert par les tests : la
   vue zoomée où le relevé fin ne trouve aucun arbre hôte (`fineDone` sans carré fin).
 - MycoDB : site tiers tenu par des bénévoles ; un renommage d'espèce casse le lien sans erreur
   visible ; la fiche qualifie la comestibilité, ce que le site s'interdit d'écrire lui-même.

@@ -5,9 +5,10 @@
  * Sans elle, l'indice des cases et des carrés ne regardait que la météo : un carré posé sur une
  * ville ou sur la mer affichait le même pourcentage qu'une forêt, et le bilan au clic disait tout
  * autre chose. Avec elle, un carré n'est coloré que s'il contient des arbres hôtes du champignon, et
- * son indice vaut pour ces forêts-là.
+ * son indice vaut pour la meilleure de ces forêts (voir HOST_BEST_MIN_PERCENT) : c'est là qu'on ira
+ * chercher, et c'est ce que les carrés de 500 m montreront en zoomant.
  */
-import { BUILT_MAX_COVER, FOREST_SHARE_URL, HOST_MIN_COVER } from './config';
+import { BUILT_MAX_COVER, FOREST_SHARE_URL, HOST_BEST_MIN_PERCENT, HOST_MIN_COVER } from './config';
 import { BASE_STEP_LAT, BASE_STEP_LON, SUB_COUNT } from './meteoGrid';
 import type { Mushroom } from './mushrooms';
 
@@ -27,7 +28,10 @@ interface ShareFile {
 export interface HostCover {
   /** Part de la surface sous des arbres hôtes du champignon (0 à 1). */
   cover: number;
-  /** Qualité moyenne de ces hôtes (poids de `Mushroom.hosts`, 0 à 1). */
+  /**
+   * Qualité de la meilleure forêt hôte du carré (poids de `Mushroom.hosts`, 0 à 1), parmi celles qui
+   * en couvrent au moins HOST_BEST_MIN_PERCENT ; jamais moins que la moyenne de tous ses hôtes.
+   */
   quality: number;
   /** Part de la surface bâtie (0 à 1 ; 0 si le fichier ne la donne pas). */
   built: number;
@@ -107,14 +111,19 @@ function coversOf(cellId: string, m: Mushroom): (HostCover | null)[] | null {
       // 0,0999… et resterait sous un seuil de 10 % (450 carrés de France dans ce cas).
       let cover = 0;
       let weighted = 0;
+      let best = 0;
       for (let n = 0; n + 1 < parts.length; n += 2) {
         const weight = weights[parts[n] ?? -1] ?? 0;
         if (weight <= 0) continue;
         const percent = parts[n + 1] ?? 0;
         cover += percent;
         weighted += percent * weight;
+        if (percent >= HOST_BEST_MIN_PERCENT && weight > best) best = weight;
       }
-      return { cover: Math.min(100, cover) / 100, quality: cover > 0 ? weighted / cover : 0, built: (builtOf?.[k] ?? 0) / 100 };
+      // Jamais moins que la moyenne de tous les hôtes : 9 % d'un hôte médiocre et 1 % d'un excellent
+      // (sous le seuil) valent mieux que le médiocre seul, et aucun carré ne baisse avec cette règle.
+      const quality = Math.max(best, cover > 0 ? weighted / cover : 0);
+      return { cover: Math.min(100, cover) / 100, quality, built: (builtOf?.[k] ?? 0) / 100 };
     });
     cache.set(key, list);
   }

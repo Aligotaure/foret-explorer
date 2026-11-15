@@ -304,8 +304,8 @@ export interface SpotContext {
   forestCode?: string | null;
   /**
    * La forêt sous le point n'est pas connue : zoom trop petit pour ses tuiles (`zoom`), ou tuiles pas
-   * encore arrivées (`loading`). Le dire ; avec `hostQuality`, l'indice vaut alors pour les forêts
-   * hôtes du secteur (carré de 4,5 km), sinon pour la météo seule.
+   * encore arrivées (`loading`). Le dire ; avec `hostQuality`, l'indice vaut alors pour la meilleure
+   * forêt hôte du secteur (carré de 4,5 km), sinon pour la météo seule.
    */
   forestUnknown?: 'zoom' | 'loading';
   /** Nature du sol au point (null : hors de la zone couverte). */
@@ -432,7 +432,7 @@ export function scoreMushroom(m: Mushroom, w: WeatherSummary, month: number, ctx
   } else if (ctx.forestUnknown) {
     const why = ctx.forestUnknown === 'zoom' ? 'Forêt inconnue à ce zoom' : 'Forêt pas encore chargée';
     const then = ctx.forestUnknown === 'zoom' ? 'Zoomez pour un point précis.' : 'Touchez à nouveau dans un instant.';
-    reasons.push(ctx.hostQuality !== undefined ? `${why} : chance des forêts hôtes du secteur. ${then}` : `${why} : météo seule. ${then}`);
+    reasons.push(ctx.hostQuality !== undefined ? `${why} : chance de la meilleure forêt hôte du secteur. ${then}` : `${why} : météo seule. ${then}`);
   }
   if (ctx.soil) {
     const pref = m.soils[ctx.soil];
