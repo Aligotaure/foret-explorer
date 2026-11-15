@@ -168,6 +168,22 @@ async function disclaimerTests(browser, base) {
     delay.shown >= 2950 && delay.shown < 6000 && delay.sinceButton >= 2950,
     JSON.stringify(delay),
   );
+  // Double appui : « Voir la carte » apparaît là où l'on vient d'accepter ; lui et Échap sont ignorés
+  // une demi-seconde. La page les essaie elle-même à l'instant où la présentation s'ouvre : commandé
+  // d'ici, l'appui arrivait après la demi-seconde sur une machine chargée, et fermait la fenêtre.
+  await page.evaluate(() => {
+    window.__garde = null;
+    const watcher = new MutationObserver(() => {
+      const tour = document.querySelector('dialog.tour[open]');
+      if (!tour) return;
+      watcher.disconnect();
+      tour.querySelector('.tour__close').click();
+      const escape = new Event('cancel', { cancelable: true });
+      tour.dispatchEvent(escape);
+      window.__garde = { open: Boolean(document.querySelector('dialog.tour[open]')), single: document.querySelectorAll('dialog.tour').length === 1, escapeIgnored: escape.defaultPrevented };
+    });
+    watcher.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] });
+  });
   await page.locator('.disclaimer__accept').click();
   const after = await page.evaluate(() => ({
     gone: !document.querySelector('dialog.disclaimer'),
@@ -179,6 +195,8 @@ async function disclaimerTests(browser, base) {
 
   // Premier accord : « La carte en 3 gestes », qu'on ferme comme on veut (ce n'est plus une porte).
   await page.waitForSelector('dialog.tour[open]', { timeout: 5000 });
+  const guard = await page.evaluate(() => window.__garde);
+  const guarded = Boolean(guard?.open && guard.single && guard.escapeIgnored);
   const tour = await page.evaluate(() => {
     const d = document.querySelector('dialog.tour');
     const body = d.querySelector('.tour__body');
@@ -210,10 +228,6 @@ async function disclaimerTests(browser, base) {
     /à gauche, dans la légende/.test(tour.text) && /à droite, son bilan/.test(tour.text) && /chance estimée/.test(tour.text) && /ni une promesse d’en trouver, ni un droit de cueillir/.test(tour.text) && !/comestible|garanti|autoris|probabilit|temps réel|trouvez|bas :/i.test(tour.text),
     tour.text.slice(0, 110),
   );
-  // Double appui : « Voir la carte » apparaît là où l'on vient d'accepter ; il est ignoré une demi-seconde.
-  await page.keyboard.press('Escape');
-  await page.locator('.tour__close').click();
-  const guarded = await page.evaluate(() => Boolean(document.querySelector('dialog.tour[open]')) && document.querySelectorAll('dialog.tour').length === 1);
   await page.waitForTimeout(600);
   await page.locator('.tour__close').click();
   const closed = await page.evaluate(() => ({ tour: Boolean(document.querySelector('dialog.tour')), inert: document.getElementById('app').inert, dialogs: document.querySelectorAll('dialog').length, focus: document.activeElement?.id }));
@@ -1133,19 +1147,72 @@ async function desktopTests(browser, base) {
   await page.evaluate(() => window.map.jumpTo({ zoom: 7 }));
   await page.waitForFunction(() => window.map.querySourceFeatures('meteo').some((f) => f.properties.sub === 0), null, { timeout: 15000 });
   await idle(page);
-  const top = await page.evaluate(() => {
+  const top = await page.evaluate(async () => {
+    const { MUSHROOM_BY_ID, currentMonth } = await import('/src/mushrooms.ts');
+    const { summarize } = await import('/src/weather.ts');
     const cells = window.map.querySourceFeatures('meteo');
+    const key = (x, y) => `${Number(x).toFixed(2)},${Number(y).toFixed(2)}`;
+    // Les pastilles dessinées (une tuile peut en répéter une, et arrondit sa position : on compare au
+    // centième de degré, un carré de 4,5 km en fait quatre à cinq), et celles qu'on attend : le
+    // meilleur carré de chaque case de la vue, s'il atteint 70 %, sans plafond ni espacement.
+    const drawn = new Map(window.map.querySourceFeatures('meteo-points').map((f) => [key(...f.geometry.coordinates), f.properties]));
+    const m = window.meteo;
+    const shown = MUSHROOM_BY_ID.get(window.store.state.mushroom);
+    const { view } = m.data;
+    const expected = m.data.cells
+      .map((c) => {
+        const s = m.data.series.get(c.id);
+        return s ? m.bestSquare(shown, c, s, summarize(s), currentMonth()) : null;
+      })
+      .filter((h) => h && h.p >= 70 && h.x >= view.west && h.x <= view.east && h.y >= view.south && h.y <= view.north)
+      .map((h) => key(h.x, h.y));
+    const big = [...drawn.values()].filter((p) => p.big === 1);
     return {
       chances: cells.every((f) => f.properties.p >= 0 && f.properties.p <= 95),
-      points: window.map.querySourceFeatures('meteo-points').map((f) => f.properties.p),
+      points: [...drawn.values()].map((p) => p.p),
+      missing: expected.filter((k) => !drawn.has(k)).length,
+      extra: [...drawn.keys()].filter((k) => !expected.includes(k)).length,
+      expected: expected.length,
+      big: big.length,
+      bigIsBest: Math.max(...big.map((p) => p.p)) === Math.max(...[...drawn.values()].map((p) => p.p)),
       status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '',
     };
   });
   check(
-    'chance estimée en % dans chaque case, pastilles seulement à 70 % et plus (12 au plus), meilleure chance de la vue annoncée',
-    top.chances && top.points.length > 0 && top.points.length <= 12 && top.points.every((p) => p >= 70) && Number(/Meilleure chance estimée dans la vue : ≈ (\d+) %/.exec(top.status)?.[1]) >= Math.max(...top.points),
+    'chance estimée en % dans chaque case, pastilles seulement à 70 % et plus, meilleure chance de la vue annoncée',
+    top.chances && top.points.length > 0 && top.points.every((p) => p >= 70) && Number(/Meilleure chance estimée dans la vue : ≈ (\d+) %/.exec(top.status)?.[1]) >= Math.max(...top.points),
     `${top.points.length} pastille(s) ${top.points.slice(0, 5).join(', ')} ; ${top.status.slice(0, 130)}`,
   );
+  check(
+    'pastilles : une sur chaque secteur à 70 % ou plus de la vue, sans plafond ; les plus fortes, 12 au plus, sont les grandes',
+    top.expected > 0 && top.missing === 0 && top.extra === 0 && top.big >= 1 && top.big <= 12 && top.bigIsBest,
+    `${top.points.length} pastille(s) pour ${top.expected} secteur(s) attendu(s), ${top.missing} manquante(s), ${top.extra} en trop ; ${top.big} grande(s)`,
+  );
+  // Taille et chiffre selon le zoom : ce que MapLibre applique à une petite et à une grande pastille,
+  // carte amenée à chaque zoom (la police simulée est vide : compter les chiffres dessinés ne prouverait rien).
+  const sizes = await page.evaluate(async () => {
+    const out = [];
+    for (const zoom of [5, 6, 7, 9]) {
+      window.map.jumpTo({ zoom });
+      await new Promise((resolve) => {
+        window.map.once('render', resolve);
+        window.map.triggerRepaint();
+      });
+      const radius = window.map.style.getLayer('meteo-points').paint.get('circle-radius');
+      const text = window.map.style.getLayer('meteo-points-etiquettes').layout.get('text-field');
+      const pastille = (isBig) => ({ type: 'Point', properties: { big: isBig, p: 80 } });
+      out.push(`${zoom} : ${radius.evaluate(pastille(0), {})} px « ${text.evaluate(pastille(0), {})} », grande ${radius.evaluate(pastille(1), {})} px « ${text.evaluate(pastille(1), {})} »`);
+    }
+    return out;
+  });
+  check(
+    'pastilles : petites en vue large (4,5 px au zoom 5, 9 px au zoom 6), toutes grandes à partir du zoom 7 ; chiffre des grandes à tous les zooms, des petites à partir du zoom 6',
+    sizes.join(' | ') === '5 : 4.5 px «  », grande 17 px « 80 % » | 6 : 9 px « 80 », grande 17 px « 80 % » | 7 : 17 px « 80 % », grande 17 px « 80 % » | 9 : 17 px « 80 % », grande 17 px « 80 % »',
+    sizes.join(' | '),
+  );
+  await page.evaluate(() => window.map.jumpTo({ zoom: 9 }));
+  await page.waitForFunction(() => window.map.querySourceFeatures('meteo').some((f) => f.properties.sub === 0), null, { timeout: 15000 });
+  await idle(page);
   // Choix des pastilles et saisons : deux règles simples, vérifiées sur leurs fonctions.
   const rules = await page.evaluate(async () => {
     const { pickHotspots } = await import('/src/meteoLayer.ts');

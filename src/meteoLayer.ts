@@ -116,7 +116,7 @@ export type MeteoStatus =
   | { state: 'ok'; cells: number; day: string; estimated: boolean; shared: boolean; sub: boolean; hosts: boolean; best: number | null; spots: boolean; fine: FineStatus }
   | { state: 'error'; message: string };
 
-/** Pastilles de la vue d'ensemble, au plus. */
+/** Grandes pastilles de la vue d'ensemble, au plus. */
 const HOTSPOT_MAX = 12;
 
 /** Un secteur candidat à une pastille : sa chance estimée, son niveau, où la poser. */
@@ -128,8 +128,10 @@ export interface Hotspot {
 }
 
 /**
- * Pastilles de la vue d'ensemble : les secteurs à HOTSPOT_MIN_CHANCE ou plus, les plus forts d'abord,
- * espacés d'un septième de la largeur de la vue (`width`, en degrés), HOTSPOT_MAX au plus.
+ * Grandes pastilles de la vue d'ensemble, celles qui portent leur chiffre à tous les zooms : les
+ * secteurs à HOTSPOT_MIN_CHANCE ou plus, les plus forts d'abord, espacés d'un septième de la largeur
+ * de la vue (`width`, en degrés), HOTSPOT_MAX au plus. Les autres secteurs à ce seuil ont une petite
+ * pastille (`MeteoLayer.showHotspots`).
  */
 export function pickHotspots(candidates: readonly Hotspot[], width: number, max = HOTSPOT_MAX): Hotspot[] {
   const gap = width / 7;
@@ -641,16 +643,24 @@ export class MeteoLayer {
   }
 
   /**
-   * Vue d'ensemble : une pastille sur les secteurs « favorables » de la vue (`pickHotspots`). Rend la
+   * Vue d'ensemble : une pastille sur chaque secteur « favorable » de la vue. Rend la
    * meilleure chance estimée de la vue (null : aucun secteur à CHANCE_THRESHOLD ou plus).
    */
   private showHotspots(candidates: readonly Hotspot[], view: Box): number | null {
     const seen = candidates.filter((c) => c.x >= view.west && c.x <= view.east && c.y >= view.south && c.y <= view.north);
-    const points: Feature[] = pickHotspots(seen, view.east - view.west).map((c) => ({
-      type: 'Feature',
-      properties: { p: c.p, color: LEVELS[c.l]?.color ?? '#e07a1f' },
-      geometry: { type: 'Point', coordinates: [c.x, c.y] },
-    }));
+    // Une pastille par secteur « favorable », sans exception (demande de Clément du 15/11/2026 : avec
+    // douze pastilles espacées au plus, 6 des 75 secteurs à 70 % ou plus étaient marqués en vue France
+    // pour les cèpes ; « à 70 % il y a d'énormes chances qu'il y ait un coin »). Les plus forts de la
+    // vue, espacés (`pickHotspots`), restent grands avec leur chiffre (`big`) ; les autres sont de
+    // petites pastilles, qui grandissent avec le zoom (mapStyle.ts) jusqu'à porter le leur.
+    const top = new Set(pickHotspots(seen, view.east - view.west));
+    const points: Feature[] = seen
+      .filter((c) => c.p >= HOTSPOT_MIN_CHANCE)
+      .map((c) => ({
+        type: 'Feature',
+        properties: { p: c.p, color: LEVELS[c.l]?.color ?? '#e07a1f', big: top.has(c) ? 1 : 0 },
+        geometry: { type: 'Point', coordinates: [c.x, c.y] },
+      }));
     this.setSource(SOURCES.meteoTop, points);
     const best = Math.max(0, ...seen.map((c) => c.p));
     return best >= CHANCE_THRESHOLD ? best : null;

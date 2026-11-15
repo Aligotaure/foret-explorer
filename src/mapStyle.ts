@@ -305,13 +305,24 @@ export function buildStyle(state: AppState): StyleSpecification {
         },
         paint: { 'text-color': '#0b1f44', 'text-halo-color': 'rgba(255,255,255,0.9)', 'text-halo-width': 1.4 },
       },
-      // Vue d'ensemble : pastilles sur les secteurs où la chance estimée atteint le seuil (meteoLayer.ts).
+      // Vue d'ensemble : une pastille sur chaque secteur où la chance estimée atteint le seuil
+      // (meteoLayer.ts). Les plus fortes de la vue (`big`) sont grandes et chiffrées à tous les zooms.
+      // Les autres grandissent avec le zoom : au zoom 5 une case de 18 km fait 10 pixels à l'écran, un
+      // point suffit ; au zoom 6 (21 pixels) elles portent leur chiffre sans le « % » ; à partir du
+      // zoom 7 (42 pixels) toutes sont grandes. Les plus fortes par-dessus.
       {
         id: LAYERS.meteoTop,
         type: 'circle',
         source: SOURCES.meteoTop,
         maxzoom: WEATHER_SUB_LABEL_MIN_ZOOM,
-        paint: { 'circle-radius': 17, 'circle-color': ['get', 'color'], 'circle-opacity': 0.92, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 },
+        layout: { 'circle-sort-key': ['+', ['*', 1000, ['get', 'big']], ['get', 'p']] },
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['==', ['get', 'big'], 1], 17, 4.5], 6, ['case', ['==', ['get', 'big'], 1], 17, 9], 7, 17],
+          'circle-color': ['get', 'color'],
+          'circle-opacity': 0.92,
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['==', ['get', 'big'], 1], 2, 1], 7, 2],
+        },
       },
       {
         id: LAYERS.meteoTopLabel,
@@ -319,11 +330,24 @@ export function buildStyle(state: AppState): StyleSpecification {
         source: SOURCES.meteoTop,
         maxzoom: WEATHER_SUB_LABEL_MIN_ZOOM,
         layout: {
-          'text-field': ['concat', ['to-string', ['get', 'p']], ' %'],
+          // (Seuils entiers : une expression de zoom dans `layout` n'est évaluée qu'aux zooms entiers.)
+          'text-field': [
+            'step',
+            ['zoom'],
+            ['case', ['==', ['get', 'big'], 1], ['concat', ['to-string', ['get', 'p']], ' %'], ''],
+            6,
+            ['case', ['==', ['get', 'big'], 1], ['concat', ['to-string', ['get', 'p']], ' %'], ['to-string', ['get', 'p']]],
+            7,
+            ['concat', ['to-string', ['get', 'p']], ' %'],
+          ],
           'text-font': [LABEL_FONT],
-          'text-size': 12,
-          'text-allow-overlap': true,
-          'text-ignore-placement': true,
+          'text-size': ['step', ['zoom'], 12, 6, ['case', ['==', ['get', 'big'], 1], 12, 10], 7, 12],
+          // Deux pastilles voisines peuvent se toucher : le chiffre de la plus forte se lit, l'autre
+          // s'efface (les pastilles, elles, sont toutes dessinées).
+          'text-allow-overlap': false,
+          'text-ignore-placement': false,
+          'text-padding': 0,
+          'symbol-sort-key': ['-', 0, ['+', ['*', 1000, ['get', 'big']], ['get', 'p']]],
         },
         paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(0,0,0,0.4)', 'text-halo-width': 1 },
       },

@@ -371,7 +371,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
       h(
         'p',
         {},
-        `En dessous de 35 %, la carte ne dessine pas de carré. En dessous de ${CHANCE_THRESHOLD} %, peu d’espoir sans connaître un coin précis : elle n’étiquette que les carrés au-dessus, et si la vue n’en a aucun, un bandeau le dit et propose le champignon de saison qui y a la meilleure chance estimée. En vue d’ensemble, une pastille marque les secteurs à ${HOTSPOT_MIN_CHANCE} % et plus : son chiffre est celui du meilleur carré de 4,5 km de la case. Pour un point précis, touchez la carte. Météo : Open-Meteo (modèles, pas de pluviomètres).`,
+        `En dessous de 35 %, la carte ne dessine pas de carré. En dessous de ${CHANCE_THRESHOLD} %, peu d’espoir sans connaître un coin précis : elle n’étiquette que les carrés au-dessus, et si la vue n’en a aucun, un bandeau le dit et propose le champignon de saison qui y a la meilleure chance estimée. En vue d’ensemble, une pastille marque chaque secteur à ${HOTSPOT_MIN_CHANCE} % et plus (les plus grandes : les meilleurs de la vue ; les petites grandissent en zoomant) : son chiffre est celui du meilleur carré de 4,5 km de la case. Pour un point précis, touchez la carte. Météo : Open-Meteo (modèles, pas de pluviomètres).`,
       ),
       h(
         'p',

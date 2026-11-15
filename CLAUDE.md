@@ -176,9 +176,18 @@ affiche 30 km du zoom 7,0 à 7,8, 20 km jusqu'à 8,35, 10 km jusqu'à 9,35, 5 km
 de latitude) : entre 9,35 et 10 elle dit déjà 5 km et les cases restent de 18 km, écart assumé pour
 n'avoir qu'un seuil (carrés, étiquettes et forêts détaillées arrivent ensemble).
 
-Pastilles (`meteo-points`, zoom < 10, mode indice ; `pickHotspots`, `bestSquare`) : une par case où
-la chance estimée atteint `HOTSPOT_MIN_CHANCE` (70 %, le niveau « favorable » ; 50 % avant le
-14/11/2026), 12 au plus, espacées d'un septième de la vue. Leur chiffre est celui du **meilleur carré
+Pastilles (`meteo-points`, zoom < 10, mode indice ; `showHotspots`, `pickHotspots`, `bestSquare`) :
+**une par case où la chance estimée atteint `HOTSPOT_MIN_CHANCE`** (70 %, le niveau « favorable » ;
+50 % avant le 14/11/2026), sans plafond. Avant le 15/11/2026 il y en avait 12 au plus, espacées d'un
+septième de la vue : en vue France, 6 des 75 secteurs à 70 % ou plus étaient marqués pour les cèpes
+(181 pour les trompettes, 125 pour les chanterelles en tube ; retour de Clément : « les grosses
+moyennes cachent des 70 % »). Deux tailles : les plus fortes de la vue, espacées, 12 au plus
+(`pickHotspots`, propriété `big`), grandes et chiffrées à tous les zooms ; les autres petites en vue
+large (rayon de 4,5 px au zoom 5, où une case de 18 km fait 10 px à l'écran ; 9 px avec leur chiffre
+sans « % » au zoom 6), toutes grandes à partir du zoom 7 (`mapStyle.ts`). Les pastilles sont toutes
+dessinées, les plus fortes par-dessus ; deux chiffres qui se touchent : celui de la plus forte se
+lit. Une pastille par case, posée sur son meilleur carré, pas une par carré de 4,5 km (ce serait
+redessiner les carrés que le zoom 10 montre). Leur chiffre est celui du **meilleur carré
 de 4,5 km allumé de la case** (à son altitude, pour ses arbres hôtes), où elles sont posées : celui
 que son étiquette affichera au zoom 10 (un test compare les deux). **La teinte de la case (`l`, `p`)
 est celle de ce même carré** : calculée pour la case entière, à son altitude médiane (Annecy : 447 à
