@@ -325,7 +325,7 @@ plus : molette, pincement, double clic, cadre de zoom, touches + et −, boutons
 reste possible ; la recherche de lieu et la géolocalisation aussi.
 - **Le champignon** (`.grid-loader`, refait le 15/11/2026 ; demande de Clément : « je veux que le
   champignon tourne pour que ça fasse vraiment loader […] au milieu de l'écran, plus visible et un
-  peu plus gros ») : une carte claire de 182 × 138 px, un anneau de 76 px dont un arc tourne en 0,9 s,
+  peu plus gros ») : un encart bleu nuit de 182 × 138 px, un anneau de 76 px dont un arc tourne en 0,9 s,
   le champignon de 44 px qui tourne dedans en 1,6 s, « Calcul des carrés… » dessous. Centré sur la
   partie libre de la carte : `--loader-left` et `--loader-right` valent la largeur de la légende et
   du bilan quand ils sont ouverts (à partir de 641 px) ; sur téléphone, tiroir ouvert, une version
