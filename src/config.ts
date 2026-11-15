@@ -163,10 +163,25 @@ export const WEATHER_SUB_LABEL_MIN_ZOOM = 10;
 /**
  * Grille fine de l'indice (carrés ≈ 500 m : chaque case de base de 4,5 km découpée en 9 × 9), à
  * partir de ce zoom. Au-delà de FINE_MAX_CELLS carrés à l'écran, on garde la grille des cases.
+ *
+ * Zoom 11 depuis le 15/11/2026 (12 avant), demande de Clément : les carrés qu'on voyait à l'échelle
+ * 1 km doivent être là dès l'échelle 2 km (la règle de la carte affiche 2 km à partir du zoom 11,1),
+ * « et si ça fait ramer, on affiche le chargement ». Un carré y fait 18 pixels de large, et une vue
+ * en contient quatre fois plus qu'au zoom 12 : 3 000 sur un écran de 1280 × 800, 5 100 sur 1850 × 940,
+ * d'où le plafond relevé de 1 600 à 6 500 (au-delà, écrans de plus de 2 000 pixels de large : la
+ * légende dit de zoomer un peu).
  */
-export const FINE_MIN_ZOOM = 12;
+export const FINE_MIN_ZOOM = 11;
 export const FINE_DIVISIONS = 9;
-export const FINE_MAX_CELLS = 1600;
+export const FINE_MAX_CELLS = 6500;
+/**
+ * Altitude exacte de chaque carré de 500 m (service de l'IGN) : seulement à partir de ce zoom. En
+ * deçà, une vue compte des milliers de carrés : ce serait des dizaines de requêtes de 200 points par
+ * déplacement (le service en accepte 5 par seconde et par adresse), et la carte redessinée à chaque
+ * lot. Les carrés prennent alors l'altitude de leur carré de 4,5 km, déjà dans les fichiers météo, ou
+ * l'altitude exacte si une visite plus zoomée l'a déjà gardée.
+ */
+export const FINE_ALTITUDE_MIN_ZOOM = 12;
 
 /**
  * Calcul des carrés en cours (mode indice) : à partir de ce zoom (la règle de la carte affiche alors

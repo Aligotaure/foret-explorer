@@ -722,6 +722,8 @@ async function desktopTests(browser, base) {
 
   // Arbres hôtes : un carré n'est coloré que s'il en contient assez et n'est pas d'abord une ville
   // (fichier des parts de forêt, simulé ici). Un carré éteint n'est même pas envoyé à la carte.
+  // (Le test est au zoom 11,5 : on attend aussi les carrés de 500 m, qui y prennent le relais.)
+  await page.waitForFunction(() => window.meteo.status.fine?.state === 'ok', null, { timeout: 20000 }).catch(() => {});
   const hosts = await page.evaluate(
     ({ cell, squares }) => {
       // Un carré se reconnaît à son centre (les identifiants de texte ne survivent pas aux tuiles de MapLibre).
@@ -755,11 +757,9 @@ async function desktopTests(browser, base) {
         // Une case du mode pluie (elle ne porte ni l, ni p, ni c), encore dans la source à l'instant où
         // l'on passe à l'indice.
         leftover: drawnWith({ sub: 0, rain20: 40, elevation: 900, x: 6.2, y: 45.9 }),
-        // En passant le zoom 10, une case entière (sub 0) reste un instant dans la source : pas d'étiquette pour elle.
-        wholeLabel: drawnWith({ sub: 0, l: 3, p: 80, c: 0.6 }).label,
-        squareLabel: drawnWith({ sub: 1, l: 3, p: 80, c: 0.6 }).label,
         woodedDrawn: drawn(0),
         zoom: window.map.getZoom(),
+        fine: window.meteo.status.fine?.state,
         caveat: [...document.querySelectorAll('#legend .legend-hint--caveat')].filter((p) => !p.hidden).map((p) => p.textContent).join(' '),
       };
     },
@@ -776,15 +776,10 @@ async function desktopTests(browser, base) {
     hosts.properties,
   );
   check(
-    'carrés : teinte, quadrillage et étiquette sur le carré boisé ; rien pour une case restée du mode pluie',
+    'carrés : teinte et quadrillage sur le carré boisé ; rien pour une case restée du mode pluie ; à l’échelle 2 km (zoom 11,5) les carrés de 500 m ont pris le relais, le carré de 4,5 km reste en fond sans étiquette',
     hosts.leftover.fill === 0 && hosts.leftover.line === 0 && hosts.leftover.label === '' &&
-      hosts.woodedDrawn?.fill > 0 && hosts.woodedDrawn.line > 0 && (hosts.zoom < 10 || hosts.zoom >= 12 || /^\d+ %$/.test(hosts.woodedDrawn.label)),
-    JSON.stringify({ zoom: +hosts.zoom.toFixed(1), reste: hosts.leftover, boise: hosts.woodedDrawn }),
-  );
-  check(
-    'passage du zoom 10 : une case entière encore dans la source n’affiche pas son pourcentage, un carré de 4,5 km oui',
-    hosts.zoom < 10 || hosts.zoom >= 12 || (hosts.wholeLabel === '' && hosts.squareLabel === '80 %'),
-    `zoom ${hosts.zoom.toFixed(1)} : case « ${hosts.wholeLabel} », carré « ${hosts.squareLabel} »`,
+      hosts.woodedDrawn?.fill > 0 && hosts.woodedDrawn.line > 0 && hosts.zoom >= 11 && hosts.woodedDrawn.label === '' && hosts.fine === 'ok',
+    JSON.stringify({ zoom: +hosts.zoom.toFixed(1), reste: hosts.leftover, boise: hosts.woodedDrawn, carres500: hosts.fine }),
   );
   // Changer de champignon ne change aucune expression de la grille : MapLibre n'a pas à refaire ses
   // tuiles pour cela (c'était la lenteur du choix d'un champignon), seul le contenu de la source change.
@@ -871,6 +866,19 @@ async function desktopTests(browser, base) {
   await page.waitForFunction(() => window.map.querySourceFeatures('meteo').some((f) => f.properties.sub === 1), null, { timeout: 15000 }).catch(() => {});
   await idle(page);
   const detail = await page.evaluate(() => window.map.querySourceFeatures('meteo').filter((f) => f.properties.sub === 1).map((f) => ({ p: f.properties.p, x: +Number(f.properties.x).toFixed(3), y: +Number(f.properties.y).toFixed(3) })));
+  // En passant le zoom 10, une case entière (sub 0) reste un instant dans la source : pas d'étiquette
+  // pour elle ; un carré de 4,5 km porte la sienne (entre les zooms 10 et 11 : au-delà, les carrés de
+  // 500 m prennent le relais).
+  const labels = await page.evaluate(() => {
+    const label = window.map.style.getLayer('meteo-etiquettes').layout.get('text-field');
+    const of = (p) => String(label.evaluate({ type: 'Polygon', properties: p }, {}));
+    return { zoom: window.map.getZoom(), whole: of({ sub: 0, l: 3, p: 80, c: 0.6 }), square: of({ sub: 1, l: 3, p: 80, c: 0.6 }) };
+  });
+  check(
+    'passage du zoom 10 : une case entière encore dans la source n’affiche pas son pourcentage, un carré de 4,5 km oui',
+    labels.zoom >= 10 && labels.zoom < 11 && labels.whole === '' && labels.square === '80 %',
+    `zoom ${labels.zoom.toFixed(1)} : case « ${labels.whole} », carré « ${labels.square} »`,
+  );
   const cellOf = (o) => `${Math.floor(o.y / 0.16)}:${Math.floor(o.x / 0.224)}`;
   const compared = overview.points
     .map((pt) => {
@@ -959,36 +967,38 @@ async function desktopTests(browser, base) {
     log.altitude.length === altitudeBefore && /cueillez loin des routes, des zones industrielles et des décharges/.test(townSpot.urban) && townSpot.link === 'a-propos.html#identifier' && !/comestible|autorisé|garanti/i.test(townSpot.urban),
     `${log.altitude.length - altitudeBefore} appel(s) d’altitude ; ${townSpot.urban.slice(0, 90)}`,
   );
-  // Même ville, forêt connue (zoom 11) : la carte n'y allume aucun carré de 4,5 km, le bilan n'estime
+  // Même ville, forêt connue (zoom 10,5) : la carte n'y allume aucun carré de 4,5 km, le bilan n'estime
   // pas non plus et ne demande rien ; il invite à zoomer. Puis, aux zooms des carrés de 500 m, il suit
   // le relevé de la carte : un bois qu'elle ne dessinerait pas est écarté, un massif est estimé.
   const townCentre = await page.evaluate(({ cell, k }) => {
     const [ci, cj] = cell.split(':').map(Number);
     return [(cj * 4 + (k % 4) + 0.5) * 0.056, (ci * 4 + Math.floor(k / 4) + 0.5) * 0.04];
   }, { cell: SHARE_CELL, k: SHARE_BUILT });
-  const hostPoint = () =>
-    page.evaluate(({ centre }) => {
-      // Un point de l'écran sous une hêtraie ou une chênaie, dans le carré de 4,5 km bâti.
+  // (Sous le zoom 11 la carte lit les tuiles du zoom 10, où un type de forêt simulé couvre 13 km : le
+  // carré bâti peut tomber tout entier sous des sapins ou une forêt mixte, hôtes eux aussi.)
+  const hostPoint = (codes = ['FF1-09-09', 'FF1G01-01']) =>
+    page.evaluate(({ centre, codes }) => {
+      // Un point de l'écran sous une forêt hôte (hêtraie ou chênaie d'office), dans le carré de 4,5 km bâti.
       for (let y = 200; y < 700; y += 8) {
         for (let x = 420; x < 1100; x += 8) {
           const ll = window.map.unproject([x, y]);
           if (Math.abs(ll.lng - centre[0]) > 0.024 || Math.abs(ll.lat - centre[1]) > 0.017) continue;
           const hit = window.map.queryRenderedFeatures([x, y], { layers: ['bdforet-hit'] })[0];
-          if (hit && ['FF1-09-09', 'FF1G01-01'].includes(hit.properties.code_tfv)) return { x, y };
+          if (hit && codes.includes(hit.properties.code_tfv)) return { x, y };
         }
       }
       return null;
-    }, { centre: townCentre });
+    }, { centre: townCentre, codes });
   const readTown = () =>
     page.evaluate(() => ({
       lines: [...document.querySelectorAll('#spot .verdict')].map((v) => `${v.querySelector('strong')?.textContent} : ${v.querySelector('.verdict__why')?.textContent ?? ''} ${v.querySelector('.level-pill')?.textContent ?? ''}`),
       urban: document.querySelector('#spot .spot__urban')?.textContent ?? '',
       forest: document.querySelector('#spot .spot__row dd')?.textContent ?? '',
     }));
-  await page.evaluate((c) => window.map.jumpTo({ center: c, zoom: 11 }), townCentre);
+  await page.evaluate((c) => window.map.jumpTo({ center: c, zoom: 10.5 }), townCentre);
   await page.waitForTimeout(900);
   await idle(page);
-  const wood = await hostPoint();
+  const wood = await hostPoint(['FF1-09-09', 'FF1G01-01', 'FF2G61-61', 'FF31']);
   let cityClicks = 0;
   if (wood) {
     await page.mouse.click(wood.x, wood.y);
@@ -997,12 +1007,12 @@ async function desktopTests(browser, base) {
     await page.waitForTimeout(400);
     const known = await readTown();
     check(
-      'bilan en ville, forêt hôte connue (zoom 11) : « secteur urbanisé : zoomez pour juger ce bois », sans pourcentage, sans altitude demandée, avec le conseil',
-      /hêtre|chênes/i.test(known.forest) && known.lines.filter((l) => /secteur urbanisé : zoomez pour juger ce bois $/.test(l)).length >= 2 && log.altitude.length === altitudeBefore && /cueillez loin des routes/.test(known.urban),
+      'bilan en ville, forêt hôte connue (zoom 10,5) : « secteur urbanisé : zoomez pour juger ce bois », sans pourcentage, sans altitude demandée, avec le conseil',
+      /^Forêt fermée/.test(known.forest) && known.lines.filter((l) => /secteur urbanisé : zoomez pour juger ce bois $/.test(l)).length >= 2 && log.altitude.length === altitudeBefore && /cueillez loin des routes/.test(known.urban),
       `${known.forest} ; ${known.lines.join(' | ').slice(0, 220)} ; ${log.altitude.length - altitudeBefore} altitude(s)`,
     );
   } else {
-    check('bilan en ville, forêt hôte connue (zoom 11) : un bois dans le carré bâti', false, 'aucun point trouvé');
+    check('bilan en ville, forêt hôte connue (zoom 10,5) : un bois dans le carré bâti', false, 'aucun point trouvé');
   }
   await page.evaluate((c) => window.map.jumpTo({ center: c, zoom: 13.6 }), townCentre);
   await page.waitForFunction(() => [...document.querySelectorAll('#legend .legend-hint')].some((p) => /carrés? de 500 m avec arbres hôtes/.test(p.textContent)), null, { timeout: 20000 }).catch(() => {});
@@ -1269,12 +1279,36 @@ async function desktopTests(browser, base) {
     rules.dormant.cepe === '1 2 3 4' && rules.dormant.girolle === '1 2 3 4' && rules.dormant.trompette === '2 3 4 5 6' && rules.dormant.chanterelle === '2 3 4 5 6 7' && rules.dormant.morille === '1 8 9 10 11 12' && rules.coherent && rules.text === 'mars à juin',
     JSON.stringify(rules.dormant),
   );
+  const altitudeEarly = log.altitude.length;
   await page.evaluate((z) => window.map.jumpTo({ zoom: z }), zoomBefore);
+  await page.waitForFunction(() => window.meteo.status.fine?.state === 'ok' && window.map.querySourceFeatures('meteo-fin').length > 0, null, { timeout: 20000 }).catch(() => {});
   await idle(page);
 
-  // Grille fine : carrés de 500 m à partir du zoom 13 (mode indice)
+  // Échelle 2 km (zoom 11,5) : les carrés de 500 m sont déjà là, leur chiffre seul (un carré fait 18 à
+  // 36 pixels), et aucune altitude exacte n'est demandée : la vue en compte des milliers, ils prennent
+  // celle de leur carré de 4,5 km. L'altitude de l'IGN n'est demandée qu'à partir du zoom 12.
+  const early = await page.evaluate(() => {
+    const label = window.map.style.getLayer('meteo-fin-etiquettes').layout.get('text-field');
+    return {
+      zoom: window.map.getZoom(),
+      fine: window.meteo.status.fine,
+      squares: window.map.querySourceFeatures('meteo-fin').length,
+      label: String(label.evaluate({ type: 'Polygon', properties: { p: 62 } }, {})),
+      dimmed: JSON.stringify(window.map.getPaintProperty('bdforet-fill', 'fill-opacity')),
+    };
+  });
+  check(
+    'échelle 2 km (zoom 11,5) : les carrés de 500 m sont dessinés, leur chiffre seul (« 62 »), sans altitude demandée à l’IGN ; les forêts s’estompent dès ce zoom',
+    early.zoom >= 11 && early.zoom < 12 && early.fine?.state === 'ok' && early.fine.count > 20 && early.squares > 20 && early.label === '62' && log.altitude.length === altitudeEarly && early.dimmed.includes('["step",["zoom"],') && early.dimmed.includes(',11,'),
+    `zoom ${early.zoom.toFixed(1)} : ${early.fine?.count} carré(s) à l’état « ${early.fine?.state} », étiquette « ${early.label} », ${log.altitude.length - altitudeEarly} altitude(s) demandée(s) ; forêts : ${early.dimmed.slice(0, 60)}`,
+  );
+
+  // Grille fine : carrés de 500 m (mode indice), altitudes exactes à partir du zoom 12
   const before = log.altitude.length;
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
+    // La vue du zoom 13,6 est dans celle du zoom 11,5, relevée à l'instant : oubliée, pour que le
+    // calcul (et la pause du zoom) ait lieu comme sur une vue jamais vue.
+    (await import('/src/fineGrid.ts')).forgetSurveys();
     // Quand la pause se lève-t-elle ? (noté dans la page : les attentes qui suivent sont plus longues)
     const container = window.map.getContainer();
     const t0 = performance.now();
@@ -1316,7 +1350,23 @@ async function desktopTests(browser, base) {
       prevented: wheel.defaultPrevented && pinch.defaultPrevented,
       focusable: !plus.disabled,
       loader: !loader.hidden,
-      fill: Boolean(loader.querySelector('.grid-loader__fill svg')),
+      // Un champignon qui tourne dans un anneau, au milieu de la carte laissée libre par la légende.
+      spin: (() => {
+        const ring = loader.querySelector('.grid-loader__spin');
+        const mushroom = ring?.querySelector('.icon');
+        if (!ring || !mushroom) return null;
+        const box = loader.getBoundingClientRect();
+        const legend = document.getElementById('legend').getBoundingClientRect();
+        const free = { left: document.getElementById('app').classList.contains('legend-open') ? legend.right : 0, right: innerWidth };
+        return {
+          size: Math.round(ring.getBoundingClientRect().width),
+          turns: getComputedStyle(mushroom).animationName,
+          ringTurns: getComputedStyle(ring, '::before').animationName,
+          offCentreX: Math.round(Math.abs(box.left + box.width / 2 - (free.left + free.right) / 2)),
+          offCentreY: Math.round(Math.abs(box.top + box.height / 2 - innerHeight / 2)),
+          takesClicks: getComputedStyle(loader).pointerEvents !== 'none',
+        };
+      })(),
       text: loader.querySelector('.grid-loader__text')?.textContent ?? '',
       hiddenFromReaders: loader.getAttribute('aria-hidden'),
     };
@@ -1332,9 +1382,18 @@ async function desktopTests(browser, base) {
     `arrivés à MapLibre : « ${ignored.reached} » ; zoom ${ignored.before} → ${ignored.after}`,
   );
   check(
-    'champignon de chargement : affiché après un quart de seconde, plein et contour superposés, « Calcul des carrés… », décoratif pour les lecteurs d’écran',
-    ignored.loader && ignored.fill && ignored.text === 'Calcul des carrés…' && ignored.hiddenFromReaders === 'true',
-    JSON.stringify({ affiche: ignored.loader, texte: ignored.text }),
+    'champignon de chargement : affiché après un quart de seconde, il tourne dans son anneau au milieu de la carte libre, 76 px, « Calcul des carrés… », décoratif pour les lecteurs d’écran, sans prendre les gestes',
+    ignored.loader &&
+      ignored.spin !== null &&
+      ignored.spin.size >= 70 &&
+      ignored.spin.turns === 'grid-loader-turn' &&
+      ignored.spin.ringTurns === 'grid-loader-turn' &&
+      ignored.spin.offCentreX <= 12 &&
+      ignored.spin.offCentreY <= 12 &&
+      !ignored.spin.takesClicks &&
+      ignored.text === 'Calcul des carrés…' &&
+      ignored.hiddenFromReaders === 'true',
+    JSON.stringify({ affiche: ignored.loader, texte: ignored.text, ...ignored.spin }),
   );
   await page.waitForFunction(() => window.map.querySourceFeatures('meteo-fin').length > 0, null, { timeout: 20000 });
   await page.waitForFunction(
@@ -1412,8 +1471,8 @@ async function desktopTests(browser, base) {
     visible: window.map.getLayoutProperty('meteo-fin-etiquettes', 'visibility'),
   }));
   check(
-    'grille fine : le pourcentage est écrit dans tous les carrés de 500 m dessinés, dès le zoom 12',
-    fineLabel.minzoom === 12 && fineLabel.visible === 'visible' && fineLabel.field === '["concat",["to-string",["coalesce",["get","p"],0]]," %"]',
+    'grille fine : le pourcentage est écrit dans tous les carrés de 500 m dessinés, dès leur arrivée au zoom 11 (le chiffre seul sous le zoom 12, où un carré fait 18 à 36 pixels)',
+    fineLabel.minzoom === 11 && fineLabel.visible === 'visible' && fineLabel.field === '["step",["zoom"],["to-string",["coalesce",["get","p"],0]],12,["concat",["to-string",["coalesce",["get","p"],0]]," %"]]',
     JSON.stringify(fineLabel),
   );
   check('grille fine : carrés de 500 m dessinés, tous avec au moins 3 points sur 9 sous un arbre hôte', fine.count > 20 && fine.visible === 'visible' && fine.coverage, `${fine.count} carrés, ${fine.levels.join(',')}`);
@@ -1424,8 +1483,8 @@ async function desktopTests(browser, base) {
   check('grille fine : altitudes IGN groupées et variées', batches.length >= 1 && batches.every((q) => q.includes('%7C')) && fine.altitudes > 5, `${batches.length} requête(s), ${fine.altitudes} altitudes`);
   check('grille fine : altitudes gardées dans le navigateur', fine.saved > 20, `${fine.saved} altitudes`);
   check(
-    'grille fine : la grille des cases s’efface au zoom 12',
-    fine.coarseOpacity.startsWith('["interpolate",["linear"],["zoom"]') && fine.coarseOpacity.includes(',12,["*",0.35,'),
+    'grille fine : la grille des cases s’efface au zoom 11',
+    fine.coarseOpacity.startsWith('["interpolate",["linear"],["zoom"]') && fine.coarseOpacity.includes(',11,["*",0.35,'),
     fine.coarseOpacity.slice(0, 40),
   );
   check('grille fine : état dans la légende', Boolean(fine.status) && fine.coverage, fine.status);
@@ -1940,7 +1999,8 @@ async function emptyViewTests(browser, base) {
   const page = await context.newPage();
   const log = { tms: [], wmts: [], geocode: [], other: [] };
   await installMocks(page, log, { sec: true });
-  await page.goto(`${base}#carte=11.5/45.92/6.19`);
+  // (Zoom 10,5 : les carrés de 4,5 km. À partir du zoom 11, ce sont les carrés de 500 m.)
+  await page.goto(`${base}#carte=10.5/45.92/6.19`);
   await waitForMap(page);
   await page.evaluate(() => window.store.update({ mushroom: 'cepe', weatherMode: 'indice' }));
   await settled(page);
@@ -1999,7 +2059,7 @@ async function emptyViewTests(browser, base) {
   await preAccept(winter);
   const page2 = await winter.newPage();
   await installMocks(page2, { tms: [], wmts: [], geocode: [], other: [] }, { mois: 12 });
-  await page2.goto(`${base}#carte=11.5/45.92/6.19`);
+  await page2.goto(`${base}#carte=10.5/45.92/6.19`);
   await waitForMap(page2);
   await page2.evaluate(() => window.store.update({ mushroom: 'girolle', weatherMode: 'indice' }));
   await settled(page2);
@@ -2041,7 +2101,7 @@ async function emptyViewTests(browser, base) {
   );
 
   // Recherche de lieu : le bilan ouvert parlait d'un autre coin, il se ferme.
-  await page2.evaluate(() => window.map.jumpTo({ zoom: 11.5 }));
+  await page2.evaluate(() => window.map.jumpTo({ zoom: 10.5 }));
   await settled(page2);
   await page2.mouse.click(700, 450);
   await page2.waitForSelector('#spot:not([hidden]) .verdict, #spot:not([hidden]) .spot__facts', { timeout: 10000 }).catch(() => {});

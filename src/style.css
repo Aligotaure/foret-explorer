@@ -669,70 +669,68 @@ li.is-off .swatch {
 
 /* ── Message temporaire, bandeaux du haut de la carte ─────────────────────── */
 
-/* ── Calcul des carrés en cours : champignon qui se remplit (gridLoader.ts) ──
-   Même emplacement que les bandeaux « Choisissez un champignon » et « risque de chou blanc »,
-   jamais avec eux. Il ne prend aucun geste à la carte. */
+/* ── Calcul des carrés en cours : champignon qui tourne (gridLoader.ts) ──
+   Au milieu de la carte, dans la place que les panneaux laissent libre (`--loader-left`,
+   `--loader-right`), bien visible : un champignon de 44 px qui tourne dans un anneau, son texte
+   dessous. Il ne prend aucun geste à la carte. */
 .grid-loader {
+  --loader-left: 0px;
+  --loader-right: 0px;
+
   position: absolute;
   z-index: 2;
-  top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
-  left: 50%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 14px 5px 9px;
-  border-radius: 999px;
-  background: var(--navy-800);
+  top: 50%;
+  left: calc(var(--loader-left) + (100% - var(--loader-left) - var(--loader-right)) / 2);
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 18px 22px 14px;
+  border-radius: 18px;
+  background: rgba(30, 30, 60, 0.94);
   box-shadow: var(--shadow);
-  color: var(--lavender-soft);
-  font-size: 13px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
   white-space: nowrap;
   pointer-events: none;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   /* (Un calcul de moins d'un quart de seconde ne l'affiche pas du tout : voir gridLoader.ts.) */
   animation: grid-loader-in 0.15s both;
 }
 
-.grid-loader__icon {
+.grid-loader[hidden] {
+  display: none;
+}
+
+/* L'anneau, dont un quart orange tourne, et le champignon qui tourne dedans, plus lentement. */
+.grid-loader__spin {
   position: relative;
-  display: block;
-  width: 26px;
-  height: 26px;
-  color: #8f8fb8;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
 }
 
-.grid-loader__icon .icon,
-.grid-loader__icon svg {
-  display: block;
-  width: 26px;
-  height: 26px;
-}
-
-/* Le même champignon, plein, dans un cache ancré en bas dont la hauteur monte. */
-.grid-loader__fill {
+.grid-loader__spin::before {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 10%;
-  overflow: hidden;
+  inset: 0;
+  border: 5px solid rgba(255, 255, 255, 0.16);
+  border-top-color: #e9a04a;
+  border-radius: 50%;
+  content: '';
+  animation: grid-loader-turn 0.9s linear infinite;
+}
+
+.grid-loader__spin .icon,
+.grid-loader__spin svg {
+  display: block;
+  width: 44px;
+  height: 44px;
+}
+
+.grid-loader__spin .icon {
   color: #e9a04a;
-  animation: grid-loader-fill 4s cubic-bezier(0.2, 0.7, 0.3, 1) both;
-}
-
-.grid-loader__fill .icon {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-}
-
-.grid-loader__fill svg path {
-  fill: currentColor;
-}
-
-.grid-loader.is-full .grid-loader__fill {
-  height: 100%;
-  animation: none;
+  animation: grid-loader-turn 1.6s linear infinite;
 }
 
 @keyframes grid-loader-in {
@@ -745,14 +743,9 @@ li.is-off .swatch {
   }
 }
 
-/* Il monte vite puis ralentit, sans jamais se dire plein avant que les carrés soient là. */
-@keyframes grid-loader-fill {
-  from {
-    height: 10%;
-  }
-
+@keyframes grid-loader-turn {
   to {
-    height: 88%;
+    transform: rotate(360deg);
   }
 }
 
@@ -978,8 +971,14 @@ li.is-off .swatch {
 
 /* ── Grand écran : les bandeaux évitent la légende ouverte ───────────────── */
 @media (min-width: 641px) {
+  /* Le champignon de chargement se centre dans la place libre, à droite de la légende et à gauche
+     du bilan. */
   #app.legend-open .grid-loader {
-    left: max(50%, calc(var(--panel-width) + 2 * var(--gap) + 110px));
+    --loader-left: calc(var(--panel-width) + 2 * var(--gap));
+  }
+
+  #app:has(#spot:not([hidden])) .grid-loader {
+    --loader-right: calc(var(--panel-width) + var(--btn) + 3 * var(--gap));
   }
 
   /* Le bandeau se centre dans la place libre : à droite de la légende, à gauche du bilan. */
@@ -1036,9 +1035,34 @@ li.is-off .swatch {
     display: none;
   }
 
-  /* Sous la recherche, et arrêté avant la colonne de boutons. */
-  .grid-loader {
-    top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
+  /* Téléphone : un tiroir ouvert (légende, bilan) couvre le bas de l'écran. Le champignon de
+     chargement monte alors dans la carte qui reste visible, sous la recherche, en plus petit. */
+  #app.legend-open .grid-loader,
+  #app:has(#spot:not([hidden])) .grid-loader {
+    top: calc(2 * var(--btn) + 4 * var(--gap) + var(--safe-top));
+    gap: 6px;
+    padding: 10px 14px 8px;
+    font-size: 13px;
+    transform: translate(-50%, 0);
+  }
+
+  #app.legend-open .grid-loader__spin,
+  #app:has(#spot:not([hidden])) .grid-loader__spin {
+    width: 48px;
+    height: 48px;
+  }
+
+  #app.legend-open .grid-loader__spin::before,
+  #app:has(#spot:not([hidden])) .grid-loader__spin::before {
+    border-width: 4px;
+  }
+
+  #app.legend-open .grid-loader__spin .icon,
+  #app.legend-open .grid-loader__spin svg,
+  #app:has(#spot:not([hidden])) .grid-loader__spin .icon,
+  #app:has(#spot:not([hidden])) .grid-loader__spin svg {
+    width: 28px;
+    height: 28px;
   }
 
   .grid-verdict {
@@ -1333,7 +1357,6 @@ li.is-off .swatch {
     max-height: calc(100% - var(--btn) - 3 * var(--gap) - 40px - var(--safe-top));
   }
 
-  .grid-loader,
   .grid-verdict {
     top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
   }
@@ -1342,12 +1365,6 @@ li.is-off .swatch {
      la légende et lui sur un écran de 834 px) : le bilan répond déjà pour le coin touché. */
   #app:has(#spot:not([hidden])) .grid-verdict {
     display: none;
-  }
-
-  /* Bilan ouvert : le champignon se centre dans la place libre à sa gauche, au lieu de passer
-     par-dessus sa première ligne. */
-  #app:has(#spot:not([hidden])) .grid-loader {
-    left: max(100px, calc((100% - var(--panel-width) - var(--btn) - 3 * var(--gap)) / 2));
   }
 }
 
@@ -2624,15 +2641,13 @@ html[data-view='analytics'] .island__link[data-view='analytics'] {
   outline-offset: -2px;
 }
 
-/* Animations réduites : le champignon s'affiche à demi plein, sans monter. */
+/* Animations réduites : rien ne tourne ; l'anneau garde son quart orange, et le texte dit ce qui se
+   passe. */
 @media (prefers-reduced-motion: reduce) {
   .grid-loader,
-  .grid-verdict__box {
-    animation: none;
-  }
-
-  .grid-loader__fill {
-    height: 55%;
+  .grid-verdict__box,
+  .grid-loader__spin::before,
+  .grid-loader__spin .icon {
     animation: none;
   }
 }

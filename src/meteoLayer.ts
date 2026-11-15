@@ -2,6 +2,7 @@ import type { Feature, Polygon } from 'geojson';
 import type { GeoJSONSource, Map as MapLibreMap } from 'maplibre-gl';
 import {
   BUILT_MAX_COVER,
+  FINE_ALTITUDE_MIN_ZOOM,
   FINE_MIN_ZOOM,
   FRANCE_BOUNDS,
   GRID_BUSY_MAX_MS,
@@ -639,7 +640,9 @@ export class MeteoLayer {
     );
     // Tout carré de 500 m dessiné porte son pourcentage, « peu probable » compris : sans lui il
     // faudrait juger à la nuance de couleur.
-    this.map.setLayoutProperty(LAYERS.meteoFineLabel, 'text-field', ['concat', ['to-string', chance], ' %'] as never);
+    // Sous le zoom 12 un carré fait 18 à 36 pixels de large : le chiffre seul, sans « % ».
+    // (Seuil entier : une expression de zoom dans `layout` n'est évaluée qu'aux zooms entiers.)
+    this.map.setLayoutProperty(LAYERS.meteoFineLabel, 'text-field', ['step', ['zoom'], ['to-string', chance], 12, ['concat', ['to-string', chance], ' %']] as never);
   }
 
   /**
@@ -981,8 +984,11 @@ export class MeteoLayer {
     // température, qui ne fait que baisser l'indice).
     const reach = this.reach(series);
     const wanted = forested.filter((c) => draw.has(c.id) && reach(c.parentId));
-    const missing = wanted.filter((c) => !altitudes.has(c.id)).sort((a, z) => distance(a) - distance(z));
-    track('ign.altitude.cacheHits', wanted.length - missing.length);
+    // … et seulement à partir du zoom FINE_ALTITUDE_MIN_ZOOM : en deçà la vue compte des milliers de
+    // carrés, qui gardent l'altitude de leur carré de 4,5 km (ou l'exacte, si elle est déjà connue).
+    const exact = this.map.getZoom() >= FINE_ALTITUDE_MIN_ZOOM;
+    const missing = exact ? wanted.filter((c) => !altitudes.has(c.id)).sort((a, z) => distance(a) - distance(z)) : [];
+    if (exact) track('ign.altitude.cacheHits', wanted.length - missing.length);
 
     let result = this.renderFine(fine);
     drawn(surveyed);

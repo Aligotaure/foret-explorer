@@ -77,13 +77,22 @@ export interface Sample {
 }
 
 interface IndexedPolygon {
-  rings: Position[][];
   value: string;
+  /**
+   * Arêtes du polygone (tous ses anneaux), rangées par bande de latitude d'un carré fin : xa, ya, xb,
+   * yb à la suite. Un point n'est comparé qu'aux arêtes de sa bande.
+   */
+  bands: Map<number, number[]>;
 }
 
-/** Point dans un polygone (règle pair-impair : les trous sont gérés). */
-function inside(rings: Position[][], x: number, y: number): boolean {
-  let hit = false;
+/**
+ * Range les arêtes par bande. Depuis le 15/11/2026 : avec les carrés de 500 m dès le zoom 11, une vue
+ * compte 3 000 à 5 000 carrés et des forêts de dizaines de milliers de sommets ; comparer chacun des
+ * neuf points d'un carré à tous les sommets de chaque forêt qui le touche bloquait la page 1 à 3 s.
+ * Une arête horizontale ne compte jamais dans la règle pair-impair : elle n'est pas rangée.
+ */
+function edgesByBand(rings: Position[][]): Map<number, number[]> {
+  const bands = new Map<number, number[]>();
   for (const ring of rings) {
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
       const a = ring[i];
@@ -91,8 +100,32 @@ function inside(rings: Position[][], x: number, y: number): boolean {
       if (!a || !b) continue;
       const [xa = 0, ya = 0] = a;
       const [xb = 0, yb = 0] = b;
-      if (ya > y !== yb > y && x < ((xb - xa) * (y - ya)) / (yb - ya) + xa) hit = !hit;
+      if (ya === yb) continue;
+      const from = Math.floor(Math.min(ya, yb) / FINE_STEP_LAT);
+      const to = Math.floor(Math.max(ya, yb) / FINE_STEP_LAT);
+      for (let band = from; band <= to; band++) {
+        let list = bands.get(band);
+        if (!list) bands.set(band, (list = []));
+        list.push(xa, ya, xb, yb);
+      }
     }
+  }
+  return bands;
+}
+
+/**
+ * Point dans un polygone (règle pair-impair : les trous sont gérés), d'après les arêtes de sa bande :
+ * toute arête que coupe l'horizontale du point est dans cette bande.
+ */
+function inside(edges: readonly number[] | undefined, x: number, y: number): boolean {
+  if (!edges) return false;
+  let hit = false;
+  for (let k = 0; k < edges.length; k += 4) {
+    const xa = edges[k] as number;
+    const ya = edges[k + 1] as number;
+    const xb = edges[k + 2] as number;
+    const yb = edges[k + 3] as number;
+    if (ya > y !== yb > y && x < ((xb - xa) * (y - ya)) / (yb - ya) + xa) hit = !hit;
   }
   return hit;
 }
@@ -124,8 +157,10 @@ class CellIndex {
           if (y < south) south = y;
           if (y > north) north = y;
         }
-        const entry = { rings, value };
+        const entry = { value, bands: edgesByBand(rings) };
         for (let i = Math.floor(south / FINE_STEP_LAT); i <= Math.floor(north / FINE_STEP_LAT); i++) {
+          // (Aucune arête dans cette bande : le polygone n'y contient aucun point.)
+          if (!entry.bands.has(i)) continue;
           for (let j = Math.floor(west / FINE_STEP_LON); j <= Math.floor(east / FINE_STEP_LON); j++) {
             const key = `${i}:${j}`;
             const bucket = this.buckets.get(key);
@@ -138,7 +173,10 @@ class CellIndex {
   }
 
   valueAt(cellId: string, x: number, y: number): string | null {
-    for (const p of this.buckets.get(cellId) ?? []) if (inside(p.rings, x, y)) return p.value;
+    const bucket = this.buckets.get(cellId);
+    if (!bucket) return null;
+    const band = Math.floor(y / FINE_STEP_LAT);
+    for (const p of bucket) if (inside(p.bands.get(band), x, y)) return p.value;
     return null;
   }
 }
@@ -158,10 +196,12 @@ const OFFSETS = [1 / 6, 1 / 2, 5 / 6] as const;
 const SURVEY_KEY = 'foret-explorer:releves';
 const SURVEY_VERSION = 1;
 /**
- * Une quarantaine d'écrans de 1280 × 800 au zoom 12,3 (448 carrés gardés pour une vue des Alpes, le
- * 14/11/2026). ≈ 30 caractères par carré : 600 000 caractères au plus dans le navigateur.
+ * Une dizaine d'écrans de 1280 × 800 au zoom 11 (3 000 carrés par vue), près de cent au zoom 12,3
+ * (448 carrés gardés pour une vue des Alpes, le 14/11/2026). ≈ 30 caractères par carré : 1,2 million
+ * de caractères au plus dans le navigateur. 20 000 avant le 15/11/2026, quand les carrés de 500 m
+ * n'arrivaient qu'au zoom 12.
  */
-const SURVEY_MAX_ENTRIES = 20_000;
+const SURVEY_MAX_ENTRIES = 40_000;
 const SURVEY_MAX_DAYS = 30;
 /** L'écriture attend ce délai de calme : elle récrit tout le cache, sur le fil qui dessine la carte. */
 const SURVEY_SAVE_DELAY_MS = 3000;
