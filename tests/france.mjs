@@ -135,6 +135,21 @@ check(
   typique.file.carres.cepe === 32 && moinsBon.file.carres.cepe === 32 && moinsBon.file.moyennes.cepe < typique.file.moyennes.cepe - 5 && moinsBon.file.moyennes.cepe > 0,
   `chênes décidus : ${typique.file.moyennes.cepe} % ; chênes sempervirents : ${moinsBon.file.moyennes.cepe} % (${typique.file.carres.cepe} carrés)`,
 );
+// Meilleure forêt du carré (15/11/2026) : 60 % de chênes sempervirents (poids 0,6) et 5 % de chênes
+// décidus (poids 1) valent comme une chênaie décidue pure ; avec 1 % de décidus seulement (sous le
+// seuil de 2 %), comme des sempervirents purs. Un calcul à la moyenne des hôtes (0,63 et 0,61)
+// rendrait deux chiffres intermédiaires.
+const melange = (partDuMeilleur) => {
+  const deux = cases.slice(0, 2);
+  return { v: 1, pasLat: parts.pasLat, pasLon: parts.pasLon, codes: ['FF1G06-06', 'FF1G01-01'], cases: Object.fromEntries(deux.map((id) => [id, Array.from({ length: 16 }, () => [0, 60, 1, partDuMeilleur])])), bati: Object.fromEntries(deux.map((id) => [id, Array(16).fill(0)])) };
+};
+const avecBonneForet = calculer('2026-10-20', 9, { fichier: melange(5) });
+const presqueSans = calculer('2026-10-20', 9, { fichier: melange(1) });
+check(
+  'meilleure forêt du carré : 5 % de chênes décidus parmi 60 % de sempervirents valent une chênaie décidue pure ; 1 % (sous le seuil de 2 %) ne compte pas',
+  avecBonneForet.file.carres.cepe === 32 && avecBonneForet.file.moyennes.cepe === typique.file.moyennes.cepe && presqueSans.file.moyennes.cepe === moinsBon.file.moyennes.cepe && typique.file.moyennes.cepe > moinsBon.file.moyennes.cepe,
+  `5 % de décidus : ${avecBonneForet.file.moyennes.cepe} % (chênaie décidue pure : ${typique.file.moyennes.cepe} %) ; 1 % : ${presqueSans.file.moyennes.cepe} % (sempervirents purs : ${moinsBon.file.moyennes.cepe} %)`,
+);
 // Une ville : mêmes carrés boisés à 100 %, mais bâtis à 15 % : aucun n'est compté, pas de moyenne.
 const ville = essai('FF1G01-01');
 for (const id of Object.keys(ville.bati)) ville.bati[id] = Array(16).fill(15);

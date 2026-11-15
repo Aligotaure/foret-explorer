@@ -778,8 +778,8 @@ export class MeteoLayer {
       // En mode indice un carré éteint n'est pas dessiné du tout : il n'est ni calculé ni envoyé.
       if (index && !lit) return null;
       const w = weatherOf();
-      // Champignon montré seulement. Arbres hôtes connus : l'indice vaut pour eux (qualité moyenne
-      // des hôtes du carré).
+      // Champignon montré seulement. Arbres hôtes connus : l'indice vaut pour la meilleure forêt
+      // hôte du carré (`HostCover.quality`).
       const score = !index || known ? null : shown ? scoreMushroom(shown, w, month, host ? { hostQuality: host.quality } : {}) : null;
       const level = known?.l ?? score?.level ?? 0;
       // Défavorable (moins de 35 %) : pas envoyé non plus. Dessiné, il ne se voyait pas (4 %
