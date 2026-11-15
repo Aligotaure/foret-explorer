@@ -974,19 +974,21 @@ async function desktopTests(browser, base) {
     const [ci, cj] = cell.split(':').map(Number);
     return [(cj * 4 + (k % 4) + 0.5) * 0.056, (ci * 4 + Math.floor(k / 4) + 0.5) * 0.04];
   }, { cell: SHARE_CELL, k: SHARE_BUILT });
-  const hostPoint = () =>
-    page.evaluate(({ centre }) => {
-      // Un point de l'écran sous une hêtraie ou une chênaie, dans le carré de 4,5 km bâti.
+  // (Sous le zoom 11 la carte lit les tuiles du zoom 10, où un type de forêt simulé couvre 13 km : le
+  // carré bâti peut tomber tout entier sous des sapins ou une forêt mixte, hôtes eux aussi.)
+  const hostPoint = (codes = ['FF1-09-09', 'FF1G01-01']) =>
+    page.evaluate(({ centre, codes }) => {
+      // Un point de l'écran sous une forêt hôte (hêtraie ou chênaie d'office), dans le carré de 4,5 km bâti.
       for (let y = 200; y < 700; y += 8) {
         for (let x = 420; x < 1100; x += 8) {
           const ll = window.map.unproject([x, y]);
           if (Math.abs(ll.lng - centre[0]) > 0.024 || Math.abs(ll.lat - centre[1]) > 0.017) continue;
           const hit = window.map.queryRenderedFeatures([x, y], { layers: ['bdforet-hit'] })[0];
-          if (hit && ['FF1-09-09', 'FF1G01-01'].includes(hit.properties.code_tfv)) return { x, y };
+          if (hit && codes.includes(hit.properties.code_tfv)) return { x, y };
         }
       }
       return null;
-    }, { centre: townCentre });
+    }, { centre: townCentre, codes });
   const readTown = () =>
     page.evaluate(() => ({
       lines: [...document.querySelectorAll('#spot .verdict')].map((v) => `${v.querySelector('strong')?.textContent} : ${v.querySelector('.verdict__why')?.textContent ?? ''} ${v.querySelector('.level-pill')?.textContent ?? ''}`),
@@ -996,7 +998,7 @@ async function desktopTests(browser, base) {
   await page.evaluate((c) => window.map.jumpTo({ center: c, zoom: 10.5 }), townCentre);
   await page.waitForTimeout(900);
   await idle(page);
-  const wood = await hostPoint();
+  const wood = await hostPoint(['FF1-09-09', 'FF1G01-01', 'FF2G61-61', 'FF31']);
   let cityClicks = 0;
   if (wood) {
     await page.mouse.click(wood.x, wood.y);
@@ -1006,7 +1008,7 @@ async function desktopTests(browser, base) {
     const known = await readTown();
     check(
       'bilan en ville, forêt hôte connue (zoom 10,5) : « secteur urbanisé : zoomez pour juger ce bois », sans pourcentage, sans altitude demandée, avec le conseil',
-      /hêtre|chênes/i.test(known.forest) && known.lines.filter((l) => /secteur urbanisé : zoomez pour juger ce bois $/.test(l)).length >= 2 && log.altitude.length === altitudeBefore && /cueillez loin des routes/.test(known.urban),
+      /^Forêt fermée/.test(known.forest) && known.lines.filter((l) => /secteur urbanisé : zoomez pour juger ce bois $/.test(l)).length >= 2 && log.altitude.length === altitudeBefore && /cueillez loin des routes/.test(known.urban),
       `${known.forest} ; ${known.lines.join(' | ').slice(0, 220)} ; ${log.altitude.length - altitudeBefore} altitude(s)`,
     );
   } else {

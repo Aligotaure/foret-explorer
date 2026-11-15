@@ -507,6 +507,39 @@ vraies données, réseau normal, en alternance : zoom de 11,3 à 12,3 sur une vu
 3,4 s → 2,6 et 2,2 s ; déplacement d'un demi-écran, 1,9 et 1,8 s → 1,9 et 2,0 s (inchangé). Même
 nombre de carrés avant et après (347, 389).
 
+**Carrés de 500 m dès l'échelle 2 km** (demande de Clément du 15/11/2026 : « il faut charger les
+carrés actuellement visibles à 1 km d'échelle dès 2 km d'échelle, et si ça fait ramer alors on
+affiche le chargement » ; `config.ts`, `fineGrid.ts`, `meteoLayer.ts`, `mapStyle.ts`). La règle
+affiche 3 km du zoom 10,35 à 11,09, 2 km jusqu'à 11,67, 1 km jusqu'à 12,67 (à 46° de latitude, calculé
+depuis le seuil des 5 km) : les carrés de 500 m n'arrivaient qu'au zoom 12, au milieu de l'échelle
+1 km. `FINE_MIN_ZOOM` passe de 12 à 11 : ils couvrent toute l'échelle 2 km. Tout ce qui lit cette
+constante suit (forêts estompées, règle de ville du bilan, texte de la légende, grille des cases en
+fond). Les carrés de 4,5 km ne sont donc plus l'échelle affichée qu'entre les zooms 10 et 11.
+- **Quatre fois plus de carrés par vue** : un carré fait 18 px de large au zoom 11 ; 3 000 carrés sur
+  un écran de 1280 × 800, 5 100 sur 1850 × 940. `FINE_MAX_CELLS` passe de 1 600 à 6 500 (au-delà, sur
+  un écran de plus de 2 000 px de large au zoom 11, la carte garde les carrés de 4,5 km et la légende
+  dit « zoomez un peu »), et les relevés gardés de 20 000 à 40 000 carrés.
+- **Chiffre seul sous le zoom 12** (« 62 », 8,5 px) : « 62 % » ne tient pas dans 18 px. Le seuil est
+  un zoom entier (une expression de zoom dans `layout` n'est évaluée qu'aux zooms entiers).
+- **Altitude exacte à partir du zoom 12 seulement** (`FINE_ALTITUDE_MIN_ZOOM`) : en deçà, une vue
+  demanderait des dizaines de lots de 200 points à chaque déplacement (l'IGN en accepte 5 par seconde
+  et par adresse), et la carte serait redessinée à chaque lot. Les carrés prennent l'altitude de leur
+  carré de 4,5 km, déjà dans les fichiers météo, ou l'exacte si une visite plus zoomée l'a gardée.
+  Aucun appel de plus à l'échelle 2 km (test e2e).
+- **Relevé quatre fois plus rapide, mêmes résultats** (`edgesByBand`, `inside`) : le test
+  point-dans-polygone comparait chacun des neuf points d'un carré à tous les sommets de chaque forêt
+  qui le touche ; les arêtes sont maintenant rangées une fois par bande de latitude (la hauteur d'un
+  carré), et un point ne lit que celles de sa bande. Mesuré le 15/11/2026 sur de vraies données
+  (1850 × 940, `cout-releve.mjs`, empreinte de tous les relevés identique avant et après) : 2 711 →
+  761 ms au zoom 11,3, 3 419 → 718 ms au zoom 11.
+- **Ce que ça coûte** (15/11/2026, ancienne et nouvelle version en alternance, deux passes, arrivée
+  au zoom 11,3 depuis le zoom 9,5, Bugey (45,98° N, 5,77° E), trompettes, 1280 × 800, `gel.mjs`) : 10 et 10 images
+  redessinées avant, 15 et 15 après (1 197 carrés de 500 m dessinés). Les durées de ce jour-là ne
+  disent rien : la machine était saturée (charge de 8 à 10 pour 4 processeurs, `gnome-shell` à plus
+  d'un processeur), 31 et 52 s avant, 47 et 48 s après, pour un geste qui prend 2 à 3 s d'ordinaire.
+  À refaire machine au calme. Le champignon de chargement et la pause du zoom couvrent cette attente
+  (`GRID_BUSY_MIN_ZOOM` = 11, inchangé) ; une vue déjà relevée n'attend pas.
+
 Ce qui reste : à partir du zoom 10, une image coûte encore 125 ms, dont 68 pour les forêts ; choisir
 un champignon y change aussi le filtre des forêts, et MapLibre refait alors toutes les tuiles de la
 BD Forêt (≈ 1 s à lui seul au zoom 11 sans carte graphique). Au zoom 9,2 les zones protégées et les
@@ -601,7 +634,8 @@ carré, en une seule requête `queryRenderedFeatures` sur toute la vue puis test
 appel par point serait bien plus lent), dès que les tuiles des forêts et des sols sont à l'écran, sans
 attendre le fond de carte ; relevés gardés d'une visite à l'autre (voir « Relevés gardés »). Altitude IGN au centre, gardée
 dans `localStorage` (`foret-explorer:altitudes`, 40 000 carrés au plus, écrit une fois par relevé),
-demandée seulement pour les carrés **à dessiner pour le champignon montré** (`fineToDraw` ; avant le
+demandée seulement à partir du zoom 12 (`FINE_ALTITUDE_MIN_ZOOM`) et pour les carrés **à dessiner
+pour le champignon montré** (`fineToDraw` ; avant le
 14/11/2026 : pour tout carré boisé, lande ou parc de ville compris), par lots de 200 points. Un carré
 dont l'altitude n'est pas encore arrivée est dessiné tout de suite à celle de son carré de 4,5 km,
 puis corrigé (de même si le service est en panne) : au changement de champignon les carrés ne
@@ -1099,6 +1133,12 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   l'avancement. Le zoom « double toucher puis glisser » passe encore. Pas essayée sur un vrai
   téléphone ni avec un vrai pavé tactile (les gestes sont simulés dans les tests) ; le plafond et la
   trêve qui le suit ne sont couverts par aucun test (il faudrait attendre 8 s).
+- Carrés de 500 m à l'échelle 2 km (zooms 11 à 12) : températures à l'altitude du carré de 4,5 km,
+  pas à celle du carré de 500 m ; en montagne le chiffre d'un carré peut donc changer en passant le
+  zoom 12 (altitude exacte). Chiffre de 8,5 px dans des carrés de 18 px au zoom 11 : lisible sur
+  écran, pas vérifié sur un vrai téléphone. Cinq images redessinées de plus à l'arrivée sur une vue
+  jamais relevée ; durée non mesurée machine au calme. Sur un écran de plus de 2 000 px de large, les
+  carrés de 500 m n'arrivent qu'un peu après le zoom 11 (plafond de 6 500 carrés).
 - Hors saison : au mois près, sans tenir compte de la région (les morilles sont grisées en janvier
   jusque dans le Midi) ; les chanterelles en tube sont grisées en février malgré un poids de 0,1.
 - Bilan sans appel : sous le zoom 11, un vrai massif pris dans un secteur bâti à 15 % ou plus reçoit
