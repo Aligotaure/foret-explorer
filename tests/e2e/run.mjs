@@ -247,7 +247,7 @@ async function disclaimerTests(browser, base) {
   const firstView = await viewOf(page);
   check('première visite : la France entière', firstView.zoom < 7 && firstView.lat > 44 && firstView.lat < 49 && firstView.lng > 0 && firstView.lng < 5, JSON.stringify(firstView));
   // Vue d'ensemble : l'indice de pousse de tout le pays, lu dans les fichiers météo communs.
-  await page.getByRole('button', { name: 'Cèpes', exact: true }).click();
+  await page.locator('#legend').getByRole('button', { name: 'Cèpes', exact: true }).click();
   await page.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 1000, null, { timeout: 20000 });
   const national = await page.evaluate(() => ({
     status: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '',
@@ -259,7 +259,7 @@ async function disclaimerTests(browser, base) {
     national.status.slice(0, 80),
   );
   await page.screenshot({ path: `${OUT}00b-france.png` });
-  await page.getByRole('button', { name: 'Cèpes', exact: true }).click(); // on retire le champignon
+  await page.locator('#legend').getByRole('button', { name: 'Cèpes', exact: true }).click(); // on retire le champignon
   await page.evaluate(() => window.map.jumpTo({ center: [2.35, 48.85], zoom: 10 }));
   await page.waitForTimeout(1500); // la vue est enregistrée une seconde après le dernier mouvement
   await page.goto(base);
@@ -690,7 +690,7 @@ async function desktopTests(browser, base) {
   }
 
   // « Je cherche… » : cèpes → forêts hôtes + indice météo
-  await page.getByRole('button', { name: 'Cèpes', exact: true }).click();
+  await page.locator('#legend').getByRole('button', { name: 'Cèpes', exact: true }).click();
   await page.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 0, null, { timeout: 15000 });
   await idle(page);
   const cepes = await page.evaluate(() => ({
@@ -1477,7 +1477,7 @@ async function desktopTests(browser, base) {
   await page.getByRole('switch', { name: 'Afficher la nature du sol' }).uncheck();
 
   // Morilles : forêts hôtes de printemps, encadré de sécurité
-  await page.getByRole('button', { name: 'Morilles', exact: true }).click();
+  await page.locator('#legend').getByRole('button', { name: 'Morilles', exact: true }).click();
   await idle(page);
   const morel = await page.evaluate(() => ({
     mushroom: window.store.state.mushroom,
@@ -1501,7 +1501,7 @@ async function desktopTests(browser, base) {
   await page.waitForTimeout(900);
   await idle(page);
   const asleep = await page.evaluate(() => {
-    const chips = [...document.querySelectorAll('.chip--mushroom')];
+    const chips = [...document.querySelectorAll('#legend .chip--mushroom')];
     const chip = chips.find((b) => b.textContent === 'Morilles');
     return {
       dormant: chips.filter((b) => b.classList.contains('chip--dormant')).map((b) => b.textContent).join(),
@@ -1564,7 +1564,7 @@ async function desktopTests(browser, base) {
   });
   const asleepFree = await zoomPause(page);
   check('champignon hors saison choisi : rien à calculer, donc ni champignon de chargement ni pause du zoom', zoomFree(asleepFree), JSON.stringify(asleepFree));
-  await page.getByRole('button', { name: 'Morilles', exact: true }).click();
+  await page.locator('#legend').getByRole('button', { name: 'Morilles', exact: true }).click();
   await page.getByRole('switch', { name: 'Afficher la grille météo' }).uncheck();
 
   // Consommation des API : compteurs de la visite et envoi groupé au serveur de mesure
@@ -1621,17 +1621,18 @@ async function desktopTests(browser, base) {
   await page.evaluate(() => window.map.jumpTo({ zoom: 9 }));
   await idle(page);
   const lowZoom = await page.evaluate(() => ({
-    hint: !document.getElementById('zoom-hint').hidden,
     note: !document.querySelector('.legend-note').hidden,
     countsHidden: [...document.querySelectorAll('.legend-item__count')].every((c) => c.hidden),
   }));
-  check('zoom 9 : bandeau, note, pastilles masquées', lowZoom.hint && lowZoom.note && lowZoom.countsHidden, JSON.stringify(lowZoom));
+  check('zoom 9 : la légende prévient que les forêts ne se filtrent pas, pastilles masquées', lowZoom.note && lowZoom.countsHidden, JSON.stringify(lowZoom));
   // Tuiles raster de 256 px : MapLibre charge le niveau z+1 (ici 10) pour un zoom carte de 9.
   check('zoom 9 : aperçu raster BD Forêt (PM_6_16)', log.wmts.some((w) => w.startsWith('LANDCOVER.FORESTINVENTORY.V2|PM_6_16|10')));
   await page.screenshot({ path: `${OUT}06-bureau-zoom9.png` });
-  await page.locator('.zoom-hint__btn').click();
+  // (Le bandeau « Zoomez pour filtrer… » et son bouton « Zoomer ici » ont laissé la place à
+  // « Choisissez un champignon » : on zoome soi-même.)
+  await page.evaluate(() => window.map.jumpTo({ zoom: 10.5 }));
   await page.waitForTimeout(800);
-  check('bouton « Zoomer ici »', (await page.evaluate(() => window.map.getZoom())) >= 10);
+  check('zoom 10,5 : la note de la légende se retire', await page.evaluate(() => document.querySelector('.legend-note').hidden));
 
   // Persistance
   await page.getByRole('button', { name: 'Conifères', exact: true }).click();
@@ -1894,7 +1895,7 @@ async function emptyViewTests(browser, base) {
     dry.scale.join(' | '),
   );
   // Fermé, le bandeau ne revient pas en se déplaçant ; il revient pour un autre champignon.
-  await page.locator('.grid-verdict__close').click();
+  await page.locator('#grid-verdict .grid-verdict__close').click();
   const closed = await verdict(page);
   await page.evaluate(() => window.map.jumpTo({ center: [6.3, 45.95] }));
   await settled(page);
@@ -1921,7 +1922,7 @@ async function emptyViewTests(browser, base) {
   await page.evaluate(() => window.map.jumpTo({ zoom: 9 }));
   await settled(page);
   const wide = await verdict(page);
-  check('vue d’ensemble : pas de bandeau sous le zoom des carrés de 4,5 km', !wide.shown && !(await page.evaluate(() => document.getElementById('zoom-hint').hidden)), `bandeau : ${wide.shown}`);
+  check('vue d’ensemble : pas de bandeau « risque de chou blanc » sous le zoom des carrés de 4,5 km', !wide.shown, `bandeau : ${wide.shown}`);
   await context.close();
 
   // Décembre, pluies du jeu d'essai : les girolles (poids de saison 0,2) n'atteignent 50 % nulle part,
@@ -1944,10 +1945,15 @@ async function emptyViewTests(browser, base) {
   await page2.locator('.grid-verdict__pick').click();
   await settled(page2);
   const picked = await verdict(page2);
+  // (Comme une puce de la légende : les forêts affichées deviennent celles du champignon proposé.)
+  const pickedHosts = await page2.evaluate(async () => {
+    const { MUSHROOM_BY_ID, hostCodes } = await import('/src/mushrooms.ts');
+    return { selected: [...window.store.state.selected].sort().join(), expected: [...hostCodes(MUSHROOM_BY_ID.get(window.store.state.mushroom))].sort().join() };
+  });
   check(
     'clic sur la proposition : le champignon est choisi, la carte montre au moins un carré à 50 % ou plus, le bandeau se retire',
-    picked.mushroom !== 'girolle' && picked.mushroom !== null && !picked.shown && picked.coarseBest >= 50 && /Meilleure chance estimée dans la vue/.test(picked.hint),
-    `${picked.mushroom}, meilleur carré ${picked.coarseBest} %, bandeau : ${picked.shown}`,
+    picked.mushroom !== 'girolle' && picked.mushroom !== null && !picked.shown && picked.coarseBest >= 50 && /Meilleure chance estimée dans la vue/.test(picked.hint) && pickedHosts.selected === pickedHosts.expected,
+    `${picked.mushroom}, meilleur carré ${picked.coarseBest} %, bandeau : ${picked.shown}, forêts hôtes sélectionnées : ${pickedHosts.selected === pickedHosts.expected}`,
   );
   // Même promesse aux carrés de 500 m, où la proposition est calculée sur les relevés de la vue.
   await page2.evaluate(() => {
@@ -1983,6 +1989,281 @@ async function emptyViewTests(browser, base) {
   await winter.close();
 }
 
+/**
+ * Bandeau « Choisissez un champignon » (à la place de « Zoomez pour filtrer… »), moyenne de France
+ * sur les puces, et trait du clic au bilan dans « La carte en 3 gestes ».
+ */
+async function chooseTests(browser, base) {
+  const read = (page) =>
+    page.evaluate(() => {
+      const hint = document.getElementById('choose-hint');
+      const chips = (root) => [...root.querySelectorAll('.chip--mushroom')].map((b) => ({ name: b.firstChild.textContent, avg: b.querySelector('.chip__avg').hidden ? null : b.querySelector('.chip__avg').textContent, hidden: b.querySelector('.chip__avg').getAttribute('aria-hidden'), said: document.getElementById(b.getAttribute('aria-describedby') ?? '')?.textContent ?? '', dormant: b.classList.contains('chip--dormant') }));
+      const visible = (el) => Boolean(el) && !el.hidden && el.getClientRects().length > 0;
+      return {
+        shown: !hint.hidden && hint.getClientRects().length > 0,
+        title: hint.querySelector('.choose-hint__title')?.textContent ?? '',
+        banner: chips(hint),
+        legend: chips(document.getElementById('legend')),
+        bannerCaption: visible(hint.querySelector('.choose-hint__caption')) ? hint.querySelector('.choose-hint__caption').textContent : null,
+        legendCaption: visible(document.querySelector('#legend .chips-caption')) ? document.querySelector('#legend .chips-caption').textContent : null,
+        oldHint: document.getElementById('zoom-hint') !== null,
+        state: { mushroom: window.store.state.mushroom, mode: window.store.state.weatherMode, selected: [...window.store.state.selected].sort().join() },
+      };
+    });
+  const NAMES = 'Cèpes,Girolles,Trompettes,Chanterelles en tube,Morilles';
+
+  // Sans fichier de moyennes (premier jour, publication ratée) : le bandeau et les puces, sans chiffre.
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await preAccept(context);
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const log = { tms: [], wmts: [], geocode: [], other: [] };
+  await installMocks(page, log);
+  await page.goto(`${base}#carte=5.5/46.5/2.5`);
+  await waitForMap(page);
+  await page.waitForTimeout(500);
+  // Grand écran, première visite : la légende est ouverte, ses puces sont à l'écran, le bandeau n'a
+  // rien à y ajouter. Légende fermée : c'est lui qui dit par où commencer.
+  const withLegendOpen = await read(page);
+  await page.evaluate(() => window.store.update({ legendOpen: false }));
+  await page.waitForTimeout(300);
+  const opening = await read(page);
+  // (Relevé maintenant : plus bas, un bilan ouvert pour l'essai charge, lui, la météo de son coin.)
+  const meteoAtOpening = log.meteoCommune.length;
+  check(
+    'aucun champignon choisi, légende fermée : bandeau « Choisissez un champignon » avec les cinq puces, à la place de « Zoomez pour filtrer… » ; légende ouverte : pas de bandeau',
+    !withLegendOpen.shown && opening.shown && opening.title === 'Choisissez un champignon' && opening.banner.map((c) => c.name).join() === NAMES && !opening.oldHint,
+    `légende ouverte : ${withLegendOpen.shown} ; fermée : ${opening.title} : ${opening.banner.map((c) => c.name).join(', ')}`,
+  );
+  // Le bilan ouvert à côté de lui ne le gêne pas sur un grand écran ; sur un écran moyen, il le remplace.
+  await page.mouse.click(640, 560);
+  await page.waitForFunction(() => !document.getElementById('spot').hidden);
+  const reachable = () =>
+    page.evaluate(() => {
+      const hint = document.getElementById('choose-hint');
+      if (hint.getClientRects().length === 0) return null;
+      const spot = document.getElementById('spot').getBoundingClientRect();
+      const box = hint.querySelector('.grid-verdict__box').getBoundingClientRect();
+      return [...hint.querySelectorAll('.chip, .grid-verdict__close')].every((el) => {
+        const r = el.getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return top === el || el.contains(top);
+      }) && box.right <= spot.left;
+    });
+  const besideSpot = await reachable();
+  await page.setViewportSize({ width: 900, height: 800 });
+  await page.waitForTimeout(200);
+  const narrow = await reachable();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(() => window.spot.close());
+  await page.waitForTimeout(200);
+  check(
+    'bilan ouvert : sur grand écran le bandeau reste à sa gauche, puces atteignables ; sur un écran de 900 px le bilan le remplace',
+    besideSpot === true && narrow === null && (await read(page)).shown,
+    `1280 px : ${besideSpot} ; 900 px : ${narrow === null ? 'retiré' : narrow}`,
+  );
+  check(
+    'sans fichier des moyennes de France : aucune puce ne porte de chiffre, aucune légende de chiffre, aucun fichier météo chargé',
+    [...opening.banner, ...opening.legend].every((c) => c.avg === null) && opening.bannerCaption === null && opening.legendCaption === null && meteoAtOpening === 0,
+    `${meteoAtOpening} fichier(s) météo demandé(s) à l’ouverture`,
+  );
+  // Une puce du bandeau choisit comme une puce de la légende : le champignon, ses forêts hôtes, la grille d'indice.
+  const hosts = await page.evaluate(async () => {
+    const { MUSHROOM_BY_ID, hostCodes } = await import('/src/mushrooms.ts');
+    return [...hostCodes(MUSHROOM_BY_ID.get('trompette'))].sort().join();
+  });
+  await page.locator('#choose-hint').getByRole('button', { name: 'Trompettes', exact: true }).click();
+  await page.waitForTimeout(300);
+  const picked = await read(page);
+  check(
+    'clic sur une puce du bandeau : champignon choisi, forêts hôtes sélectionnées, grille d’indice allumée, bandeau retiré',
+    picked.state.mushroom === 'trompette' && picked.state.mode === 'indice' && picked.state.selected === hosts && !picked.shown,
+    JSON.stringify(picked.state).slice(0, 120),
+  );
+  // Champignon retiré, grille d'indice encore allumée (elle montre alors les cèpes) : pas de bandeau,
+  // l'emplacement est celui du champignon de chargement. Grille éteinte : il revient. Fermé : plus du tout.
+  await page.evaluate(() => window.store.update({ mushroom: null }));
+  await page.waitForTimeout(200);
+  const unpicked = await read(page);
+  await page.evaluate(() => window.store.update({ weatherMode: 'off' }));
+  await page.waitForTimeout(200);
+  const back = await read(page);
+  await page.locator('#choose-hint .grid-verdict__close').click();
+  const closed = await read(page);
+  await page.evaluate(() => window.store.update({ weatherMode: 'pluie' }));
+  await page.evaluate(() => window.store.update({ weatherMode: 'off' }));
+  await page.waitForTimeout(200);
+  const still = await read(page);
+  check(
+    'bandeau : absent tant que la grille d’indice est allumée, de retour sans champignon ni indice, et plus du tout une fois fermé',
+    unpicked.state.mushroom === null && !unpicked.shown && back.shown && !closed.shown && !still.shown,
+    `indice sans champignon : ${unpicked.shown}, grille éteinte : ${back.shown}, fermé : ${closed.shown}, ensuite : ${still.shown}`,
+  );
+  await page.close();
+
+  // Avec le fichier (octobre simulé) : le chiffre sur chaque puce de saison, dans la légende comme dans
+  // le bandeau ; rien pour les morilles, hors saison, même si le fichier en donnait un.
+  const page2 = await context.newPage();
+  await installMocks(page2, { tms: [], wmts: [], geocode: [], other: [] }, { france: { moyennes: { cepe: 41, girolle: 12, trompette: 55, chanterelle: 60, morille: 33 }, carres: {} } });
+  await page2.goto(`${base}#carte=5.5/46.5/2.5`);
+  await waitForMap(page2);
+  // (Les réglages gardés par la page précédente peuvent être ceux d'un instant avant sa fermeture.)
+  // Légende ouverte d'abord (ses puces et leur légende), puis fermée (le bandeau).
+  await page2.evaluate(() => window.store.update({ mushroom: null, weatherMode: 'off', legendOpen: true }));
+  await page2.waitForFunction(() => document.querySelector('#legend .chip__avg:not([hidden])') !== null, null, { timeout: 8000 }).catch(() => {});
+  const inLegend = await read(page2);
+  const named = await page2.locator('#legend').getByRole('button', { name: 'Cèpes', exact: true }).count();
+  await page2.evaluate(() => window.store.update({ legendOpen: false }));
+  await page2.waitForFunction(() => document.querySelector('#choose-hint .chip__avg:not([hidden])') !== null, null, { timeout: 8000 }).catch(() => {});
+  const withStats = { ...(await read(page2)), legend: inLegend.legend, legendCaption: inLegend.legendCaption };
+  const shownAs = (list) => list.map((c) => `${c.name} ${c.avg ?? '—'}`).join(', ');
+  check(
+    'moyennes de France : le chiffre de chaque champignon de saison sur sa puce, dans la légende et dans le bandeau ; aucun pour les morilles, hors saison',
+    shownAs(withStats.legend) === 'Cèpes 41 %, Girolles 12 %, Trompettes 55 %, Chanterelles en tube 60 %, Morilles —' && shownAs(withStats.banner) === shownAs(withStats.legend),
+    shownAs(withStats.legend),
+  );
+  check(
+    'moyennes de France : les chiffres sont légendés (« chance estimée moyenne en France »), phrase complète dans la légende, courte dans le bandeau',
+    withStats.legendCaption === 'Le % de chaque champignon : sa chance estimée moyenne en France, là où poussent ses arbres hôtes.' && withStats.bannerCaption === '% : chance estimée moyenne en France',
+    `${withStats.legendCaption} | ${withStats.bannerCaption}`,
+  );
+  const cepe = withStats.legend[0];
+  const morille = withStats.legend[4];
+  check(
+    'puces : le nom du bouton reste le nom du champignon (chiffre décoratif), le chiffre et « hors saison » sont dans sa description',
+    named === 1 && cepe.hidden === 'true' && cepe.said === 'chance estimée moyenne en France : 41 %' && morille.dormant && morille.said === 'hors saison (mars à juin)',
+    `« Cèpes » trouvé ${named} fois ; ${cepe.said} ; ${morille.said}`,
+  );
+  await page2.close();
+
+  // Fichier trop ancien, ou calculé un autre mois (les saisons ont pu changer) : pas de chiffre.
+  const stale = [];
+  for (const [what, france] of [
+    ['ancien de 10 jours', { jour: new Date(Date.now() - 10 * 86_400_000).toISOString().slice(0, 10), moyennes: { cepe: 41 }, carres: {} }],
+    ['calculé en mars', { mois: 3, moyennes: { cepe: 41 }, carres: {} }],
+    ['d’un autre format', { v: 2, moyennes: { cepe: 41 }, carres: {} }],
+  ]) {
+    const p = await context.newPage();
+    await installMocks(p, { tms: [], wmts: [], geocode: [], other: [] }, { france });
+    await p.goto(`${base}#carte=5.5/46.5/2.5`);
+    await waitForMap(p);
+    await p.waitForTimeout(800);
+    const r = await read(p);
+    stale.push(`${what} : ${r.legend.some((c) => c.avg !== null) ? 'chiffres affichés' : 'aucun chiffre'}`);
+    await p.close();
+  }
+  check('moyennes de France : un fichier trop ancien, d’un autre mois ou d’un autre format n’affiche aucun chiffre', stale.every((t) => /aucun chiffre$/.test(t)), stale.join(' ; '));
+  // Janvier : sans champignon choisi, la grille d'indice montrerait les cèpes, hors saison. Elle ne
+  // dessine rien (ni champignon de chargement, ni « risque de chou blanc ») : le bandeau reste, pour
+  // dire de choisir. Puis au clavier : la puce choisie, ou la croix, retirent le bandeau sous le
+  // clavier, qui passe au bouton de la légende au lieu de repartir du début de la page.
+  const winter = await context.newPage();
+  await installMocks(winter, { tms: [], wmts: [], geocode: [], other: [] }, { mois: 1 });
+  await winter.goto(`${base}#carte=5.5/46.5/2.5`);
+  await waitForMap(winter);
+  await winter.evaluate(() => window.store.update({ mushroom: null, weatherMode: 'indice', legendOpen: false }));
+  await winter.waitForTimeout(400);
+  const january = await read(winter);
+  const keyboard = async (selector) => {
+    await winter.locator(selector).focus();
+    await winter.keyboard.press('Enter');
+    await winter.waitForTimeout(300);
+    return winter.evaluate(() => ({ focus: document.activeElement?.id ?? '', mushroom: window.store.state.mushroom, shown: document.getElementById('choose-hint').getClientRects().length > 0 }));
+  };
+  const chosen = await keyboard('#choose-hint .chip--mushroom:nth-of-type(3)');
+  await winter.evaluate(() => window.store.update({ mushroom: null }));
+  await winter.waitForTimeout(300);
+  const reshown = await read(winter);
+  const crossed = await keyboard('#choose-hint .grid-verdict__close');
+  check(
+    'janvier, grille d’indice allumée sans champignon (les cèpes, hors saison, ne dessinent rien) : le bandeau reste affiché',
+    january.shown && january.state.mode === 'indice' && january.state.mushroom === null && reshown.shown,
+    `bandeau : ${january.shown}, puis de nouveau : ${reshown.shown}`,
+  );
+  check(
+    'clavier : la puce choisie, ou la croix, retirent le bandeau ; le clavier passe au bouton de la légende',
+    chosen.mushroom === 'trompette' && !chosen.shown && chosen.focus === 'legend-toggle' && !crossed.shown && crossed.focus === 'legend-toggle',
+    `après la puce : ${JSON.stringify(chosen)} ; après la croix : ${JSON.stringify(crossed)}`,
+  );
+  await winter.close();
+  check('bandeau et puces : aucune erreur de page', errors.length === 0, errors.join(' | '));
+  await context.close();
+
+  // Téléphone : le bandeau tient à gauche de la colonne de boutons, ses puces se touchent ; la légende
+  // ouverte (mêmes puces) le remplace.
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  await preAccept(phone);
+  const page3 = await phone.newPage();
+  await installMocks(page3, { tms: [], wmts: [], geocode: [], other: [] }, { france: { moyennes: { cepe: 41, girolle: 12, trompette: 55, chanterelle: 60 }, carres: {} } });
+  await page3.goto(`${base}#carte=5.5/46.5/2.5`);
+  await waitForMap(page3);
+  await page3.waitForFunction(() => document.querySelector('#choose-hint .chip__avg:not([hidden])') !== null, null, { timeout: 8000 }).catch(() => {});
+  const layout = await page3.evaluate(() => {
+    const box = document.querySelector('#choose-hint .grid-verdict__box').getBoundingClientRect();
+    const tools = document.getElementById('toolbar-top').getBoundingClientRect();
+    const search = document.getElementById('search').getBoundingClientRect();
+    const reach = [...document.querySelectorAll('#choose-hint .chip, #choose-hint .grid-verdict__close')].every((el) => {
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return top === el || el.contains(top);
+    });
+    return { left: Math.round(box.left), right: Math.round(box.right), top: Math.round(box.top), height: Math.round(box.height), tools: Math.round(tools.left), search: Math.round(search.bottom), reach, scroll: document.documentElement.scrollWidth > window.innerWidth };
+  });
+  await page3.locator('#choose-hint').getByRole('button', { name: 'Girolles', exact: true }).tap();
+  await page3.waitForTimeout(300);
+  const tapped = await read(page3);
+  await page3.evaluate(() => window.store.update({ mushroom: null, weatherMode: 'off' }));
+  await page3.locator('#legend-toggle').tap();
+  await page3.waitForTimeout(400);
+  const withLegend = await read(page3);
+  check(
+    'téléphone : bandeau sous la recherche, à gauche de la colonne de boutons, sans défilement ; croix et puces se touchent, un toucher choisit le champignon',
+    layout.left >= 0 && layout.right <= layout.tools && layout.top >= layout.search && layout.reach && !layout.scroll && layout.height < 240 && tapped.state.mushroom === 'girolle' && !tapped.shown,
+    JSON.stringify(layout),
+  );
+  check('téléphone : la légende ouverte (mêmes puces) remplace le bandeau', !withLegend.shown && withLegend.state.mushroom === null, `bandeau : ${withLegend.shown}`);
+  await phone.close();
+
+  // « La carte en 3 gestes » : un trait fléché part de l'épingle du coin touché et mène à son bilan
+  // (panneau de droite sur grand écran, tiroir du bas sur téléphone).
+  const links = [];
+  for (const [name, viewport, mobile] of [['grand écran', { width: 1280, height: 860 }, false], ['téléphone', { width: 390, height: 844 }, true]]) {
+    const first = await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile });
+    const p = await first.newPage();
+    await installMocks(p, { tms: [], wmts: [], geocode: [], other: [] });
+    await p.goto(`${base}#carte=5.5/46.5/2.5`);
+    await p.waitForFunction(() => {
+      const b = [...document.querySelectorAll('dialog.disclaimer button')].find((x) => /accepte/.test(x.textContent));
+      return b && !b.disabled;
+    }, null, { timeout: 30000 });
+    await p.locator('dialog.disclaimer button', { hasText: 'accepte' }).click();
+    await p.waitForSelector('#tour-heading', { timeout: 8000 });
+    await p.waitForTimeout(400);
+    links.push({
+      name,
+      ...(await p.evaluate(() => {
+        const screen = [...document.querySelectorAll('.tour__screen')].find((s) => getComputedStyle(s).display !== 'none');
+        const r = (sel) => screen.querySelector(sel).getBoundingClientRect();
+        const link = r('.tour-link');
+        const pin = r('.tour-map__pin');
+        const wide = screen.classList.contains('tour__screen--wide');
+        const target = wide ? [...screen.querySelectorAll('.tour-panel')].pop().getBoundingClientRect() : r('.tour-phone__sheet');
+        const d = (v) => Math.round(v);
+        return wide
+          ? { wide, count: screen.querySelectorAll('.tour-link').length, start: d(link.left - pin.right), end: d(target.left - link.right), across: d(Math.abs((link.top + link.bottom) / 2 - (pin.top + pin.bottom) / 2)), length: d(link.width), hidden: screen.getAttribute('aria-hidden') }
+          : { wide, count: screen.querySelectorAll('.tour-link').length, start: d(link.top - pin.bottom), end: d(target.top - link.bottom), across: d(Math.abs((link.left + link.right) / 2 - (pin.left + pin.right) / 2)), length: d(link.height), hidden: screen.getAttribute('aria-hidden') };
+      })),
+    });
+    await first.close();
+  }
+  check(
+    'accueil en 3 gestes : un trait fléché relie l’épingle du coin touché à son bilan (à droite sur grand écran, en bas sur téléphone), schéma toujours décoratif',
+    links.length === 2 && links[0].wide && !links[1].wide && links.every((l) => l.count === 1 && l.hidden === 'true' && Math.abs(l.start) <= 6 && l.end >= 0 && l.end <= 22 && l.across <= 6 && l.length >= 12),
+    links.map((l) => `${l.name} : part à ${l.start} px de l’épingle, finit à ${l.end} px du bilan, ${l.length} px de long, décalé de ${l.across} px`).join(' ; '),
+  );
+}
+
 /** Fichiers météo communs injoignables : la carte interroge Open-Meteo elle-même, avec mesure. */
 async function fallbackTests(browser, base) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -1994,7 +2275,7 @@ async function fallbackTests(browser, base) {
   await installMocks(page, log, { meteoCommune: false });
   await page.goto(`${base}#carte=10.5/45.92/6.19`);
   await waitForMap(page);
-  await page.getByRole('button', { name: 'Cèpes', exact: true }).click();
+  await page.locator('#legend').getByRole('button', { name: 'Cèpes', exact: true }).click();
   await page.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 0, null, { timeout: 15000 });
   const status = await page.evaluate(() => [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '');
   check(
@@ -2047,7 +2328,7 @@ async function fallbackTests(browser, base) {
   await installMocks(page2, log2, { meteoCommune: 'ancienne' });
   await page2.goto(`${base}#carte=10.5/44.5/3.1`); // ailleurs : pas dans le cache du jour de la page précédente
   await waitForMap(page2);
-  await page2.getByRole('button', { name: 'Cèpes', exact: true }).click();
+  await page2.locator('#legend').getByRole('button', { name: 'Cèpes', exact: true }).click();
   await page2.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 0, null, { timeout: 15000 });
   check(
     'secours : fichiers communs trop anciens, Open-Meteo interrogé, aucun bloc lu',
@@ -2062,7 +2343,7 @@ async function fallbackTests(browser, base) {
   await installMocks(page3, log3, { meteoCommune: 'provisoire' });
   await page3.goto(`${base}#carte=10.5/45.92/6.19`);
   await waitForMap(page3);
-  await page3.getByRole('button', { name: 'Cèpes', exact: true }).click();
+  await page3.locator('#legend').getByRole('button', { name: 'Cèpes', exact: true }).click();
   await page3.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 0, null, { timeout: 15000 });
   const status3 = await page3.evaluate(() => [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '');
   check(
@@ -2090,7 +2371,7 @@ async function fallbackTests(browser, base) {
   await installMocks(page5, { tms: [], wmts: [], geocode: [], other: [] }, { foret: false });
   await page5.goto(`${base}#carte=10.5/45.92/6.19`);
   await waitForMap(page5);
-  await page5.getByRole('button', { name: 'Cèpes', exact: true }).click();
+  await page5.locator('#legend').getByRole('button', { name: 'Cèpes', exact: true }).click();
   await page5.waitForFunction(() => window.map.querySourceFeatures('meteo').length > 0, null, { timeout: 15000 });
   const blind = await page5.evaluate(() => ({
     covers: [...new Set(window.map.querySourceFeatures('meteo').map((f) => f.properties.c))],
@@ -2131,13 +2412,13 @@ async function fallbackTests(browser, base) {
   await page7.goto(`${base}#carte=13.6/45.92/6.19`);
   await waitForMap(page7);
   await page7.evaluate(() => window.store.update({ mushroom: null, weatherMode: 'off' })); // l'état gardé par le navigateur vient des pages précédentes
-  await page7.getByRole('button', { name: 'Trompettes', exact: true }).click();
+  await page7.locator('#legend').getByRole('button', { name: 'Trompettes', exact: true }).click();
   await page7.waitForTimeout(1500);
   await idle(page7);
   const july = await page7.evaluate(() => {
-    const chip = [...document.querySelectorAll('.chip--mushroom')].find((b) => b.textContent === 'Trompettes');
+    const chip = [...document.querySelectorAll('#legend .chip--mushroom')].find((b) => b.textContent === 'Trompettes');
     return {
-      dormant: [...document.querySelectorAll('.chip--dormant')].map((b) => b.textContent).join(),
+      dormant: [...document.querySelectorAll('#legend .chip--dormant')].map((b) => b.textContent).join(),
       chip: chip?.classList.contains('chip--dormant'),
       mode: window.store.state.weatherMode,
       sources: ['meteo', 'meteo-points', 'meteo-fin'].map((id) => window.map.querySourceFeatures(id).length).join(),
@@ -2375,6 +2656,7 @@ try {
   await group('secours', () => fallbackTests(browser, server.url));
   await group('cache', () => surveyCacheTests(browser, server.url));
   await group('vide', () => emptyViewTests(browser, server.url));
+  await group('choix', () => chooseTests(browser, server.url));
   await group('telephone', () => mobileTests(browser, server.url));
   await group('vues', () => viewTests({ browser, base: server.url, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour }));
 } finally {

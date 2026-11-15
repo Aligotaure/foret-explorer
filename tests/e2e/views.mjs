@@ -49,7 +49,7 @@ const geometry = (page) =>
       'boutons du bas': document.getElementById('toolbar-bottom'),
       légende: document.getElementById('legend'),
       bilan: document.getElementById('spot'),
-      'bandeau de zoom': document.getElementById('zoom-hint'),
+      'bandeau du haut': document.querySelector('#choose-hint .grid-verdict__box'),
     };
     // Écart le plus faible entre l'îlot et un contrôle visible (négatif : ils se chevauchent).
     const gaps = {};
@@ -70,12 +70,13 @@ const geometry = (page) =>
       return Boolean(top) && (top === el || el.contains(top));
     };
     const buttons = [
-      ...document.querySelectorAll('#legend-toggle, .search__input, .search__submit, #toolbar-top > *, #toolbar-bottom button, #spot .panel__close, #legend .panel__close, .zoom-hint__btn'),
+      ...document.querySelectorAll('#legend-toggle, .search__input, .search__submit, #toolbar-top > *, #toolbar-bottom button, #spot .panel__close, #legend .panel__close, #choose-hint .grid-verdict__close, #choose-hint .chip'),
     ].filter(shown);
     // Boutons de la carte recouverts par l'îlot.
     const masked = buttons.filter((el) => document.getElementById('view-switch').contains(topAt(el))).map((el) => el.getAttribute('aria-label') ?? el.textContent);
     const spotClose = document.querySelector('#spot .panel__close');
-    const hintButton = document.querySelector('.zoom-hint__btn');
+    // Le bandeau « Choisissez un champignon » : sa croix et chacune de ses puces doivent pouvoir se toucher.
+    const hintButtons = [...document.querySelectorAll('#choose-hint .grid-verdict__close, #choose-hint .chip')];
     const links = [...document.querySelectorAll('.island__link')].map((a) => ({ w: Math.round(box(a).width), h: Math.round(box(a).height) }));
     return {
       island: { left: Math.round(bar.left), right: Math.round(bar.right), top: Math.round(bar.top), bottom: Math.round(bar.bottom), centre: Math.round((bar.left + bar.right) / 2) },
@@ -84,7 +85,7 @@ const geometry = (page) =>
       masked,
       islandReachable: [...document.querySelectorAll('.island__link')].every(reachable),
       spotClose: shown(spotClose) ? reachable(spotClose) : null,
-      hintButton: shown(hintButton) ? reachable(hintButton) : null,
+      hintButton: hintButtons.some(shown) ? hintButtons.filter(shown).every(reachable) : null,
       links,
       scroll: document.documentElement.scrollWidth > window.innerWidth,
     };
@@ -645,7 +646,9 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     watch(page);
     await installMocks(page, { tms: [], wmts: [], geocode: [], other: [] });
     const rows = [];
-    // France entière (bandeau « Zoomez… » affiché), légende ouverte sur grand écran, puis bilan ouvert.
+    // France entière, aucun champignon choisi : bandeau « Choisissez un champignon » sur téléphone
+    // (légende fermée), pas sur grand écran (légende ouverte, mêmes puces) ; puis bilan ouvert (sur
+    // téléphone, son tiroir remplace le bandeau).
     // La mise en page de la carte se décide au chargement (plus ou moins de 641 px) : deux chargements.
     for (const group of [
       [280, 320, 360, 390, 414, 640],
@@ -671,7 +674,7 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     const worst = (g) => Math.min(...Object.values(g.gaps));
     const tight = rows.filter((r) => r.width >= 320 && (worst(r.closed) < 6 || worst(r.open) < 6));
     // Rien n'est mesuré à vide : chaque contrôle attendu à cette largeur a bien été trouvé à l'écran.
-    const expected = (r, open) => ['bouton légende', 'recherche', 'boutons du haut', 'boutons du bas', 'bandeau de zoom', ...(r.width > 640 ? ['légende'] : []), ...(open ? ['bilan'] : [])];
+    const expected = (r, open) => ['bouton légende', 'recherche', 'boutons du haut', 'boutons du bas', ...(!open && r.width <= 640 ? ['bandeau du haut'] : []), ...(r.width > 640 ? ['légende'] : []), ...(open ? ['bilan'] : [])];
     const unmeasured = rows.filter((r) => !expected(r, false).every((name) => name in r.closed.gaps) || !expected(r, true).every((name) => name in r.open.gaps));
     check(
       'îlot : aucun chevauchement avec les contrôles de la carte, de 320 à 1920 px (bilan ouvert ou fermé)',
@@ -686,15 +689,16 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
       masked.length === 0,
       masked.map((r) => `${r.width} px : ${[...r.closed.masked, ...r.open.masked].join(', ') || 'îlot recouvert'}`).join(' ; '),
     );
-    // Entre 641 et 1127 px, le bilan s'ouvre une rangée plus bas, là où passe le bandeau « Zoomez… ».
+    // Entre 641 et 1127 px, le bilan s'ouvre une rangée plus bas, là où passent les bandeaux du haut.
     const closeHidden = rows.filter((r) => r.width > 640 && r.open.spotClose !== true);
     check('bilan : son bouton « Fermer » reste atteignable à toutes les largeurs de bureau', closeHidden.length === 0, closeHidden.map((r) => `${r.width} px`).join(', '));
     const hintHidden = rows.filter((r) => r.width <= 640 && r.closed.hintButton !== true);
-    check('mobile : bouton « Zoomer ici » du bandeau entièrement dégagé des boutons de droite', hintHidden.length === 0, hintHidden.map((r) => `${r.width} px`).join(', '));
-    // Bureau : le bandeau reste cliquable, bilan ouvert compris (à partir de 834 px ; plus étroit, il
-    // déborde déjà de l'écran quand la légende est ouverte, comme avant l'îlot).
-    const hintUnder = rows.filter((r) => r.width >= 834 && (r.closed.hintButton !== true || r.open.hintButton !== true));
-    check('bureau : bouton « Zoomer ici » cliquable, bilan ouvert ou fermé', hintUnder.length === 0, hintUnder.map((r) => `${r.width} px`).join(', '));
+    check('mobile : bandeau « Choisissez un champignon », croix et puces entièrement dégagées des boutons de droite', hintHidden.length === 0, hintHidden.map((r) => `${r.width} px`).join(', '));
+    const hintGone = rows.filter((r) => r.width <= 640 && r.open.hintButton !== null);
+    check('mobile : le tiroir du bilan remplace le bandeau « Choisissez un champignon »', hintGone.length === 0, hintGone.map((r) => `${r.width} px`).join(', '));
+    // Bureau : la légende est ouverte, ses puces sont à l'écran : pas de bandeau.
+    const hintUnder = rows.filter((r) => r.width > 640 && (r.closed.hintButton !== null || r.open.hintButton !== null));
+    check('bureau, légende ouverte : pas de bandeau « Choisissez un champignon » (les puces sont dans la légende)', hintUnder.length === 0, hintUnder.map((r) => `${r.width} px`).join(', '));
     const small = rows.filter((r) => r.closed.links.some((l) => l.h < 44 || l.w < 44));
     const off = rows.filter((r) => r.closed.island.left < 0 || r.closed.island.right > r.width || r.closed.island.top !== 8 || r.closed.scroll || r.open.scroll);
     const centred = rows.filter((r) => (r.width <= 640 || r.width >= 1188) && Math.abs(r.closed.island.centre - r.width / 2) > 1);
@@ -715,7 +719,7 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
         page.evaluate(() => {
           const shown = (el) => el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
           const edge = (sel, side) => (shown(document.querySelector(sel)) ? Math.round(document.querySelector(sel).getBoundingClientRect()[side]) : null);
-          return { search: edge('.search', 'bottom'), hint: edge('#zoom-hint', 'bottom'), spot: edge('#spot', 'top'), legend: edge('#legend', 'top') };
+          return { search: edge('.search', 'bottom'), hint: edge('#choose-hint .grid-verdict__box', 'bottom'), spot: edge('#spot', 'top'), legend: edge('#legend', 'top') };
         });
       await page.mouse.click(width <= 640 ? Math.round(width / 2) : 450, 250);
       await page.waitForFunction(() => !document.getElementById('spot').hidden);
@@ -736,12 +740,13 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
         !r.withSpot.islandReachable ||
         Math.min(...Object.values(r.withSpot.gaps)) < 6 ||
         r.withSpot.spotClose !== true ||
-        (r.phone && (r.withSpot.hint === null || r.withSpot.spot < r.withSpot.hint || r.withSpot.spot < r.withSpot.search + 4 || r.withLegend.legend < r.withLegend.hint || r.withLegend.legend < r.withLegend.search + 4)),
+        // Téléphone : un tiroir ouvert remplace le bandeau, et s'arrête sous la recherche.
+        (r.phone && (r.withSpot.hint !== null || r.withSpot.spot < r.withSpot.search + 4 || r.withLegend.hint !== null || r.withLegend.legend < r.withLegend.search + 4)),
     );
     check(
-      'écran bas (téléphone couché) : îlot dégagé, tiroirs arrêtés sous la recherche et le bandeau',
+      'écran bas (téléphone couché) : îlot dégagé, tiroirs arrêtés sous la recherche, bandeau retiré quand un tiroir est ouvert',
       lowBad.length === 0,
-      low.map((r) => `${r.size} : bilan à ${r.withSpot.spot} px${r.phone ? `, légende à ${r.withLegend.legend} px, bandeau jusqu’à ${r.withSpot.hint} px` : ''}`).join(' ; '),
+      low.map((r) => `${r.size} : bilan à ${r.withSpot.spot} px${r.phone ? `, légende à ${r.withLegend.legend} px, bandeau ${r.withSpot.hint === null ? 'retiré' : `jusqu’à ${r.withSpot.hint} px`}` : ''}`).join(' ; '),
     );
     await context.close();
   }

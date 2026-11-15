@@ -667,27 +667,11 @@ li.is-off .swatch {
   text-align: center;
 }
 
-/* ── Bandeau de zoom, message temporaire ──────────────────────────────────── */
-.zoom-hint {
-  position: absolute;
-  z-index: 2;
-  top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
-  left: 50%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 6px 6px 14px;
-  border-radius: var(--radius);
-  background: var(--navy-800);
-  box-shadow: var(--shadow);
-  font-size: 14px;
-  white-space: nowrap;
-  transform: translateX(-50%);
-}
+/* ── Message temporaire, bandeaux du haut de la carte ─────────────────────── */
 
 /* ── Calcul des carrés en cours : champignon qui se remplit (gridLoader.ts) ──
-   À la place du bandeau « Zoomez… » : l'un ne s'affiche que sous le zoom 10, l'autre à partir du
-   zoom 11. Il ne prend aucun geste à la carte. */
+   Même emplacement que les bandeaux « Choisissez un champignon » et « risque de chou blanc »,
+   jamais avec eux. Il ne prend aucun geste à la carte. */
 .grid-loader {
   position: absolute;
   z-index: 2;
@@ -780,16 +764,6 @@ li.is-off .swatch {
 
 .btn-square[aria-disabled='true']:hover {
   background: var(--navy-800);
-}
-
-.zoom-hint__btn {
-  padding: 6px 12px;
-  border: 0;
-  border-radius: var(--radius);
-  background: var(--accent);
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .toast {
@@ -966,12 +940,44 @@ li.is-off .swatch {
   background: var(--navy-700);
 }
 
-/* ── Grand écran : le bandeau de zoom évite la légende ouverte ───────────── */
-@media (min-width: 641px) {
-  #app.legend-open .zoom-hint {
-    left: max(50%, calc(var(--panel-width) + 2 * var(--gap) + 200px));
-  }
+/* ── « Choisissez un champignon » (chooseHint.ts) : même emplacement, même boîte, avec les puces ── */
+.choose-hint__box {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 4px 8px;
+  max-width: 660px;
+  padding-bottom: 9px;
+}
 
+.choose-hint__title {
+  margin: 0;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Les puces et leur légende prennent toute la largeur de la boîte, sous le titre. */
+.choose-hint__box .presets,
+.choose-hint__caption {
+  grid-column: 1 / -1;
+  padding-right: 4px;
+}
+
+.choose-hint__caption {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+/* Légende ouverte : elle porte les mêmes puces, le bandeau n'a rien à y ajouter (et, sur un écran
+   moyen, il ne resterait pas la place de l'afficher entre la légende et le bilan). */
+#app.legend-open .choose-hint {
+  display: none;
+}
+
+/* ── Grand écran : les bandeaux évitent la légende ouverte ───────────────── */
+@media (min-width: 641px) {
   #app.legend-open .grid-loader {
     left: max(50%, calc(var(--panel-width) + 2 * var(--gap) + 110px));
   }
@@ -1030,7 +1036,7 @@ li.is-off .swatch {
     display: none;
   }
 
-  /* Sous la recherche, et arrêté avant la colonne de boutons (qui cachait « Zoomer ici »). */
+  /* Sous la recherche, et arrêté avant la colonne de boutons. */
   .grid-loader {
     top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
   }
@@ -1041,24 +1047,10 @@ li.is-off .swatch {
     justify-content: flex-start;
   }
 
-  .zoom-hint {
-    top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
-    right: calc(var(--btn) + 2 * var(--gap));
-    left: var(--gap);
-    justify-content: space-between;
-    white-space: normal;
-    transform: none;
-  }
-
-  .zoom-hint__btn {
-    flex: none;
-    white-space: nowrap;
-  }
-
-  /* Petit écran (moins de 620 px de haut) : tant que le bandeau est affiché, les tiroirs s'arrêtent
-     sous lui. Sans `:has()`, ils peuvent le recouvrir en partie, sans rien empêcher. */
-  #app:has(#zoom-hint:not([hidden])) .panel {
-    max-height: min(62%, calc(100% - 3 * var(--btn) - 6 * var(--gap) - var(--safe-top)));
+  /* « Choisissez un champignon » : le tiroir du bilan le remplace (haut de trois rangées de puces,
+     il passerait sous le tiroir). */
+  #app:has(#spot:not([hidden])) .choose-hint {
+    display: none;
   }
 }
 
@@ -1142,6 +1134,20 @@ li.is-off .swatch {
 .switch:checked::after {
   background: #fff;
   transform: translateX(15px);
+}
+
+/* Moyenne de France du champignon (franceStats.ts) : dans la puce, après le nom, en plus discret. */
+.chip__avg {
+  margin-left: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.chips-caption {
+  margin-top: 6px;
+  font-size: 11.5px;
 }
 
 .chip--mushroom[aria-pressed='true'] {
@@ -1318,18 +1324,24 @@ li.is-off .swatch {
 }
 
 /* Entre 641 et 1127 px, la première rangée ne peut pas porter la recherche, l'îlot et le bilan :
-   le bilan s'ouvre une rangée plus bas, comme la légende. Le bandeau « Zoomez… » descend d'une
-   rangée lui aussi : il passe sous l'en-tête du bilan, comme avant, sans lui prendre sa place. */
+   le bilan s'ouvre une rangée plus bas, comme la légende. Le champignon de chargement descend d'une
+   rangée lui aussi ; les bandeaux du haut (« Choisissez un champignon », « risque de chou blanc »)
+   se retirent tant que le bilan est ouvert (voir plus bas). */
 @media (min-width: 641px) and (max-width: 1127px) {
   .panel--spot {
     top: calc(var(--btn) + 2 * var(--gap) + var(--safe-top));
     max-height: calc(100% - var(--btn) - 3 * var(--gap) - 40px - var(--safe-top));
   }
 
-  .zoom-hint,
   .grid-loader,
   .grid-verdict {
     top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
+  }
+
+  /* À ces largeurs, le bilan ouvert ne laisse pas la place d'un bandeau à côté de lui (28 px entre
+     la légende et lui sur un écran de 834 px) : le bilan répond déjà pour le coin touché. */
+  #app:has(#spot:not([hidden])) .grid-verdict {
+    display: none;
   }
 
   /* Bilan ouvert : le champignon se centre dans la place libre à sa gauche, au lieu de passer
@@ -1748,10 +1760,6 @@ summary.verdict__head::before {
     /* 70 % de l'écran, sans jamais monter sur la recherche (téléphone couché) */
     max-height: min(70%, calc(100% - 2 * var(--btn) - 4 * var(--gap) - var(--safe-top)));
   }
-
-  #app:has(#zoom-hint:not([hidden])) .panel--spot {
-    max-height: min(70%, calc(100% - 3 * var(--btn) - 6 * var(--gap) - var(--safe-top)));
-  }
 }
 
 .spot__value {
@@ -1963,6 +1971,54 @@ a.btn-square {
 
 .tour__screen--phone {
   display: none;
+}
+
+/* Du coin touché à son bilan : un trait fléché, de la couleur de l'épingle (pas en vert : sur ce
+   schéma le vert est une forêt), bordé de blanc pour se lire sur la carte comme sur les carrés. */
+.tour-link {
+  position: absolute;
+  z-index: 1;
+  background: var(--accent);
+  box-shadow: 0 0 0 1.5px #fff;
+}
+
+.tour-link::after {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 6px solid transparent;
+  content: '';
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff);
+}
+
+/* Grand écran : de l'épingle (60 % ; 56 % de la carte) jusqu'au bord du panneau « Ce coin ». */
+.tour-link--wide {
+  top: calc(56% + 6px);
+  right: 9px;
+  left: calc(60% + 16px);
+  height: 3px;
+}
+
+.tour-link--wide::after {
+  top: -4.5px;
+  right: -9px;
+  border-left-color: var(--accent);
+  border-right-width: 0;
+}
+
+/* Téléphone : de l'épingle (66 % ; 41 %) vers le tiroir du bas, qui occupe 40 % de l'écran. */
+.tour-link--phone {
+  top: calc(41% + 18px);
+  bottom: calc(40% + 9px);
+  left: calc(66% + 5.5px);
+  width: 3px;
+}
+
+.tour-link--phone::after {
+  bottom: -9px;
+  left: -4.5px;
+  border-top-color: var(--accent);
+  border-bottom-width: 0;
 }
 
 .tour-panel {

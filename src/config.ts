@@ -60,13 +60,20 @@ export const GLYPHS_URL = `${GEOPF}/annexes/ressources/vectorTiles/fonts/{fontst
 export const LABEL_FONT = 'Source Sans Pro Regular';
 
 /**
+ * Adresse de la page, pour situer les données servies avec le site. Ce fichier est aussi lu hors
+ * navigateur (scripts/meteo/france.mjs, qui calcule les moyennes de France à la publication) : il
+ * n'y a alors pas de page, et aucune de ces adresses ne sert.
+ */
+const PAGE = typeof document === 'undefined' ? 'http://localhost/' : document.baseURI;
+
+/**
  * Fichiers météo communs (cases d'environ 18 km sur toute la France, 30 derniers jours), produits
  * chaque jour par la tâche GitHub `meteo.yml` et publiés avec le site. En développement, on lit
  * ceux du site en ligne.
  */
 export const METEO_BASE = import.meta.env.DEV
   ? 'https://aligotaure.github.io/foret-explorer/data/meteo/'
-  : new URL('data/meteo/', document.baseURI).href;
+  : new URL('data/meteo/', PAGE).href;
 
 /**
  * Parts de forêt de chaque carré de 4,5 km (scripts/foret/parts.mjs ; fichier versionné, servi avec le
@@ -77,7 +84,7 @@ export const METEO_BASE = import.meta.env.DEV
  * Seuil relevé de 5 à 10 % le 14/11/2026 : à 5 %, 85 % des carrés de France s'allumaient pour les
  * cèpes, donc presque toutes les villes et tous les villages (72 % à 10 %).
  */
-export const FOREST_SHARE_URL = new URL('foret/parts.json', document.baseURI).href;
+export const FOREST_SHARE_URL = new URL('foret/parts.json', PAGE).href;
 export const HOST_MIN_COVER = 0.1;
 export const HOST_FULL_COVER = 0.5;
 /**
@@ -195,7 +202,7 @@ export const archiveTiles = (url: string): string => `pmtiles://${url}/{z}/{x}/{
 
 export const GEOLOGY_TILES_BASE = import.meta.env.DEV
   ? 'https://aligotaure.github.io/foret-explorer/data/geologie/'
-  : new URL('data/geologie/', document.baseURI).href;
+  : new URL('data/geologie/', PAGE).href;
 
 export const GEOLOGY = {
   sourceLayer: 'geologie',
@@ -215,7 +222,7 @@ export const GEOLOGY = {
  */
 export const ZONES_BASE = import.meta.env.DEV
   ? 'https://aligotaure.github.io/foret-explorer/data/zones/'
-  : new URL('data/zones/', document.baseURI).href;
+  : new URL('data/zones/', PAGE).href;
 
 export const ZONES = {
   protectedLayer: 'protection',

@@ -72,6 +72,11 @@ https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
   calcul des parts de forêt, lecteur de tuiles, fichier versionné ; lui seul tourne en local).
   `node tests/geologie.mjs non` liste les formations encore sans sol, `sol <id>` et `grep <motif>`
   servent à régler les règles.
+- `npm run test:france` : le calcul des moyennes de France par champignon (chiffre des puces), joué
+  sur des fichiers météo fabriqués par le test ; tourne en local (il lui faut Vite). Pour fabriquer
+  le fichier en local à partir de la météo du site en ligne (les puces du serveur de développement
+  l'affichent alors) : `node scripts/meteo/france.mjs --meteo .cache/meteo-en-ligne --amorce
+  https://aligotaure.github.io/foret-explorer/data/meteo/ --sortie public/data/meteo/france.json`.
 
 Après chaque modification : `npm run check` puis `npm run test:e2e` (`npm run test:donnees` si
 `scripts/`, `src/meteoGrid.ts` ou `src/metricsSchema.ts` changent ; `npm test` dans `worker/` si le
@@ -119,6 +124,8 @@ nouvelle dépendance sans raison.
 | `spot.ts` | Bilan d'un coin au clic, la réponse d'abord : zone protégée, terrain (forêt, sol, altitude, statut), une ligne par champignon, bouton « ? », pluie, règles repliées |
 | `search.ts` | Recherche de lieu (autocomplétion de la Géoplateforme) |
 | `toolbar.ts` | Boutons : légende, fond de carte, géolocalisation, plein écran, zoom |
+| `chooseHint.ts` | Bandeau « Choisissez un champignon » (`#choose-hint`), avec les puces, tant qu'aucun n'est choisi ; il a remplacé « Zoomez pour filtrer les types de forêt » |
+| `franceStats.ts` | Moyenne de France par champignon (chiffre des puces) : le calcul, lancé à la publication par `scripts/meteo/france.mjs`, et la lecture de `data/meteo/france.json` par la carte |
 | `gridLoader.ts` | Calcul des carrés en cours : champignon qui se remplit (`#grid-loader`) et zoom en pause, pilotés par `MeteoLayer.onBusy` ; puis, si la vue n'a rien à 50 % ou plus, le bandeau « risque de chou blanc » (`#grid-verdict`, `MeteoLayer.onVerdict`) |
 | `counts.ts` | Nombre de polygones par type dans les tuiles affichées |
 | `dom.ts`, `icons.ts` | Utilitaires DOM (`h()`, `toast()`…), icônes SVG |
@@ -129,7 +136,9 @@ PMTiles), `regles.mjs` (règles de classement des descriptions géologiques en n
 `info.json` : provenance, départements, emprise et zooms lus dans l'en-tête de l'archive, surfaces par sol).
 `scripts/meteo/` : `mettre-a-jour.mjs` (fichiers météo communs, voir « Météo commune »), `cases.mjs`
 (liste des cases qui touchent la France, d'après ADMIN EXPRESS, et altitude IGN de leurs carrés de
-4,5 km), `cases-france.json` (versionné).
+4,5 km), `cases-france.json` (versionné), `france.mjs` (moyennes de France par champignon →
+`data/meteo/france.json`, à chaque publication : il fabrique avec Vite une version de
+`src/franceStats.ts` lisible par Node, dans `.cache/france/`, et l'appelle).
 `scripts/foret/` : `parts.mjs` (parts de forêt par carré de 4,5 km → `public/foret/parts.json`,
 versionné), `mvt.mjs` (lecteur de tuiles vectorielles sans dépendance), `geometrie.mjs` (aires,
 découpage d'un anneau par un rectangle, tuiles XYZ).
@@ -301,8 +310,8 @@ Depuis : à partir du zoom `GRID_BUSY_MIN_ZOOM` (11), en mode indice et pour un 
 de mode ou de champignon, jusqu'à l'arrivée des tuiles des carrés et des forêts détaillées (premier
 dessin des carrés de 500 m : on n'attend ni leurs altitudes, ni le fond de carte, ni les zones). Un
 seul travail a le droit d'annoncer la fin : le dernier lancé (`work`). Pendant ce temps, un champignon
-se remplit à la place du bandeau « Zoomez… » (jamais ensemble : l'un sous le zoom 10, l'autre à partir
-du zoom 11 ; affiché seulement si le calcul dure plus d'un quart de seconde) et le zoom ne répond
+se remplit à l'emplacement des bandeaux du haut (jamais avec eux ; affiché seulement si le calcul
+dure plus d'un quart de seconde) et le zoom ne répond
 plus : molette, pincement, double clic, cadre de zoom, touches + et −, boutons + et −. Se déplacer
 reste possible ; la recherche de lieu et la géolocalisation aussi.
 - **Bornes** : la pause dure `GRID_BUSY_MAX_MS` (8 s) au plus depuis son début (un déplacement ne
@@ -411,6 +420,61 @@ Mesuré le 14/11/2026 sur une vue où tout est défavorable (Bourges, cèpes, é
 change pas de façon mesurable** (156 à 282 ms avant, 143 à 321 ms après, machine chargée : les forêts
 pèsent bien plus que cent petits carrés). Le gain est dans les appels et dans la lisibilité, pas dans
 la fluidité.
+
+**« Choisissez un champignon » et moyenne de France sur les puces** (demandes de Clément du
+15/11/2026 ; `chooseHint.ts`, `franceStats.ts`, `mushroomChip` et `pickMushroom` de
+`legendExtras.ts`, `scripts/meteo/france.mjs`).
+- **Bandeau** (`#choose-hint`, à l'emplacement des bandeaux du haut) : tant qu'aucun champignon
+  n'est choisi, que la grille d'indice n'a rien à montrer **et que la légende est fermée**, à tous
+  les zooms. (Grille d'indice allumée sans champignon : elle montre les cèpes, donc pas de bandeau,
+  sauf de janvier à avril où, hors saison, elle ne dessine rien.) Quand il se retire alors que le
+  clavier y était (puce choisie, croix), le clavier passe au bouton de la légende. Les cinq puces sont dedans (un geste, sans ouvrir la légende) ; on n'écrit pas « à
+  gauche », faux sur téléphone. Il se ferme pour la visite (croix). Légende ouverte, pas de bandeau :
+  elle porte les mêmes puces (c'est le cas à la première visite sur grand écran ; le bandeau sert
+  surtout sur téléphone, où la légende est un tiroir fermé). Il recouvre le haut de la carte : un
+  clic dessus n'atteint pas la carte. Il a pris la place de « Zoomez pour filtrer les types de
+  forêt », que la légende dit dans « Types de forêt » (le bouton « Zoomer ici » a disparu avec lui).
+- **Bilan ouvert** : sous 1128 px de large, il remplace les bandeaux du haut (« Choisissez un
+  champignon » à toutes ces largeurs, « risque de chou blanc » entre 641 et 1127 px) : entre la
+  légende et lui il ne reste que 28 px sur un écran de 834 px. Sur téléphone, « risque de chou
+  blanc » reste au-dessus du tiroir.
+- **Puce** (`mushroomChip`, la même dans la légende et le bandeau) : le nom, puis la moyenne de
+  France en plus petit (« Trompettes 40 % »). Le nom accessible reste le nom seul (chiffre
+  `aria-hidden`, redit dans `aria-describedby` avec « hors saison (…) ») : deux boutons portent donc
+  le même nom quand le bandeau est affiché, les tests visent ceux de `#legend`. `pickMushroom`
+  choisit le champignon, ses forêts hôtes et la grille d'indice ; la proposition du bandeau « risque
+  de chou blanc » passe par lui aussi (avant, elle ne changeait pas les forêts affichées).
+- **Moyenne de France** : moyenne des chances estimées sur les carrés de 4,5 km que la carte peut
+  allumer pour ce champignon (`isLit` : 10 % d'arbres hôtes, moins de 15 % de bâti), chaque carré
+  comptant pour un, calculés comme la carte (`squareScore`). Villes, plaines sans hôtes et mer n'y
+  sont pas. Pas de chiffre pour un champignon sans estimation ce mois-ci. Le 14/11/2026 : cèpes
+  18 %, girolles 17 %, trompettes 46 %, chanterelles en tube 48 % (20 025, 19 566, 19 034 et 6 622
+  carrés). **Elle écrase les régions** (cèpes à 18 % avec 500 carrés à 70 % ou plus, 7 % des
+  carrés à 50 % ou plus) : elle classe les champignons entre eux, rien de plus ; la légende sous les
+  puces le dit (« chance estimée moyenne en France, là où poussent ses arbres hôtes »).
+- **Calculée à la publication, pas dans le navigateur** : tant qu'aucun champignon n'est choisi la
+  carte ne charge aucun fichier météo (vérifié : 0 requête) ; la calculer sur place coûterait à
+  chaque visite 45 fichiers (325 ko compressés) et 0,1 à 0,25 s de calcul. `deploy.yml` lance
+  `scripts/meteo/france.mjs` après les tests de données et avant la construction du site, en
+  `continue-on-error` (elle ne doit jamais bloquer la publication) ; il écrit
+  `public/data/meteo/france.json` (216 octets : `v`, `maj`, `jour`, `mois`, `moyennes`, `carres`).
+  L'étape écrit d'abord un fichier vide, que le calcul remplace : il y a donc toujours un fichier
+  (absent, il laisserait une erreur 404 dans la console à chaque visite).
+  La carte le lit une fois par visite et n'affiche rien s'il manque, s'il est d'un autre format, si
+  son dernier jour a plus de 4 jours, ou s'il a été calculé un autre mois (les saisons ont pu
+  changer). Le script ne recopie pas l'indice : `vite build --ssr` (API de Vite, aucune dépendance
+  en plus) en 0,1 s ; `config.ts` se charge donc aussi hors navigateur (`PAGE`).
+- Le chiffre date de la dernière publication (une par jour, la nuit d'ordinaire) : la carte, elle,
+  calcule avec le jour courant ; entre deux publications les deux peuvent différer d'un jour de
+  délai après la pluie.
+- Relecture du 15/11/2026 (deux relecteurs, chaque constat contre-vérifié) : 4 constats, tous
+  mineurs, tous traités ; aucun sur l'étape de publication. Le test du calcul passait avec un calcul
+  faux (carrés tous à l'altitude du point de relevé) : il fait maintenant varier l'altitude des
+  carrés, la qualité des hôtes et le bâti, et échoue si l'on fausse l'un des trois (vérifié sur une
+  copie).
+- **« La carte en 3 gestes »** : un trait fléché (`.tour-link`) part de l'épingle du coin touché et
+  mène à son bilan, à droite sur le schéma grand écran, vers le tiroir du bas sur le schéma
+  téléphone ; de la couleur de l'épingle, pas en vert (le vert y est une forêt).
 
 **Le relevé n'attend que les forêts et les sols** (`waitForSurveyTiles`, 14/11/2026). Il attendait
 le repos de toute la carte (`idle`), donc aussi le fond de carte et les zones protégées, qu'il ne lit
@@ -581,10 +645,11 @@ Chaque carré de 500 m dessiné porte son pourcentage dès le zoom 12 (`meteo-fi
   sont réduites). Placé en `vw`, sans `transform`. Ce qu'il a déplacé :
   - ≤ 640 px : îlot sur la première rangée, entre le bouton légende et les boutons de droite ; la
     recherche passe à la deuxième rangée (`.topbar` en `flex-wrap`, `pointer-events: none` sur le
-    vide), le bandeau « Zoomez… » à la troisième, arrêté avant la colonne de boutons ;
+    vide), les bandeaux du haut (« Choisissez un champignon », champignon de chargement, « risque de
+    chou blanc ») à la troisième, arrêtés avant la colonne de boutons ;
   - de 641 à 1187 px : îlot à droite de la recherche (décentré) ; sous 760 px la recherche se
-    resserre ; de 641 à 1127 px le bilan s'ouvre une rangée plus bas, et le bandeau « Zoomez… »
-    aussi (il reste sous l'en-tête du bilan, par-dessus son contenu, comme avant) ;
+    resserre ; de 641 à 1127 px le bilan s'ouvre une rangée plus bas, et les bandeaux du haut
+    aussi ;
   - à partir de 1188 px : centré, rien ne bouge.
 - **Contenu de la vue Analytics** : tout vient de `src/analyticsData.ts` ("" , `null` ou `[]` : état
   vide). Guillemets doubles dans ce fichier (les apostrophes du français y sont sans danger), modèles
@@ -715,6 +780,8 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   ci-dessus suppose les températures ramenées à l'altitude de chaque point de 4,5 km : c'est ce que
   fait la grille à partir du zoom 10 (en deçà, la case et sa pastille prennent l'indice de son meilleur
   carré, à l'altitude de ce carré), et le bilan d'un coin avec l'altitude exacte.
+- `data/meteo/france.json` : moyennes de France par champignon, écrites à chaque publication (voir
+  « Choisissez un champignon et moyenne de France »), pas par la tâche météo.
 - Fichiers servis par GitHub Pages : `data/meteo/index.json` (grille, blocs, date de mise à jour `maj`,
   `dernierJour` = dernier jour définitif de la plupart des cases) et `data/meteo/b/<bi>_<bj>.json`
   (blocs de 8 × 8 cases : `dates` = 30 jours complets + la journée du passage, par case `p` pluie,
@@ -972,8 +1039,8 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   feuillus. Part bâtie : zones généralisées du Plan IGN au zoom 10, pas les bâtiments un à un.
 - Accueil : tant qu'une de ses deux fenêtres est ouverte, l'îlot ne répond pas ; sans stockage du
   navigateur, l'avertissement revient à chaque visite et la présentation n'est pas montrée d'office ;
-  sur téléphone, une fois fermée, la légende reste fermée et rien à l'écran ne dit de choisir un
-  champignon. Rien n'a été essayé sur un vrai téléphone ni avec un lecteur d'écran.
+  sur téléphone, une fois fermée, la légende reste fermée (le bandeau « Choisissez un champignon »
+  dit alors par où commencer, tant qu'on ne l'a pas fermé). Rien n'a été essayé sur un vrai téléphone ni avec un lecteur d'écran.
 - Fluidité : sans carte graphique (machine virtuelle, vieux téléphone), choisir un champignon à partir
   du zoom 10 prend encore plus d'une seconde, à cause du filtre des forêts, et un zoom occupe encore
   le processeur 2,5 à 4,5 s (voir « Fluidité »). Mesures faites dans Chromium sans carte graphique
@@ -985,6 +1052,12 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   hôtes dans ce secteur » ou « secteur urbanisé ». Entre les zooms 9,35 et 10 la règle affiche déjà
   5 km et les cases restent de 18 km. Un secteur entre 50 et 69 % n'a ni pastille ni étiquette avant
   le zoom 10 (la légende donne la meilleure chance de la vue).
+- Moyenne de France : une moyenne nationale ne dit rien d'une région ; elle date de la dernière
+  publication ; elle manque le premier jour (avant la première publication) et dès que l'étape de
+  calcul échoue. Bandeau « Choisissez un champignon » : fermé, il ne revient pas de la visite ; il
+  ne s'affiche pas légende ouverte, donc pas à la première visite sur grand écran. Le trait de « La carte en
+  3 gestes » n'est vu qu'à la première visite ; sur la vraie carte, rien d'autre que l'épingle et le
+  titre « Ce coin » ne relie le clic au bilan.
 - Sans carré : un secteur sans carré peut être sans arbres hôtes, en ville, ou à moins de 35 % ; la
   carte ne distingue pas ces cas (le bilan d'un clic, lui, donne la raison). Les carrés de 4,5 km
   entre 35 et 50 % restent très pâles là où la forêt couvre peu (opacité selon la part d'arbres
@@ -1045,8 +1118,8 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
 10. Garder une copie des tuiles géologiques dans une release du dépôt (si le miroir disparaît).
 11. Vue Analytics : brancher l'entonnoir en direct (mesure et consentement à décider), puis une
     courbe ou une seconde série dans les graphiques quand une analyse en a besoin.
-12. Téléphone : ouvrir la légende à la fermeture de la présentation, et faire dire « Choisissez un
-    champignon » au bandeau du haut tant qu'aucun n'est choisi.
+12. Téléphone : ouvrir la légende à la fermeture de la présentation (le bandeau « Choisissez un
+    champignon », lui, est fait : 15/11/2026).
 13. Liens vers les fiches des sosies dangereux, et mesurer la part des visites qui ouvrent un bilan
     avant et après la refonte (les compteurs `app.sessions` et `app.spots` existent déjà).
 14. Filtre des forêts sans refaire les tuiles : une couche par type de forêt, à opacité constante

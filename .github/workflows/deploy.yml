@@ -166,6 +166,20 @@ jobs:
           fi
       - name: Tester les scripts de données (météo commune simulée, règles des sols sur toute la France)
         run: npm run test:donnees
+      - name: Moyennes de France par champignon (chiffre des puces)
+        # À partir des fichiers météo du jour, avant la construction du site qui les recopie. Ne doit
+        # jamais bloquer la publication : sans ce fichier, les puces n'affichent pas de chiffre.
+        continue-on-error: true
+        run: |
+          # Toujours un fichier, même vide : la carte le demande à chaque visite, et un fichier absent
+          # laisserait une erreur 404 dans la console du navigateur. Vide, il n'affiche aucun chiffre.
+          mkdir -p public/data/meteo
+          echo '{"v":1,"maj":"","jour":"","mois":0,"moyennes":{},"carres":{}}' > public/data/meteo/france.json
+          if [ -f public/data/meteo/index.json ]; then
+            node scripts/meteo/france.mjs --meteo public/data/meteo --parts public/foret/parts.json --sortie public/data/meteo/france.json
+          else
+            echo "::warning::Pas de fichiers météo communs : pas de moyennes de France."
+          fi
       - name: Vérifier les types et construire
         run: npm run check
         env:
