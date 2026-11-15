@@ -33,10 +33,22 @@ export async function closeTour(page) {
   await page.waitForSelector('dialog.tour', { state: 'detached', timeout: 3000 });
 }
 
+/**
+ * Valide le rappel « période de chasse », qui suit un accord donné à la main : le mois des tests est
+ * figé en octobre, donc pendant l'ouverture de la chasse (src/hunting.ts).
+ */
+export async function passHunting(page) {
+  await page.waitForSelector('dialog.hunting[open]', { timeout: 5000 });
+  await page.waitForFunction(() => !document.querySelector('.hunting__accept').disabled, null, { timeout: 8000 });
+  await page.locator('.hunting__accept').click();
+}
+
+// Accord donné et rappel « période de chasse » vu à l'instant : la carte s'ouvre sans fenêtre.
 const preAccept = (context) =>
   context.addInitScript((v) => {
     try {
       localStorage.setItem('foret-explorer:avertissement', JSON.stringify({ v, t: Date.now() }));
+      localStorage.setItem('foret-explorer:chasse', JSON.stringify({ t: Date.now() }));
     } catch {
       /* rien */
     }
@@ -193,6 +205,85 @@ async function disclaimerTests(browser, base) {
   const announced = await page.evaluate(() => window.__pret);
   check('avertissement : fin du compte à rebours annoncée aux lecteurs d’écran', announced === 'Vous pouvez maintenant accepter.', String(announced));
 
+  // Pendant l'ouverture de la chasse (octobre, mois figé) : le rappel de sécurité, bloquant lui aussi,
+  // entre l'avertissement et la présentation.
+  await page.waitForSelector('dialog.hunting[open]', { timeout: 5000 });
+  const hunt = await page.evaluate(() => {
+    const d = document.querySelector('dialog.hunting');
+    const b = d.querySelector('.hunting__accept');
+    const alert = d.querySelector('.hunting__alert');
+    const body = d.querySelector('.hunting__body');
+    return {
+      modal: d.matches(':modal'),
+      role: d.getAttribute('role'),
+      label: document.getElementById(d.getAttribute('aria-labelledby'))?.textContent,
+      described: document.getElementById(d.getAttribute('aria-describedby'))?.textContent,
+      disabled: b.disabled,
+      button: b.textContent,
+      text: d.textContent.replace(/\s+/g, ' '),
+      alert: alert.textContent,
+      color: getComputedStyle(alert).color,
+      weight: Number(getComputedStyle(alert.querySelector('strong')).fontWeight),
+      fits: body.scrollHeight <= body.clientHeight + 1,
+      others: document.querySelectorAll('dialog').length - 1,
+    };
+  });
+  check(
+    'chasse : après l’accord, rappel bloquant (fenêtre modale nommée, bouton à compte à rebours), seul à l’écran',
+    hunt.modal && hunt.role === 'alertdialog' && hunt.label === 'Sécurité en forêt' && hunt.described === hunt.alert && hunt.disabled && /^Lisez d’abord… [123]$/.test(hunt.button) && hunt.others === 0,
+    JSON.stringify({ modal: hunt.modal, role: hunt.role, label: hunt.label, button: hunt.button, others: hunt.others }),
+  );
+  check(
+    'chasse : « ATTENTION : PÉRIODE DE CHASSE » et les dates de la saison, en rouge et en gras',
+    /^ATTENTION : PÉRIODE DE CHASSE du (1er|[2-7]) septembre \d{4} au (28|29) février \d{4}$/.test(hunt.alert) && hunt.color === 'rgb(255, 128, 128)' && hunt.weight >= 700,
+    `${hunt.alert} — ${hunt.color}, graisse ${hunt.weight}`,
+  );
+  check(
+    'chasse : chasubles, danger réel, propriétaire ; d’où viennent les dates ; lisible sans défiler',
+    ['Même avec des chasubles visibles, certains chasseurs peuvent vous tirer dessus', 'Ce danger est réel', 'même pour une bonne omelette', 'demandez au propriétaire (s’il est sympa) quand vous pourriez pratiquer son terrain', 'ouverture générale', 'le préfet fixe celles de chaque département'].every((w) => hunt.text.includes(w)) && hunt.fits,
+    hunt.text.slice(0, 90),
+  );
+  await page.screenshot({ path: `${OUT}00a-chasse.png` });
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page.mouse.click(60, 500);
+  await page.waitForTimeout(200);
+  const huntBlocked = await page.evaluate(() => ({ open: document.querySelector('dialog.hunting')?.open, tour: Boolean(document.querySelector('dialog.tour')) }));
+  check('chasse : Échap et clic à côté ne ferment pas le rappel', huntBlocked.open === true && !huntBlocked.tour, JSON.stringify(huntBlocked));
+  await page.waitForFunction(() => !document.querySelector('.hunting__accept').disabled, null, { timeout: 8000 });
+  const huntDelay = await page.evaluate(() => {
+    const d = document.querySelector('dialog.hunting');
+    return { shown: Number(d.dataset.actif) - Number(d.dataset.debut), button: d.querySelector('.hunting__accept').textContent, status: d.querySelector('[role="status"]').textContent };
+  });
+  check(
+    'chasse : « J’ai compris » possible au bout de 3 secondes d’affichage, annoncé aux lecteurs d’écran',
+    huntDelay.shown >= 2950 && huntDelay.shown < 6000 && huntDelay.button === 'J’ai compris' && huntDelay.status === 'Vous pouvez maintenant continuer.',
+    JSON.stringify(huntDelay),
+  );
+  await page.locator('.hunting__accept').click();
+  const huntAfter = await page.evaluate(() => ({
+    gone: !document.querySelector('dialog.hunting'),
+    saved: JSON.parse(localStorage.getItem('foret-explorer:chasse') ?? 'null'),
+    terms: JSON.parse(localStorage.getItem('foret-explorer:avertissement')).t,
+  }));
+  check('chasse : rappel validé et mémorisé, l’accord gardé n’est pas touché', huntAfter.gone && typeof huntAfter.saved?.t === 'number' && huntAfter.terms === after.saved.t, JSON.stringify(huntAfter));
+  // Les bornes de la période (Code de l'environnement, article R424-7) : du premier dimanche de
+  // septembre au dernier jour de février. Jours donnés à la main : le mois de la page est figé.
+  const seasons = await page.evaluate(async () => {
+    const { huntingSeason, seasonLabel } = await import('/src/hunting.ts');
+    const at = (y, m, d) => {
+      const season = huntingSeason({ getFullYear: () => y, getMonth: () => m - 1, getDate: () => d });
+      return season ? seasonLabel(season) : null;
+    };
+    return [at(2026, 8, 31), at(2026, 9, 5), at(2026, 9, 6), at(2026, 11, 15), at(2027, 1, 1), at(2027, 2, 28), at(2027, 3, 1), at(2027, 6, 15), at(2028, 2, 29), at(2030, 9, 1)];
+  });
+  const s2026 = 'du 6 septembre 2026 au 28 février 2027';
+  check(
+    'chasse : période du premier dimanche de septembre au dernier jour de février, rien de mars à août',
+    JSON.stringify(seasons) === JSON.stringify([null, null, s2026, s2026, s2026, s2026, null, null, 'du 5 septembre 2027 au 29 février 2028', 'du 1er septembre 2030 au 28 février 2031']),
+    JSON.stringify(seasons),
+  );
+
   // Premier accord : « La carte en 3 gestes », qu'on ferme comme on veut (ce n'est plus une porte).
   await page.waitForSelector('dialog.tour[open]', { timeout: 5000 });
   const guard = await page.evaluate(() => window.__garde);
@@ -280,6 +371,7 @@ async function disclaimerTests(browser, base) {
   await waitForMap(page);
   await page.waitForTimeout(500);
   check('avertissement : pas redemandé à la visite suivante', !(await disclaimerOpen(page)));
+  check('chasse : rappel pas remontré à la visite suivante (moins de 12 heures)', (await page.evaluate(() => document.querySelectorAll('dialog').length)) === 0);
   const kept = await viewOf(page);
   check('visite suivante : la carte reprend la dernière vue', Math.abs(kept.lng - 2.35) < 0.01 && Math.abs(kept.lat - 48.85) < 0.01 && kept.zoom === 10, JSON.stringify(kept));
 
@@ -332,11 +424,37 @@ async function disclaimerTests(browser, base) {
     if (asked) {
       await page2.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
       await page2.locator('.disclaimer__accept').click();
+      await passHunting(page2);
       await page2.waitForTimeout(700);
     }
     const tourShown = await page2.evaluate(() => Boolean(document.querySelector('dialog.tour[open]')));
     check(`accueil, ${name} : accord redemandé, présentation ${expected ? 'montrée une fois' : 'non remontrée'}`, asked && tourShown === expected, JSON.stringify({ asked, tourShown }));
     await again.close();
+  }
+
+  // Accord déjà donné : le rappel « période de chasse » vient seul, au plus toutes les 12 heures, et
+  // seulement pendant l'ouverture générale (mois figé par `installMocks`).
+  for (const [name, mois, seenHoursAgo, expected] of [
+    ['octobre, rappel vu il y a 13 heures', 10, 13, true],
+    ['octobre, rappel vu il y a 11 heures', 10, 11, false],
+    ['février, jamais vu', 2, null, true],
+    ['juin, jamais vu', 6, null, false],
+  ]) {
+    const season = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+    await season.addInitScript(
+      ([v, hours]) => {
+        localStorage.setItem('foret-explorer:avertissement', JSON.stringify({ v, t: Date.now() }));
+        if (hours !== null) localStorage.setItem('foret-explorer:chasse', JSON.stringify({ t: Date.now() - hours * 3_600_000 }));
+      },
+      [TERMS_VERSION, seenHoursAgo],
+    );
+    const page3 = await season.newPage();
+    await installMocks(page3, { tms: [], wmts: [], geocode: [], other: [] }, { mois });
+    await page3.goto(base);
+    const shown = await page3.waitForSelector('dialog.hunting[open]', { timeout: expected ? 10000 : 2500 }).then(() => true, () => false);
+    const others = await page3.evaluate(() => document.querySelectorAll('dialog:not(.hunting)').length);
+    check(`chasse, ${name} : rappel ${expected ? 'montré, sans l’avertissement' : 'pas montré'}`, shown === expected && others === 0, JSON.stringify({ shown, others }));
+    await season.close();
   }
   await context.close();
 }
@@ -2365,6 +2483,7 @@ async function chooseTests(browser, base) {
       return b && !b.disabled;
     }, null, { timeout: 30000 });
     await p.locator('dialog.disclaimer button', { hasText: 'accepte' }).click();
+    await passHunting(p);
     await p.waitForSelector('#tour-heading', { timeout: 8000 });
     await p.waitForTimeout(400);
     links.push({
@@ -2684,6 +2803,19 @@ async function mobileTests(browser, base) {
   await page.screenshot({ path: `${OUT}06b-mobile-avertissement.png` });
   await page.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
   await page.locator('.disclaimer__accept').tap();
+  // Rappel « période de chasse » : dans l'écran, sans défiler, bouton à la taille du doigt.
+  await page.waitForSelector('dialog.hunting[open]', { timeout: 5000 });
+  const mobileHunt = await page.evaluate(() => {
+    const d = document.querySelector('dialog.hunting');
+    const body = d.querySelector('.hunting__body');
+    const r = d.getBoundingClientRect();
+    const b = d.querySelector('.hunting__accept').getBoundingClientRect();
+    return { inside: r.left >= 0 && r.right <= 390 && r.bottom <= 844, width: Math.round(r.width), scrolls: body.scrollHeight > body.clientHeight + 1, button: Math.round(b.height), buttonWidth: Math.round(b.width) };
+  });
+  check('mobile : rappel « période de chasse » dans l’écran, lisible sans défiler, bouton de 46 px sur toute la largeur', mobileHunt.inside && mobileHunt.width >= 370 && !mobileHunt.scrolls && mobileHunt.button >= 46 && mobileHunt.buttonWidth >= 300, JSON.stringify(mobileHunt));
+  await page.screenshot({ path: `${OUT}06c-mobile-chasse.png` });
+  await page.waitForFunction(() => !document.querySelector('.hunting__accept').disabled, null, { timeout: 8000 });
+  await page.locator('.hunting__accept').tap();
   // Présentation sur téléphone : silhouette de téléphone, gestes décrits sans « à gauche » ni « à droite ».
   await page.waitForSelector('dialog.tour[open]', { timeout: 5000 });
   const mobileTour = await page.evaluate(() => {
@@ -2785,7 +2917,7 @@ try {
   await group('vide', () => emptyViewTests(browser, server.url));
   await group('choix', () => chooseTests(browser, server.url));
   await group('telephone', () => mobileTests(browser, server.url));
-  await group('vues', () => viewTests({ browser, base: server.url, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour }));
+  await group('vues', () => viewTests({ browser, base: server.url, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour, passHunting }));
 } finally {
   await browser.close();
   await server.close();
