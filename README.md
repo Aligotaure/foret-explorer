@@ -8,7 +8,8 @@ chanterelles en tube et morilles. Elle signale aussi les **zones protégées** e
 publiques**, pour savoir où l'on a le droit de cueillir. Toute la France métropolitaine, Corse
 comprise. Tout vient de services publics, sans clé d'API.
 
-**En ligne : https://aligotaure.github.io/foret-explorer/** /br
+**En ligne : https://aligotaure.github.io/foret-explorer/** 
+
 **Lien avec îlot analytique : https://aligotaure.github.io/foret-explorer/?analytics#vue=analytics**
 
 
