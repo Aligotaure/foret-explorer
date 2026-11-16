@@ -9,10 +9,15 @@
  * déclencher `hashchange` : MapLibre ne déplace donc pas la carte, qui reste où elle était.
  * Précédent et Suivant du navigateur rendent à chaque entrée sa vue (et, par MapLibre, sa position).
  *
+ * L'îlot et la vue Analytics sont réservés aux liens « vitrine » (`?analytics` dans l'adresse,
+ * `SHOWCASE` de src/legal.ts) : sans ce mot, `vue=analytics` est ignoré et le site n'est que la carte.
+ * Le mot est avant le `#` : `urlFor` le recopie tel quel, MapLibre aussi.
+ *
  * Dans la vue Analytics, pas de lien interne du type `href="#section"` : il remplacerait tout le
  * fragment de l'adresse, `vue=analytics` compris, et ramènerait à la carte.
  */
 import { byId } from './dom';
+import { SHOWCASE } from './legal';
 
 export type ViewId = 'map' | 'analytics';
 
@@ -40,8 +45,11 @@ let links: HTMLAnchorElement[] = [];
  */
 const hashParts = (): string[] => location.hash.slice(1).split('&').filter(Boolean);
 
-/** Vue demandée par l'adresse. Même règle que le script en tête d'index.html. */
-const viewInUrl = (): ViewId => (hashParts().includes(ANALYTICS_PART) ? 'analytics' : 'map');
+/**
+ * Vue demandée par l'adresse. Même règle que le script en tête d'index.html : la vue Analytics
+ * n'existe que pour un lien « vitrine » ; ailleurs, même tapée à la main, c'est la carte.
+ */
+const viewInUrl = (): ViewId => (SHOWCASE && hashParts().includes(ANALYTICS_PART) ? 'analytics' : 'map');
 
 let shown: ViewId = viewInUrl();
 
