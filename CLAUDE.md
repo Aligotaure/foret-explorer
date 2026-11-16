@@ -853,8 +853,9 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   (16/11/2026) : 63 895 parcelles (99 Mo de GeoJSON), 641 sites, 148 994 ha, dont 108 685 possédés et
   40 264 gérés sans être possédés (contrats de gestion ; 46 ha sans type, tenus pour gérés), soit
   847 terrains une fois fusionnés par site et par type (599 `cdl`, 248 `cdl_gestion`). Tuiles : une archive
-  `data/zones/zones.pmtiles`, zooms 9 à 11 (sur-zoom au-delà), 4 142 tuiles, 24 Mo, 3 minutes de
-  construction.
+  `data/zones/zones.pmtiles`, zooms 9 à 11 (sur-zoom au-delà), 4 142 tuiles, 24 Mo. Construction
+  dans GitHub (16/11/2026, Ubuntu 26.04) : 5 min, dont 3 min 54 s de téléchargements (1 min pour les
+  parcelles du Conservatoire), 20 s pour la fusion et 31 s de découpage.
   **Refaite une fois par an** (`deploy.yml`, demande de Clément du 16/11/2026 : les zones bougent
   peu ; avant, chaque semaine) : seulement si l'archive a 365 jours ou plus (date `genere` de son
   `info.json`), si les scripts de `scripts/zones/` ont changé depuis (toute retouche, même d'un
@@ -876,8 +877,11 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   parcelle serait tracée en rouge ; chaque parcelle dilatée d'un mètre puis le terrain resserré
   d'autant, car des parcelles voisines laissent des interstices de moins d'un mètre (≈ 30 km de bords
   sur un quart des parcelles, mesuré le 16/11/2026), qui deviendraient de fins trous cernés de rouge ;
-  la construction échoue si un terrain perd sa géométrie. Étiquette : dans la plus grande parcelle du
-  site. Noms : capitales converties (`capitales` de `telecharger.mjs` : « ILES CHAUSEY » →
+  la construction échoue si un terrain perd sa géométrie. Archive ainsi reconstruite le 16/11/2026
+  (tuiles du zoom 11) : 148 756 ha (108 478 possédés, 40 277 gérés), 639 noms ; 14 878 contours
+  extérieurs contre 14 364 avant (sans la fusion, il y en aurait plus de 64 000) ; trous de moins de
+  3 m de large en moyenne : 129 km de contours, contre 133 km dans l'archive du 11/11/2026.
+  Étiquette : dans la plus grande parcelle du site. Noms : capitales converties (`capitales` de `telecharger.mjs` : « ILES CHAUSEY » →
   « Iles Chausey », « -DE- » → « -de- »). Pas de lien : la couche n'en donne pas, l'INPN refuse les
   scripts (403), et les numéros des pages du site du Conservatoire (`/siteLittoral/<n>/…`) ne sont pas
   les `pera_id` (Agriate : 42 contre 50). Aussi listée : `CONSERVATOIRE_LITTORAL.PERIMETRES:perimetre_intervention`
