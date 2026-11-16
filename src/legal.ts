@@ -14,8 +14,28 @@ export const TERMS_DATE_LABEL = '14 novembre 2026';
  */
 export const TOUR_SINCE = '2026-11-14';
 
-/** Page « À propos » (conditions, mentions légales, confidentialité), à côté de index.html. */
-export const ABOUT_URL = 'a-propos.html';
+/**
+ * Mot de l'adresse qui fait d'un lien un lien « vitrine » (`…/?analytics`), donné aux prospects de
+ * l'éditeur : lui seul montre l'îlot « Carte / Analytics » et ouvre la vue Analytics. Les visiteurs
+ * venus par l'adresse ordinaire ne voient que la carte. Ce n'est pas un verrou : le mot se lit dans le
+ * code, qui est public. Le script en tête d'index.html applique la même règle avant le premier
+ * affichage : changer le mot aux deux endroits.
+ */
+export const SHOWCASE_PARAM = 'analytics';
+
+/**
+ * L'adresse de cette page porte le mot (`?analytics`, `?analytics=1`, `?utm_source=x&analytics`…).
+ * Lu une fois, à l'ouverture : rien dans la page ne change la partie `?` de l'adresse (MapLibre et
+ * src/view.ts n'écrivent que ce qui suit le `#`, et le formulaire de recherche n'est jamais envoyé
+ * par le navigateur : src/main.ts), donc l'îlot ne disparaît pas en cours de visite.
+ */
+export const SHOWCASE = typeof location !== 'undefined' && new RegExp(`[?&]${SHOWCASE_PARAM}(?:[=&]|$)`).test(location.search);
+
+/**
+ * Page « À propos » (conditions, mentions légales, confidentialité), à côté de index.html. Un lien
+ * « vitrine » y garde son mot, que « Retour à la carte » rend à la carte (src/apropos.ts).
+ */
+export const ABOUT_URL = SHOWCASE ? `a-propos.html?${SHOWCASE_PARAM}` : 'a-propos.html';
 
 /** Dépôt du projet : contact de l'éditeur (onglet « Issues »). */
 export const REPO_URL = 'https://github.com/Aligotaure/foret-explorer';

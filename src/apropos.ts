@@ -6,7 +6,7 @@ import './apropos.css';
 import { METRICS_URL } from './config';
 import { acceptedAt } from './disclaimer';
 import { h } from './dom';
-import { TERMS_DATE_LABEL, clearStoredData, storedEntries } from './legal';
+import { SHOWCASE, SHOWCASE_PARAM, TERMS_DATE_LABEL, clearStoredData, storedEntries } from './legal';
 
 const LABELS: Readonly<Record<string, string>> = {
   'foret-explorer:v1': 'Vos réglages (types de forêt, champignon, fond de carte, couches affichées)',
@@ -22,6 +22,12 @@ const size = (bytes: number): string =>
   bytes < 1024 ? `${bytes} o` : `${(bytes / 1024).toLocaleString('fr-FR', { maximumFractionDigits: bytes < 10240 ? 1 : 0 })} Ko`;
 
 for (const el of document.querySelectorAll('[data-terms-date]')) el.textContent = TERMS_DATE_LABEL;
+
+// Lien « vitrine » (src/legal.ts) : « Retour à la carte » rend le mot à la carte, sinon l'îlot
+// disparaîtrait au retour.
+if (SHOWCASE) {
+  for (const back of document.querySelectorAll<HTMLAnchorElement>('a[href="./"]')) back.setAttribute('href', `./?${SHOWCASE_PARAM}`);
+}
 
 const gpc = (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true;
 const metricsState = document.querySelector('[data-metrics-state]');

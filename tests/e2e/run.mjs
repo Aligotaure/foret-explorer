@@ -2917,7 +2917,9 @@ try {
   await group('vide', () => emptyViewTests(browser, server.url));
   await group('choix', () => chooseTests(browser, server.url));
   await group('telephone', () => mobileTests(browser, server.url));
-  await group('vues', () => viewTests({ browser, base: server.url, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour, passHunting }));
+  // Îlot et vue Analytics : réservés aux liens « vitrine » (?analytics, src/legal.ts). Les autres
+  // groupes ouvrent l'adresse ordinaire, donc la carte sans îlot.
+  await group('vues', () => viewTests({ browser, base: `${server.url}?analytics`, plainBase: server.url, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour, passHunting }));
 } finally {
   await browser.close();
   await server.close();

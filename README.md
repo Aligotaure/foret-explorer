@@ -92,8 +92,13 @@ mange : au moindre doute, faites contrôler la récolte par un pharmacien ou une
 
 En haut au centre, un îlot bascule entre la **carte** et la vue **Analytics**, qui montre comment le
 produit est piloté : pari en cours, analyses, paris tranchés. Revenir à la carte la retrouve telle
-quelle (position, légende, bilan), et la vue Analytics s'ouvre sans charger la carte. Son adresse
-directe : `…/#vue=analytics` (elle se combine avec la position : `#carte=11.5/45.92/6.19&vue=analytics`).
+quelle (position, légende, bilan), et la vue Analytics s'ouvre sans charger la carte.
+
+L'îlot et la vue Analytics ne s'affichent que pour un lien « vitrine », dont l'adresse porte
+`?analytics` : `…/foret-explorer/?analytics` ouvre la carte avec l'îlot,
+`…/foret-explorer/?analytics#vue=analytics` directement la vue Analytics (elle se combine avec la
+position : `?analytics#carte=11.5/45.92/6.19&vue=analytics`). À l'adresse ordinaire, le site n'est
+que la carte. C'est une discrétion, pas un verrou : le mot se lit dans le code, qui est public.
 
 Tout ce qu'affiche la vue Analytics vient d'un seul fichier, `src/analyticsData.ts`, à modifier à la
 main : son en-tête explique comment (modèles à recopier, dates, nombres). Tant qu'un bloc est vide,

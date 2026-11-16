@@ -20,7 +20,10 @@
   --gap: 8px;
   --panel-width: 360px;
   --search-width: 420px;
-  --island-width: 208px; /* îlot « Carte / Analytics » */
+  --island-width: 208px; /* îlot « Carte / Analytics » (0 sans lien « vitrine », voir plus bas) */
+  /* Téléphone : hauteur de la rangée que l'îlot ajoute en haut de l'écran ; 0 sans lui. Les positions
+     comptées en rangées (bandeaux, champignon de chargement, hauteur du bilan) l'ajoutent. */
+  --island-row: 0px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
@@ -137,7 +140,8 @@ button {
 .search {
   position: relative;
   display: flex;
-  /* Sous 760 px de large, la recherche se resserre : l'îlot se loge entre elle et les boutons de droite. */
+  /* Avec l'îlot (lien « vitrine »), sous 760 px de large, la recherche se resserre : l'îlot se loge
+     entre elle et les boutons de droite. Sans lui, --island-width vaut 0 : elle garde ses 420 px. */
   width: min(var(--search-width), calc(100vw - 5 * var(--gap) - 2 * var(--btn) - var(--island-width)));
   min-width: 0;
   height: var(--btn);
@@ -991,10 +995,16 @@ li.is-off .swatch {
   }
 }
 
-/* ── Mobile : recherche pleine largeur sous l'îlot, légende en tiroir bas ── */
+/* ── Mobile : recherche en haut (sous l'îlot s'il est là), légende en tiroir bas ── */
 @media (max-width: 640px) {
-  /* Première rangée : bouton légende, îlot (centré), boutons de droite. La recherche passe à la
-     rangée suivante ; le vide de la première rangée laisse passer les gestes vers la carte. */
+  /* Première rangée : bouton légende, recherche, boutons de droite. Avec l'îlot (lien « vitrine »,
+     `data-island`), elle porte le bouton légende, l'îlot (centré) et les boutons de droite, et la
+     recherche passe à la rangée suivante ; le vide de la première rangée laisse alors passer les
+     gestes vers la carte. */
+  html[data-island] {
+    --island-row: calc(var(--btn) + var(--gap));
+  }
+
   .topbar {
     right: calc(var(--btn) + 2 * var(--gap));
     flex-wrap: wrap;
@@ -1006,8 +1016,12 @@ li.is-off .swatch {
   }
 
   .search {
-    flex: 1 0 100%;
+    flex: 1;
     width: auto;
+  }
+
+  html[data-island] .search {
+    flex: 1 0 100%;
   }
 
   .panel {
@@ -1039,7 +1053,7 @@ li.is-off .swatch {
      chargement monte alors dans la carte qui reste visible, sous la recherche, en plus petit. */
   #app.legend-open .grid-loader,
   #app:has(#spot:not([hidden])) .grid-loader {
-    top: calc(2 * var(--btn) + 4 * var(--gap) + var(--safe-top));
+    top: calc(var(--btn) + 3 * var(--gap) + var(--island-row) + var(--safe-top));
     gap: 6px;
     padding: 10px 14px 8px;
     font-size: 13px;
@@ -1066,7 +1080,7 @@ li.is-off .swatch {
   }
 
   .grid-verdict {
-    top: calc(2 * var(--btn) + 3 * var(--gap) + var(--safe-top));
+    top: calc(var(--btn) + 2 * var(--gap) + var(--island-row) + var(--safe-top));
     left: var(--gap);
     justify-content: flex-start;
   }
@@ -1775,7 +1789,7 @@ summary.verdict__head::before {
     right: 0;
     left: 0;
     /* 70 % de l'écran, sans jamais monter sur la recherche (téléphone couché) */
-    max-height: min(70%, calc(100% - 2 * var(--btn) - 4 * var(--gap) - var(--safe-top)));
+    max-height: min(70%, calc(100% - var(--btn) - 3 * var(--gap) - var(--island-row) - var(--safe-top)));
   }
 }
 
@@ -2741,6 +2755,19 @@ html[data-view='analytics'] .island__link[data-view='analytics'] {
     left: calc(50vw - var(--island-width) / 2);
     font-size: clamp(13px, 4.6vw, 15px);
   }
+}
+
+/* Sans lien « vitrine » (?analytics dans l'adresse : index.html, src/legal.ts), pas d'îlot, et sa
+   place revient à la carte : la recherche reprend ses 420 px sous 760 px de large, et sur téléphone
+   la première rangée (`--island-row` reste à 0). Le schéma téléphone de « La carte en 3 gestes » ne
+   le dessine pas non plus. `display: none` le retire aussi du clavier et des lecteurs d'écran. */
+html:not([data-island]) {
+  --island-width: 0px;
+}
+
+html:not([data-island]) .island,
+html:not([data-island]) .tour-phone__island {
+  display: none;
 }
 
 /* Une vue n'a pas pu être téléchargée (src/main.ts). */

@@ -15,20 +15,30 @@
     <meta name="apple-mobile-web-app-title" content="Forêts" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <script>
-      // Vue demandée par l'adresse (#vue=analytics), posée avant le premier affichage : la carte
-      // n'apparaît pas un instant derrière la vue Analytics. Même règle que src/view.ts.
-      if (/(?:^#|&)vue=analytics(?:&|$)/.test(location.hash)) document.documentElement.dataset.view = 'analytics';
-      // Sinon la page s'ouvre sur la carte : son code est demandé tout de suite, sans attendre la
-      // feuille de style (nom du fichier écrit au build par vite.config.ts ; vide en développement).
-      else if ('__MAP_CHUNK__') {
-        document.head.append(Object.assign(document.createElement('link'), { rel: 'modulepreload', href: '__MAP_CHUNK__' }));
+      {
+        // Lien « vitrine » : seule une adresse qui porte ?analytics montre l'îlot « Carte / Analytics »
+        // et peut ouvrir la vue Analytics (même règle que SHOWCASE, src/legal.ts). Sans lui, le site
+        // n'est que la carte. L'étiquette data-island est posée avant le premier affichage : la
+        // feuille de style s'en sert, l'îlot n'apparaît donc jamais un instant pour rien.
+        const showcase = /[?&]analytics(?:[=&]|$)/.test(location.search);
+        if (showcase) document.documentElement.dataset.island = '';
+        // Vue demandée par l'adresse (#vue=analytics), posée avant le premier affichage : la carte
+        // n'apparaît pas un instant derrière la vue Analytics. Même règle que src/view.ts.
+        if (showcase && /(?:^#|&)vue=analytics(?:&|$)/.test(location.hash)) document.documentElement.dataset.view = 'analytics';
+        // Sinon la page s'ouvre sur la carte : son code est demandé tout de suite, sans attendre la
+        // feuille de style (nom du fichier écrit au build par vite.config.ts ; vide en développement).
+        else if ('__MAP_CHUNK__') {
+          document.head.append(Object.assign(document.createElement('link'), { rel: 'modulepreload', href: '__MAP_CHUNK__' }));
+        }
       }
     </script>
   </head>
   <body>
-    <!-- Îlot : bascule entre la carte et la vue Analytics (src/view.ts) -->
+    <!-- Îlot : bascule entre la carte et la vue Analytics (src/view.ts). Montré seulement pour un lien
+         « vitrine » (?analytics, voir l'en-tête) : ses liens gardent donc ce mot, même ouverts dans un
+         autre onglet. -->
     <nav id="view-switch" class="island" aria-label="Vues">
-      <a class="island__link" href="./" data-view="map" aria-current="page">Carte</a>
+      <a class="island__link" href="./?analytics" data-view="map" aria-current="page">Carte</a>
       <a class="island__link" href="#vue=analytics" data-view="analytics">Analytics</a>
     </nav>
     <p id="view-status" class="visually-hidden" role="status"></p>
