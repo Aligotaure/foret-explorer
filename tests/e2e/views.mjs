@@ -2,6 +2,9 @@
 // gardée en mémoire, vue Analytics et son fichier de contenu. Lancés par run.mjs, qui fournit le
 // serveur, le navigateur et ses utilitaires.
 //
+// L'îlot et la vue Analytics sont réservés aux liens « vitrine » (`?analytics`, src/legal.ts) :
+// `base` porte ce mot, `plainBase` est l'adresse ordinaire (section 7 : la carte seule, sans îlot).
+//
 // Les jeux d'essai ci-dessous sont factices et ne servent qu'ici : le site, lui, n'affiche que le
 // contenu de src/analyticsData.ts.
 
@@ -91,7 +94,7 @@ const geometry = (page) =>
     };
   });
 
-export async function viewTests({ browser, base, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour, passHunting }) {
+export async function viewTests({ browser, base, plainBase, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour, passHunting }) {
   const errors = [];
   const watch = (page) => {
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
@@ -797,6 +800,15 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     // Un geste sur la carte entre le bouton légende et l'îlot atteint bien la carte.
     const through = await page.evaluate(() => document.elementFromPoint(72, 30)?.className);
     check('mobile : la rangée de l’îlot laisse passer les gestes vers la carte', /maplibregl-canvas/.test(String(through)), String(through));
+    // Avec l'îlot, ce qui se place sous la recherche descend d'une rangée (--island-row ; section 7 :
+    // sans lui, 62 et 70 px). Valeurs calculées : bandeaux et champignon n'ont pas à être affichés.
+    const banners = await page.evaluate(() => getComputedStyle(document.getElementById('grid-verdict')).top);
+    await page.locator('#legend-toggle').tap();
+    await page.waitForTimeout(300);
+    const loaderTop = await page.evaluate(() => (document.getElementById('app').classList.contains('legend-open') ? getComputedStyle(document.getElementById('grid-loader')).top : 'légende fermée'));
+    await page.locator('#legend .panel__close').tap();
+    await page.waitForTimeout(300);
+    check('mobile, lien « vitrine » : bandeaux et champignon de chargement (tiroir ouvert) sous la recherche, sur la troisième rangée', banners === '108px' && loaderTop === '116px', JSON.stringify({ bandeaux: banners, chargement: loaderTop }));
 
     await island(page, 'analytics').tap();
     await page.waitForSelector('#analytics h1');
@@ -813,6 +825,132 @@ export async function viewTests({ browser, base, OUT, check, preAccept, installM
     const filledPhone = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     await page.screenshot({ path: `${OUT}14b-analytics-jeu-d-essai-390.png`, fullPage: true });
     check('mobile : vue Analytics remplie (jeu d’essai) sans défilement horizontal', !filledPhone);
+    await context.close();
+  }
+
+  // ── 7. Adresse ordinaire, sans ?analytics : la carte seule, sans îlot ───────────────────────
+  // Le mot est réservé aux liens « vitrine » donnés aux prospects ; les cueilleurs arrivent par
+  // l'adresse ordinaire (src/legal.ts). Les sections 1 à 6 ouvrent toutes le lien « vitrine ».
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    await preAccept(context);
+    const page = await context.newPage();
+    watch(page);
+    await installMocks(page, { tms: [], wmts: [], geocode: [], other: [] });
+    const requested = [];
+    page.on('request', (r) => requested.push(r.url()));
+    const state = () =>
+      page.evaluate(() => ({
+        view: document.documentElement.dataset.view ?? 'map',
+        island: 'island' in document.documentElement.dataset,
+        shown: document.getElementById('view-switch').getClientRects().length > 0,
+        title: document.title,
+        analyticsBuilt: document.getElementById('analytics').childElementCount > 0,
+      }));
+    // Un ancien lien (#vue=analytics sans le mot), puis le même ajout tapé à la main dans la barre
+    // d'adresse (`hashchange`, que src/view.ts écoute).
+    await page.goto(`${plainBase}#vue=analytics`);
+    await waitForMap(page);
+    const landing = await state();
+    await page.evaluate((fragment) => {
+      location.hash = fragment;
+    }, `${ANNECY.slice(1)}&vue=analytics`);
+    await page.waitForTimeout(500);
+    const typed = await state();
+    const navs = await page.getByRole('navigation', { name: 'Vues' }).count();
+    const analyticsCode = requested.filter((u) => /\/src\/analyticsView\.ts/.test(u));
+    check(
+      'adresse ordinaire (sans ?analytics) : pas d’îlot, ni à l’écran ni pour les lecteurs d’écran ; #vue=analytics, à l’ouverture ou tapé ensuite, laisse la carte sans charger la vue Analytics',
+      [landing, typed].every((v) => v.view === 'map' && !v.island && !v.shown && v.title === 'Forêt Explorer' && !v.analyticsBuilt) && navs === 0 && analyticsCode.length === 0,
+      JSON.stringify({ landing, typed, navs, analyticsCode: analyticsCode.length }),
+    );
+    await page.screenshot({ path: `${OUT}15-sans-ilot-1280.png` });
+
+    // Entre 641 et 760 px de large : sans îlot, la recherche garde ses 420 px ; avec lui, elle se
+    // resserre pour lui laisser la place (700 − 5 × 8 − 2 × 46 − 208 = 360 px).
+    await page.setViewportSize({ width: 700, height: 800 });
+    await page.waitForTimeout(300);
+    const plainWidth = await page.evaluate(() => Math.round(document.getElementById('search').getBoundingClientRect().width));
+    const showcase = await context.newPage();
+    watch(showcase);
+    await installMocks(showcase, { tms: [], wmts: [], geocode: [], other: [] });
+    await showcase.setViewportSize({ width: 700, height: 800 });
+    await showcase.goto(`${base}${ANNECY}`);
+    await waitForMap(showcase);
+    const showcaseWidth = await showcase.evaluate(() => Math.round(document.getElementById('search').getBoundingClientRect().width));
+    check('700 px de large : la recherche garde ses 420 px sans îlot, et se resserre à côté de lui', plainWidth === 420 && showcaseWidth === 360, JSON.stringify({ sans: plainWidth, avec: showcaseWidth }));
+
+    // « À propos » et retour : le lien « vitrine » garde son mot (src/legal.ts, src/apropos.ts) ;
+    // l'adresse ordinaire reste ordinaire.
+    await showcase.setViewportSize({ width: 1280, height: 800 });
+    await showcase.waitForTimeout(300);
+    const footer = await showcase.evaluate(() => [...document.querySelectorAll('#legend .legend-footer a')].map((a) => a.getAttribute('href')));
+    await showcase.locator('#legend .legend-footer a').first().click();
+    await showcase.waitForSelector('.top__back');
+    const backLinks = (p) => p.evaluate(() => [...document.querySelectorAll('a')].filter((a) => /Retour à la carte/.test(a.textContent ?? '')).map((a) => a.getAttribute('href')));
+    const about = { search: await showcase.evaluate(() => location.search), back: await backLinks(showcase) };
+    await showcase.locator('.top__back').click();
+    await waitForMap(showcase);
+    const back = await showcase.evaluate(() => ({
+      search: location.search,
+      shown: document.getElementById('view-switch').getClientRects().length > 0,
+      mapLink: document.querySelector('.island__link[data-view="map"]').getAttribute('href'),
+    }));
+    await page.goto(new URL('a-propos.html#conditions', plainBase).href);
+    await page.waitForSelector('.top__back');
+    const plainBack = await backLinks(page);
+    check(
+      'lien « vitrine » : « À propos » et « Retour à la carte » gardent ?analytics, l’îlot revient ; à l’adresse ordinaire, rien ne change',
+      footer.length === 4 && footer.every((h) => h.startsWith('a-propos.html?analytics#')) && about.search === '?analytics' && about.back.length === 2 && about.back.every((h) => h === './?analytics') && back.search === '?analytics' && back.shown && back.mapLink === './?analytics' && plainBack.length === 2 && plainBack.every((h) => h === './'),
+      JSON.stringify({ footer, about, back, plainBack }),
+    );
+    await context.close();
+  }
+
+  // Téléphone, adresse ordinaire, premier accord : présentation sans îlot dans son schéma, puis la
+  // recherche sur la première rangée, à côté du bouton légende (390 − 8 − 46 − 8 − 62 = 266 px), et
+  // ce qui se place sous elle une rangée plus haut qu'avec l'îlot (section 6 : 108 et 116 px).
+  {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+    const page = await context.newPage();
+    watch(page);
+    await installMocks(page, { tms: [], wmts: [], geocode: [], other: [] });
+    await page.goto(`${plainBase}#carte=12/45.92/6.19`);
+    await page.waitForSelector('dialog.disclaimer[open]', { timeout: 10000 });
+    await page.waitForFunction(() => !document.querySelector('.disclaimer__accept').disabled, null, { timeout: 8000 });
+    await page.locator('.disclaimer__accept').click();
+    await passHunting(page);
+    await page.waitForSelector('dialog.tour[open]', { timeout: 5000 });
+    const schema = await page.evaluate(() => {
+      const screen = document.querySelector('.tour__screen--phone');
+      const drawn = document.querySelector('.tour-phone__island');
+      return { screen: screen ? getComputedStyle(screen).display : null, island: drawn ? getComputedStyle(drawn).display : null };
+    });
+    await page.screenshot({ path: `${OUT}16-sans-ilot-presentation-390.png` });
+    await closeTour(page);
+    await waitForMap(page);
+    await idle(page);
+    const phone = await page.evaluate(() => {
+      const r = (sel) => document.querySelector(sel).getBoundingClientRect();
+      return {
+        shown: document.getElementById('view-switch').getClientRects().length > 0,
+        search: Math.round(r('.search').top),
+        searchLeft: Math.round(r('.search').left),
+        searchWidth: Math.round(r('.search').width),
+        toggle: Math.round(r('#legend-toggle').top),
+        tools: Math.round(r('#toolbar-top').top),
+        banners: getComputedStyle(document.getElementById('grid-verdict')).top,
+      };
+    });
+    await page.screenshot({ path: `${OUT}16b-sans-ilot-390.png` });
+    await page.locator('#legend-toggle').tap();
+    await page.waitForTimeout(300);
+    const loaderTop = await page.evaluate(() => (document.getElementById('app').classList.contains('legend-open') ? getComputedStyle(document.getElementById('grid-loader')).top : 'légende fermée'));
+    check(
+      'téléphone, adresse ordinaire : pas d’îlot (ni dans le schéma de la présentation), recherche sur la première rangée, bandeaux et champignon de chargement une rangée plus haut',
+      !phone.shown && phone.search === 8 && phone.searchLeft === 62 && phone.searchWidth === 266 && phone.toggle === 8 && phone.tools === 8 && phone.banners === '62px' && loaderTop === '70px' && schema.screen === 'block' && schema.island === 'none',
+      JSON.stringify({ ...phone, chargement: loaderTop, schema }),
+    );
     await context.close();
   }
 

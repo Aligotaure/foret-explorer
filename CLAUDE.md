@@ -15,7 +15,10 @@ Cloudflare, `worker/`) suit la consommation des API.
 
 Deux vues dans la même page, choisies par un îlot noir en haut au centre : « Carte » (tout ce qui
 précède) et « Analytics » (comment le produit est piloté : pari en cours, analyses, paris tranchés),
-à l'adresse `#vue=analytics`. Voir « Deux vues : Carte et Analytics ».
+à l'adresse `#vue=analytics`. L'îlot et la vue Analytics sont réservés aux liens « vitrine », qui
+portent `?analytics` (`…/foret-explorer/?analytics#vue=analytics`), donnés par Clément à ses
+prospects freelance : à l'adresse ordinaire, celle des cueilleurs, le site n'est que la carte. Voir
+« Deux vues : Carte et Analytics ».
 
 Usage visé : repérer les coins favorables aux champignons (cèpes, girolles, trompettes, chanterelles
 en tube, morilles) partout en France. La carte sert aussi sur téléphone, en forêt : le mobile compte
@@ -38,10 +41,11 @@ https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
 - `npm run typecheck` : TypeScript strict, sans émission
 - `npm run build` : build statique dans `dist/` ; `npm run check` = typecheck + build + contrôle du
   build (`tests/build.mjs`, aussi `npm run test:build` : la page d'entrée et la vue Analytics
-  n'embarquent pas MapLibre, le code de la carte est préchargé, ordre des feuilles de style, contenu
-  de `src/analyticsData.ts` relu)
+  n'embarquent pas MapLibre, le code de la carte est préchargé, le script d'en-tête reconnaît le
+  lien « vitrine », ordre des feuilles de style, contenu de `src/analyticsData.ts` relu)
 - `npm run test:e2e` : test de bout en bout (Playwright + vrai MapLibre, services simulés ; avertissement,
-  À propos et zones compris ; îlot et vue Analytics dans `tests/e2e/views.mjs`). Première fois :
+  À propos et zones compris ; îlot et vue Analytics dans `tests/e2e/views.mjs`, ouverts par le lien
+  « vitrine », plus l'adresse ordinaire sans îlot). Première fois :
   `npx playwright install chromium`. Captures dans `tests/e2e/shots/`. La suite entière prend une
   dizaine de minutes ; pour mettre un test au point, `E2E_SEULS=cache,vide npm run test:e2e` ne joue
   que ces groupes (`avertissement`, `bureau`, `secours`, `cache`, `vide`, `telephone`, `vues`).
@@ -95,7 +99,7 @@ nouvelle dépendance sans raison.
 | Fichier | Rôle |
 |---|---|
 | `main.ts` | Point d'entrée (petit) : feuilles de style, îlot, avertissement, et chaque vue chargée par `import()` à sa première ouverture |
-| `view.ts` | Les deux vues : lecture et écriture de `#vue=analytics` dans l'adresse, historique, îlot, annonce aux lecteurs d'écran |
+| `view.ts` | Les deux vues : lecture et écriture de `#vue=analytics` dans l'adresse (vue Analytics pour un lien « vitrine » seulement), historique, îlot, annonce aux lecteurs d'écran |
 | `mapView.ts` | La vue Carte (chargée à la demande) : protocole `pmtiles://`, carte (France entière puis dernière vue gardée), modules, état → carte, clic → bilan du coin, comptages |
 | `analyticsView.ts`, `analytics.css` | La vue Analytics (chargée à la demande, sans rien de la carte) : en-tête, entonnoir (emplacement vide), pari en cours, analyses, paris tranchés, états vides |
 | `analyticsData.ts` | **Le** fichier de contenu de la vue Analytics, modifié à la main (guide en tête du fichier) |
@@ -104,7 +108,7 @@ nouvelle dépendance sans raison.
 | `gate.ts` | Fenêtre bloquante à compte à rebours, commune à l'avertissement et au rappel « période de chasse » : `<dialog>` modal que ni Échap ni un clic à côté ne ferment, bouton actif 3 s après l'affichage réel (horloge), retrait sans validation |
 | `hunting.ts` | Rappel « période de chasse » (`huntingSeason` : du premier dimanche de septembre au dernier jour de février), bloquant 3 s, montré après l'avertissement et avant la présentation, au plus toutes les 12 heures (`foret-explorer:chasse`) ; rien de mars à août |
 | `tour.ts` | « La carte en 3 gestes » : fenêtre libre montrée après un premier accord et depuis la légende, schéma de l'écran dessiné en HTML/CSS (grand écran et téléphone) ; chargé avec l'entrée, n'importe rien de la carte |
-| `legal.ts` | Version des conditions (`TERMS_VERSION`), jour de la refonte (`TOUR_SINCE`), adresse de « À propos », données gardées dans le navigateur, effacement |
+| `legal.ts` | Version des conditions (`TERMS_VERSION`), jour de la refonte (`TOUR_SINCE`), lien « vitrine » (`SHOWCASE` : `?analytics` dans l'adresse), adresse de « À propos » (qui garde ce mot), données gardées dans le navigateur, effacement |
 | `apropos.ts`, `apropos.css` | Page `a-propos.html` (conseils, règles, conditions, mentions légales, confidentialité) : état de la mesure, « Effacer mes données » |
 | `zones.ts` | Zones protégées et forêt publique sous un point, hachures, `info.json` (sans lui : statut inconnu) |
 | `config.ts` | URLs des services, archives de tuiles (`archiveTiles`, zooms de `GEOLOGY` et `ZONES`), emprise de la France (`FRANCE_BOUNDS` : données et première vue), réglages de la météo, clé localStorage |
@@ -692,6 +696,21 @@ zoom 12, texte de 8,5 px au zoom 11 ; « 62 % » ensuite, de 10 px au zoom 12 à
 
 ## Deux vues : Carte et Analytics
 
+- **Lien « vitrine »** (demande de Clément du 16/11/2026 : l'îlot invisible pour les cueilleurs,
+  visible pour ses prospects freelance et entreprises ; `SHOWCASE` de `legal.ts`). Seule une adresse
+  qui porte `?analytics` dans sa partie `?` (`?analytics`, `?analytics=1`, `?utm_source=x&analytics`)
+  montre l'îlot et peut ouvrir la vue Analytics ; à l'adresse ordinaire, `vue=analytics` est ignoré,
+  même tapé à la main, et la vue Analytics n'est pas chargée. Lien à donner :
+  `https://aligotaure.github.io/foret-explorer/?analytics#vue=analytics` (ou sans `#vue=analytics`
+  pour ouvrir sur la carte). Le mot est avant le `#` : ni MapLibre ni `view.ts` n'y touchent (vérifié
+  dans le code de MapLibre : il ne remplace que ce qui suit le `#`), il reste donc tout au long de la
+  visite ; il est lu une fois, à l'ouverture. Il suit les liens internes : « À propos » (`ABOUT_URL`)
+  et ses deux « Retour à la carte » (`apropos.ts`), le lien « Carte » de l'îlot (`./?analytics`, pour
+  un onglet ouvert à part). Deux endroits appliquent la règle : le script en tête d'`index.html`
+  (avant le premier affichage, il pose `data-island` sur `<html>`, que la feuille de style lit) et
+  `legal.ts` ; changer le mot aux deux. **Ce n'est pas un verrou** : le mot se lit dans le code, qui
+  est public, comme le contenu de la vue Analytics (`analyticsData.ts`) ; un lien transmis par un
+  prospect montre l'îlot à qui le reçoit. N'y mettre rien de confidentiel.
 - **Adresse** : `#vue=analytics` à côté de la position que MapLibre tient à jour (`hash: 'carte'`),
   par exemple `#carte=11.5/45.92/6.19&vue=analytics` ; sans `vue=analytics`, c'est la carte.
   `view.ts` découpe le fragment à la main (jamais `URLSearchParams` : il encoderait les « / » de
@@ -724,11 +743,12 @@ zoom 12, texte de 8,5 px au zoom 11 ; « 62 % » ensuite, de 10 px au zoom 12 à
 - **Avertissement** : c'est `main.ts` qui l'appelle, avec la vue Carte seulement ; quitter la carte
   sans l'avoir accepté le retire (`withdrawDisclaimer()`), y revenir le remontre, compte à rebours
   repris de zéro. Tant qu'il est à l'écran, l'îlot est inerte (fenêtre modale) : l'adresse à donner
-  pour montrer la vue Analytics est `…/#vue=analytics`.
+  pour montrer la vue Analytics est `…/?analytics#vue=analytics`.
 - **Îlot** : `nav` de deux liens (`aria-current="page"`), avant `#app` dans la page (premier arrêt de
   la touche Tab). 208 px × 46 px (`--island-width`, `--btn`), liens pleine hauteur, fond clair du
   segment actif en `::before` (glissement de 300 ms, bord meneur en premier ; rien si les animations
-  sont réduites). Placé en `vw`, sans `transform`. Ce qu'il a déplacé :
+  sont réduites). Placé en `vw`, sans `transform`. Ce qu'il déplace, pour un lien « vitrine »
+  seulement :
   - ≤ 640 px : îlot sur la première rangée, entre le bouton légende et les boutons de droite ; la
     recherche passe à la deuxième rangée (`.topbar` en `flex-wrap`, `pointer-events: none` sur le
     vide), les bandeaux du haut (« Choisissez un champignon », champignon de chargement, « risque de
@@ -737,6 +757,14 @@ zoom 12, texte de 8,5 px au zoom 11 ; « 62 % » ensuite, de 10 px au zoom 12 à
     resserre ; de 641 à 1127 px le bilan s'ouvre une rangée plus bas, et les bandeaux du haut
     aussi ;
   - à partir de 1188 px : centré, rien ne bouge.
+  À l'adresse ordinaire (`html:not([data-island])`), l'îlot est en `display: none` (ni clavier ni
+  lecteur d'écran), `--island-width` vaut 0 (la recherche garde ses 420 px), et sur téléphone
+  `--island-row` aussi : la recherche revient sur la première rangée à côté du bouton légende, et ce
+  qui se place sous elle (bandeaux, champignon de chargement tiroir ouvert, hauteur du bilan) remonte
+  d'une rangée. Le schéma téléphone de « La carte en 3 gestes » ne dessine pas l'îlot. De 641 à
+  1127 px, le bilan s'ouvre une rangée plus bas dans les deux cas (sans l'îlot, sur la première
+  rangée, il chevaucherait encore la recherche sous 904 px de large : 8 + 46 + 8 + 420 px à gauche,
+  360 + 62 px à droite).
 - **Contenu de la vue Analytics** : tout vient de `src/analyticsData.ts` ("" , `null` ou `[]` : état
   vide). Guillemets doubles dans ce fichier (les apostrophes du français y sont sans danger), modèles
   en commentaire dont chaque champ vaut `A_REMPLIR` (un oubli fait échouer `npm run check`). Les
@@ -1147,8 +1175,10 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   réseau, GPC ou page fermée brutalement : pas comptés) ; l'adresse de collecte est publique.
 - Comptages des forêts sur les tuiles chargées (débordent un peu de l'écran).
 - Recherche non biaisée vers la zone affichée.
-- Deux vues : tant que l'avertissement est à l'écran, l'îlot ne répond pas (il faut l'accepter, ou
-  arriver par `#vue=analytics`). Quitter la carte par l'îlot moins de 0,3 s après un déplacement peut
+- Deux vues : réservées aux liens « vitrine » (`?analytics`), ce qui n'est pas un verrou (mot lisible
+  dans le code public ; un lien transmis montre l'îlot) ; un ancien lien `…/#vue=analytics`, sans le
+  mot, ouvre la carte. Tant que l'avertissement est à l'écran, l'îlot ne répond pas (il faut
+  l'accepter, ou arriver par `?analytics#vue=analytics`). Quitter la carte par l'îlot moins de 0,3 s après un déplacement peut
   laisser l'ancienne position dans l'entrée de l'historique (seul Précédent la retrouve). Entre 641 et
   1187 px de large, l'îlot n'est pas centré. Graphiques de la vue Analytics : une série de barres
   (ni courbe ni comparaison de deux séries).

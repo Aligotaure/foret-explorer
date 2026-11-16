@@ -70,29 +70,50 @@ check(`vue Analytics : moins de ${kilo(MAX_EAGER_BYTES)} de code`, analytics.siz
 
 // En-tête : la vue Analytics est décidée avant le premier affichage, sinon la carte est préchargée.
 // Le script est exécuté pour de bon, adresse par adresse (le lire ne prouverait rien : un simple
-// commentaire contient déjà « vue=analytics »).
+// commentaire contient déjà « vue=analytics »). Rendu : « vue préchargement », plus « îlot » si
+// l'étiquette data-island (lien « vitrine », ?analytics) est posée.
 const inline = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '';
-function head(hash) {
+function head(address) {
+  const [search, hash] = address.includes('#') ? [address.slice(0, address.indexOf('#')), address.slice(address.indexOf('#'))] : [address, ''];
   const preloaded = [];
   const root = { dataset: {} };
   try {
     vm.runInNewContext(inline, {
-      location: { hash },
+      location: { hash, search },
       document: { documentElement: root, head: { append: (link) => preloaded.push(`${link.rel}:${link.href}`) }, createElement: () => ({}) },
     });
   } catch (error) {
     return `erreur : ${error.message}`;
   }
-  return `${root.dataset.view ?? 'carte'} ${preloaded.join(',') || 'rien'}`;
+  return `${root.dataset.view ?? 'carte'} ${preloaded.join(',') || 'rien'}${'island' in root.dataset ? ' îlot' : ''}`;
 }
 const onMap = `carte modulepreload:./assets/${mapFile}`;
 const mapHashes = ['', '#carte=11.5/45.92/6.19', '#vue=analyticsx', '#revue=analytics', '#carte=6/46/2&vue=carte'];
 const analyticsHashes = ['#vue=analytics', '#carte=11.5/45.92/6.19&vue=analytics', '#vue=analytics&carte=6/46/2'];
-const wrong = [...mapHashes.filter((hash) => head(hash) !== onMap), ...analyticsHashes.filter((hash) => head(hash) !== 'analytics rien')];
+// Avec le mot, la vue Analytics s'ouvre si l'adresse la demande ; sans lui, c'est toujours la carte.
+const expected = [
+  ...mapHashes.map((hash) => [`?analytics${hash}`, `${onMap} îlot`]),
+  ...analyticsHashes.map((hash) => [`?analytics${hash}`, 'analytics rien îlot']),
+  ...[...mapHashes, ...analyticsHashes].map((hash) => [hash, onMap]),
+];
+const wrong = expected.filter(([address, result]) => head(address) !== result);
 check(
-  'en-tête : la carte est préchargée quand la page s’ouvre sur elle, jamais pour la vue Analytics',
+  'en-tête : la carte est préchargée quand la page s’ouvre sur elle, jamais pour la vue Analytics, réservée aux liens « vitrine »',
   Boolean(inline) && Boolean(mapFile) && wrong.length === 0 && !html.includes('__MAP_CHUNK__'),
-  wrong.length ? wrong.map((hash) => `« ${hash} » → ${head(hash)}`).join(' ; ') : `./assets/${mapFile}`,
+  wrong.length ? wrong.map(([address]) => `« ${address} » → ${head(address)}`).join(' ; ') : `./assets/${mapFile}`,
+);
+// Le mot se reconnaît où qu'il soit dans la partie « ? », seul ou avec une valeur ; pas en morceau
+// d'un autre mot ni en valeur d'un autre paramètre.
+const showcaseFor = ['?analytics', '?analytics=1', '?analytics=', '?utm_source=x&analytics', '?analytics&utm_source=x'];
+const plainFor = ['', '?', '?analyticsx', '?xanalytics', '?a=analytics', '?vue=analytics', '?Analytics'];
+const wrongWord = [
+  ...showcaseFor.filter((search) => !head(search).endsWith(' îlot')),
+  ...plainFor.filter((search) => head(search) !== onMap),
+];
+check(
+  'en-tête : îlot montré pour ?analytics (seul, avec une valeur, parmi d’autres paramètres), et pour rien d’autre',
+  Boolean(inline) && wrongWord.length === 0,
+  wrongWord.length ? wrongWord.map((search) => `« ${search} » → ${head(search)}`).join(' ; ') : `${showcaseFor.length} adresses avec, ${plainFor.length} sans`,
 );
 // L'ordre des feuilles de style compte : style.css corrige des règles de MapLibre.
 const cssFile = html.match(/<link rel="stylesheet"[^>]*\shref="\.\/(assets\/[^"]+\.css)"/)?.[1];
