@@ -249,7 +249,7 @@ export function zonesSection(store: Store): { el: HTMLElement; sync(state: AppSt
     status.textContent =
       state === 'missing'
         ? 'Données des zones indisponibles pour le moment : le bilan d’un coin ne dit rien du statut du terrain.'
-        : `${ZONES.coverage}, à partir du zoom ${ZONES.minZoom}${when}. Sources : PatriNat (OFB, MNHN) et IGN (BD TOPO, d’après l’ONF). Indicatif : seuls les textes officiels et les panneaux sur place font foi.`;
+        : `${ZONES.coverage}, à partir du zoom ${ZONES.minZoom}${when}. Sources : PatriNat (OFB, MNHN), Conservatoire du littoral et IGN (BD TOPO, d’après l’ONF). Indicatif : seuls les textes officiels et les panneaux sur place font foi.`;
   };
   onZonesInfo(describe);
   describe();

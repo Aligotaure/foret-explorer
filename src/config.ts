@@ -46,7 +46,7 @@ export const ATTRIBUTION = {
   bdForet: `${IGN} – BD Forêt® V2 (Licence Ouverte Etalab 2.0)`,
   geologie: '© <a href="https://www.brgm.fr/" target="_blank" rel="noopener">BRGM</a> – carte géologique 1/50 000 harmonisée',
   meteo: 'Météo <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0)',
-  zones: `Zones protégées : PatriNat (OFB, MNHN) ; forêts publiques : ${IGN} – BD TOPO®`,
+  zones: `Zones protégées : PatriNat (OFB, MNHN), Conservatoire du littoral ; forêts publiques : ${IGN} – BD TOPO®`,
 } as const;
 
 /** Autocomplétion d'adresses et de lieux-dits (Géoplateforme). */

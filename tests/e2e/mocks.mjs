@@ -156,18 +156,24 @@ export function geologyTile() {
 }
 
 // Zones : réserve naturelle sur le quart haut-gauche de chaque tuile, forêt publique sur le quart
-// bas-droit ; ailleurs, terrain sans statut public (forêt « sans doute privée »).
+// bas-droit ; en haut du quart haut-droit, deux bandes du Conservatoire du littoral (un terrain qu'il
+// possède, puis un terrain qu'il gère) ; ailleurs, terrain sans statut public (forêt « sans doute privée »).
 export function zonesTile() {
-  const quarter = (x0, y0) => [
+  const rectangle = (x0, y0, width, height) => [
     [
       [x0, y0],
-      [x0 + 2048, y0],
-      [x0 + 2048, y0 + 2048],
-      [x0, y0 + 2048],
+      [x0 + width, y0],
+      [x0 + width, y0 + height],
+      [x0, y0 + height],
     ],
   ];
+  const quarter = (x0, y0) => rectangle(x0, y0, 2048, 2048);
+  // Bandes de toute la largeur du quart : la zone de recherche des tests (470 px de large au zoom 11,5,
+  // où une tuile en fait 724) en croise forcément une colonne.
   const protection = encodeTile('protection', [
     { id: fid++, props: { type: 'rnn', nom: 'Réserve d’essai', url: 'https://inpn.mnhn.fr/espace/protege/FR3600000' }, rings: quarter(0, 0) },
+    { id: fid++, props: { type: 'cdl', nom: 'Dunes d’essai' }, rings: rectangle(2048, 0, 2048, 512) },
+    { id: fid++, props: { type: 'cdl_gestion', nom: 'Marais d’essai' }, rings: rectangle(2048, 512, 2048, 512) },
   ]);
   const forests = encodeTile('foret_publique', [
     { id: fid++, props: { nature: 'autre', nom: 'Forêt communale d’essai' }, rings: quarter(2048, 2048) },
@@ -399,7 +405,7 @@ export async function installMocks(page, log, { meteoCommune = true, altitudeLen
     const path = new URL(route.request().url()).pathname;
     log.zones.push(path);
     if (path.endsWith('/info.json')) {
-      const info = { genere: '2026-11-03T06:00:00.000Z', compteurs: { rnn: 1, autres_forets_publiques: 1 } };
+      const info = { genere: '2026-11-03T06:00:00.000Z', compteurs: { rnn: 1, cdl: 1, cdl_gestion: 1, autres_forets_publiques: 1 } };
       return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(info) });
     }
     if (path.endsWith('/zones.pmtiles')) return fulfillRange(route, zonesArchive);

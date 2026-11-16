@@ -110,6 +110,8 @@ function statusValue(zones: ZonesAtPoint, forest: ForestAtPoint | null): HTMLEle
       ` : forêt publique${zones.publicForest.domaniale ? ' (domaniale)' : ''}, cueillette familiale en général tolérée sauf interdiction`,
     );
   }
+  // Seulement sur un terrain que le Conservatoire possède : ceux qu'il gère (« cdl_gestion ») ont un
+  // autre propriétaire, inconnu ici.
   if (zones.protections.some((z) => z.type === 'cdl')) return value(h('strong', {}, 'Propriété publique'), ' (Conservatoire du littoral)');
   // Dans une zone protégée, le propriétaire peut être public ou privé : on ne devine pas.
   if (zones.protections.length) return value(h('strong', {}, 'Propriétaire non identifié'), ' : accord à demander');
