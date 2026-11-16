@@ -5,9 +5,10 @@
 #
 # 1. Reprend les tuiles « nature du sol » de toute la France (cache, refaites seulement quand les
 #    scripts de scripts/geologie/ changent : ≈ 2,7 Go de cartes du BRGM à télécharger), celles des
-#    zones protégées et forêts publiques (cache, refaites chaque semaine depuis le WFS) et les
-#    derniers fichiers météo communs : tout cela est servi par GitHub Pages avec le site. Si une
-#    reconstruction échoue, les tuiles précédentes restent ; sans tuiles du tout, rien n'est publié.
+#    zones protégées et forêts publiques (cache, ou à défaut le site en ligne ; refaites depuis le WFS
+#    une fois par an, ou quand leurs scripts changent) et les derniers fichiers météo communs : tout
+#    cela est servi par GitHub Pages avec le site. Si une reconstruction échoue, les tuiles
+#    précédentes restent ; sans tuiles du tout, rien n'est publié.
 #    Les tuiles sont rangées dans une archive PMTiles par couche : GitHub Pages abandonne une
 #    publication au bout de 10 minutes, et des dizaines de milliers de petits fichiers n'y passent pas.
 # 2. Teste le serveur de mesure (worker/) et, si les secrets Cloudflare existent, le publie :
@@ -60,19 +61,70 @@ jobs:
           key: geologie-tuiles-${{ hashFiles('scripts/geologie/*') }}
           # Scripts modifiés : on garde les tuiles précédentes si la reconstruction échoue.
           restore-keys: geologie-tuiles-
-      - name: Semaine en cours
-        id: semaine
-        run: echo "n=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
-      - name: Tuiles des zones protégées et des forêts publiques en cache (refaites chaque semaine)
+      - name: Tuiles des zones protégées et des forêts publiques en cache
         id: zones
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: public/data/zones
-          key: zones-tuiles-${{ hashFiles('scripts/zones/*') }}-${{ steps.semaine.outputs.n }}
-          # Nouvelle semaine ou scripts modifiés : tuiles précédentes gardées si le WFS ne répond pas.
-          restore-keys: zones-tuiles-
+          # Chaque archive est gardée sous un nom à elle (voir « Garder les tuiles des zones ») : ce nom
+          # exact n'existe jamais. On reprend la plus récente faite avec les scripts actuels, à défaut
+          # la plus récente tout court (scripts modifiés depuis : elle sera refaite).
+          key: zones-tuiles-${{ hashFiles('scripts/zones/*') }}
+          restore-keys: |
+            zones-tuiles-${{ hashFiles('scripts/zones/*') }}-
+            zones-tuiles-
+      - name: Zones protégées à refaire ? (une fois par an, ou quand leurs scripts changent)
+        # Les zones bougent peu : une actualisation par an suffit (demande de Clément du 16/11/2026 ;
+        # avant, chaque semaine). Sans archive en cache (cache perdu, premier passage), on reprend
+        # celle du site en ligne, sans appeler le WFS. L'archive n'est refaite que si elle a un an ou
+        # plus, si les scripts de scripts/zones/ ont changé depuis, ou s'il n'y en a nulle part.
+        id: zones-age
+        env:
+          CLE: ${{ steps.zones.outputs.cache-matched-key }}
+          PREFIXE: zones-tuiles-${{ hashFiles('scripts/zones/*') }}-
+          EN_LIGNE: https://aligotaure.github.io/foret-explorer/data/zones
+        run: |
+          dossier=public/data/zones
+          source=cache
+          if [ ! -s "$dossier/zones.pmtiles" ] || [ ! -s "$dossier/info.json" ]; then
+            source=aucune
+            # Téléchargée à part : une archive arrivée incomplète ne remplace rien.
+            tmp=$(mktemp -d)
+            if curl -fsS --retry 3 --connect-timeout 10 -m 120 -o "$tmp/info.json" "$EN_LIGNE/info.json" \
+              && curl -fsS --retry 3 --connect-timeout 10 -m 600 -o "$tmp/zones.pmtiles" "$EN_LIGNE/zones.pmtiles" \
+              && [ "$(head -c 7 "$tmp/zones.pmtiles")" = PMTiles ]; then
+              rm -rf "$dossier" && mkdir -p "$dossier" && mv "$tmp/info.json" "$tmp/zones.pmtiles" "$dossier/"
+              source=site
+            fi
+            rm -rf "$tmp"
+          fi
+          # Âge en jours, d'après la date de construction écrite dans info.json (champ « genere »).
+          age=
+          if [ "$source" != aucune ]; then
+            age=$(node -e 'const g = Date.parse(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).genere); if (Number.isFinite(g)) console.log(Math.floor((Date.now() - g) / 864e5))' "$dossier/info.json" 2>/dev/null) || age=
+          fi
+          if [ "$source" = aucune ]; then
+            raison="aucune archive, ni en cache ni sur le site en ligne"
+          elif [ "$source" = cache ] && [[ "$CLE" != "$PREFIXE"* ]]; then
+            raison="scripts de scripts/zones/ modifiés depuis l'archive en cache"
+          elif [ -z "$age" ]; then
+            raison="date de l'archive illisible"
+          elif [ "$age" -ge 365 ]; then
+            raison="archive de $age jours"
+          else
+            raison=
+          fi
+          if [ -n "$raison" ]; then
+            echo "Zones protégées à refaire : $raison."
+            echo "refaire=oui" >> "$GITHUB_OUTPUT"
+          elif [ "$source" = site ]; then
+            echo "Zones protégées gardées : archive de $age jours, reprise du site en ligne."
+          else
+            echo "Zones protégées gardées : archive de $age jours, en cache."
+          fi
+          echo "source=$source" >> "$GITHUB_OUTPUT"
       - name: Installer GDAL
-        if: steps.geologie.outputs.cache-hit != 'true' || steps.zones.outputs.cache-hit != 'true'
+        if: steps.geologie.outputs.cache-hit != 'true' || steps.zones-age.outputs.refaire == 'oui'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin > /dev/null
       - name: Construire les tuiles « nature du sol » (France entière, une dizaine de minutes)
         id: geologie-construire
@@ -87,15 +139,17 @@ jobs:
           key: geologie-tuiles-${{ hashFiles('scripts/geologie/*') }}
       - name: Construire les tuiles des zones protégées et des forêts publiques (France entière)
         id: zones-construire
-        if: steps.zones.outputs.cache-hit != 'true'
+        if: steps.zones-age.outputs.refaire == 'oui'
         continue-on-error: true
         run: bash scripts/zones/construire.sh
       - name: Garder les tuiles des zones
-        if: steps.zones-construire.outcome == 'success'
+        # Archive neuve, ou reprise du site en ligne (pour ne pas la retélécharger à chaque
+        # publication). Un nom par exécution : une entrée du cache ne se remplace pas.
+        if: steps.zones-construire.outcome == 'success' || steps.zones-age.outputs.source == 'site'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: public/data/zones
-          key: zones-tuiles-${{ hashFiles('scripts/zones/*') }}-${{ steps.semaine.outputs.n }}
+          key: zones-tuiles-${{ hashFiles('scripts/zones/*') }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Fichiers météo communs (dernier passage de la tâche « Météo commune »)
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

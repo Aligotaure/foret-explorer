@@ -26,12 +26,13 @@ autant que le bureau. Première visite : la France entière ; ensuite, la derni�
 
 En ligne : https://aligotaure.github.io/foret-explorer/ (GitHub Pages, republié à chaque push sur
 `main` et à chaque tour complet de la météo par `.github/workflows/deploy.yml` : archive des tuiles
-de géologie (cache), archive des zones (cache, refaite chaque semaine), fichiers météo (cache de
+de géologie (cache), archive des zones (cache, à défaut celle du site en ligne ; refaite une fois par
+an), fichiers météo (cache de
 `meteo.yml`), tests et publication du serveur de mesure s'il est configuré, `npm run check`,
 publication de `dist/`). Autres workflows : `meteo.yml` (toutes les heures : fichiers météo communs,
 une demande par case et par jour, voir plus bas), `verification.yml` (chaque pull request, Dependabot
 compris), `surveillance.yml` (chaque jour : les services et les archives répondent-ils, la météo
-a-t-elle plus de 36 h de retard ? Open-Meteo injoignable : simple avertissement). Liste des risques du site (document à part) :
+a-t-elle plus de 36 h de retard, les zones plus de 13 mois ? Open-Meteo injoignable : simple avertissement). Liste des risques du site (document à part) :
 https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
 
 ## Commandes
@@ -842,7 +843,22 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   biotope, 26 arrêtés d'habitats naturels, 623 sites du Conservatoire du littoral, 2 552 sites des CEN ;
   17 071 forêts publiques (1 285 domaniales ; 360 Mo de GeoJSON). Tuiles : une archive
   `data/zones/zones.pmtiles`, zooms 9 à 11 (sur-zoom au-delà), 4 142 tuiles, 24 Mo, 3 minutes de
-  construction ; gardée en cache et refaite chaque semaine (`deploy.yml`).
+  construction.
+  **Refaite une fois par an** (`deploy.yml`, demande de Clément du 16/11/2026 : les zones bougent
+  peu ; avant, chaque semaine) : seulement si l'archive a 365 jours ou plus (date `genere` de son
+  `info.json`), si les scripts de `scripts/zones/` ont changé depuis (toute retouche, même d'un
+  commentaire, relance la reconstruction), ou s'il n'y en a nulle part. Gardée dans le cache
+  d'Actions sous un nom par exécution (`zones-tuiles-<empreinte des scripts>-<exécution>`) ; cache
+  perdu : reprise du site en ligne (24 Mo), sans appeler le WFS. Une reconstruction ratée laisse
+  l'archive précédente en place et est retentée à chaque publication ; `surveillance.yml` échoue
+  quand l'archive en ligne a plus de 13 mois (395 jours).
+  ⚠ `patrinat_cdl:conservatoire_littoral` a disparu du WFS entre le 11 et le 16/11/2026 (HTTP 400
+  « Unknown namespace [patrinat_cdl] », absente des GetCapabilities) : toute reconstruction échoue
+  tant que `telecharger.mjs` la demande (piste 17). L'archive du 11/11/2026 garde les 623 sites.
+  Couches du Conservatoire listées le 16/11/2026 : `CONSERVATOIRE_LITTORAL.PARCELLES:parcelles_protegees`
+  (63 895 parcelles cadastrales ; site dans `pera_id` et `pera_nom`, aussi `prot_dat`,
+  `type_maitrise` ; pas de fiche INPN) et `CONSERVATOIRE_LITTORAL.PERIMETRES:perimetre_intervention`
+  (722 périmètres où le Conservatoire peut acquérir : pas des terrains protégés).
   ⚠ Un cœur de parc national compte des centaines de milliers de points : pas de `Math.min(...tableau)`
   ni de `push(...tableau)` sur ces géométries (dépassement de pile).
   Exclus exprès : Natura 2000, ZNIEFF, PNR, sites classés, réserves de chasse (pas d'interdiction de
@@ -1171,6 +1187,13 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   et s'arrêtent après 60 jours sans activité sur le dépôt.
 - Tuiles des sols et des zones jusqu'au zoom 11 seulement (sur-zoom au-delà) : limites précises à
   quelques mètres, ce que valent les données ; l'archive des sols fait 143 Mo d'un seul tenant.
+- Zones protégées et forêts publiques refaites une fois par an : une zone créée ou agrandie
+  entre-temps n'apparaît qu'à la reconstruction suivante (« À propos » les dit « indicatives […]
+  dépassées »). Archive du 11/11/2026 : aucune reconstruction n'est tentée avant le 11/11/2027 ;
+  ensuite, tant que la couche du Conservatoire du littoral n'est pas remplacée (piste 17), chaque
+  publication la tente et échoue (≈ 1 min 20 s de plus), l'archive reste servie, et
+  `surveillance.yml` passe au rouge vers le 11/12/2027. Une archive reprise du site en ligne (cache
+  perdu) est tenue pour faite avec les scripts actuels.
 - Mesure de consommation : compteurs envoyés par les navigateurs, donc ordres de grandeur (hors
   réseau, GPC ou page fermée brutalement : pas comptés) ; l'adresse de collecte est publique.
 - Comptages des forêts sur les tuiles chargées (débordent un peu de l'écran).
@@ -1301,3 +1324,7 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
 16. Carrés de 500 m prêts autour de la vue : relever aussi la marge des tuiles déjà chargées (elles
     débordent de l'écran ; à vérifier avec `querySourceFeatures`), sans rien télécharger de plus ; et
     faire démarrer avant `load` ce qui n'attend pas les tuiles (comptages exclus).
+17. Conservatoire du littoral : remplacer `patrinat_cdl:conservatoire_littoral`, retirée du WFS
+    (voir « Données et API »), par les parcelles protégées (`CONSERVATOIRE_LITTORAL.PARCELLES:parcelles_protegees`,
+    regroupées par site avec `pera_id`) : avant le 11/11/2027 (reconstruction annuelle), et avant
+    toute autre retouche de `scripts/zones/`, qui relance la reconstruction.

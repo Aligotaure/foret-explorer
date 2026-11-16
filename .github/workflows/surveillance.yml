@@ -1,7 +1,7 @@
 # Vérifie chaque jour que les services utilisés par la carte répondent : IGN (tuiles, altitude,
 # recherche, polices), Open-Meteo et le site en ligne (archives des tuiles de géologie et des zones,
-# lues par morceaux ; fichiers météo communs, dont le dernier jour ne doit pas avoir plus de
-# 36 heures). Une ou deux requêtes par service. En cas d'échec, l'exécution apparaît en rouge dans
+# lues par morceaux ; zones refaites il y a moins de 13 mois ; fichiers météo communs, dont le
+# dernier jour ne doit pas avoir plus de 36 heures). Une ou deux requêtes par service. En cas d'échec, l'exécution apparaît en rouge dans
 # l'onglet Actions et GitHub envoie un e-mail de notification (réglage par défaut des notifications
 # Actions).
 #
@@ -94,6 +94,17 @@ jobs:
           verifier 'Nature du sol' 'https://aligotaure.github.io/foret-explorer/data/geologie/info.json' 'departements'
           archive 'Nature du sol' 'https://aligotaure.github.io/foret-explorer/data/geologie/geologie.pmtiles'
           verifier 'Zones protégées et forêts publiques' 'https://aligotaure.github.io/foret-explorer/data/zones/info.json' 'genere'
+          # Refaites une fois par an par la publication (deploy.yml), qui garde l'ancienne archive si
+          # le WFS de l'IGN refuse (couche renommée…) : passé 13 mois, la reconstruction échoue depuis
+          # un mois. Lu ici, avant que « archive » ne remplace la réponse.
+          genere=$(jq -r '.genere // empty' reponse 2>/dev/null)
+          limite=$(date -u -d '395 days ago' +%FT%TZ)
+          if [ -z "$genere" ] || [ "$genere" \< "$limite" ]; then
+            echo "::error::Zones protégées et forêts publiques trop anciennes : archive du ${genere:-jour inconnu}, la reconstruction annuelle (deploy.yml) échoue sans doute."
+            echec=1
+          else
+            echo "OK  Zones protégées et forêts publiques refaites le ${genere%%T*}"
+          fi
           archive 'Zones protégées et forêts publiques' 'https://aligotaure.github.io/foret-explorer/data/zones/zones.pmtiles'
           verifier 'Météo commune' 'https://aligotaure.github.io/foret-explorer/data/meteo/index.json' 'dernierJour'
           # Le tour du jour se fait d'ordinaire dans la nuit, mais GitHub lance les tâches planifiées avec

@@ -156,7 +156,7 @@ Pour tester une version locale depuis un téléphone sur le même Wi-Fi : `npm r
 ## Mise en ligne
 
 Chaque push sur `main` déclenche `.github/workflows/deploy.yml` : tuiles de géologie (gardées en
-cache tant que leurs scripts ne changent pas), tuiles des zones (refaites chaque semaine), fichiers
+cache tant que leurs scripts ne changent pas), tuiles des zones (refaites une fois par an), fichiers
 météo, tests et publication du serveur de mesure (s'il est configuré), vérification TypeScript,
 build Vite, publication sur GitHub Pages. Les dépendances sont installées avec `npm ci
 --ignore-scripts` : versions figées par les `package-lock.json`, sans script d'installation. Les
