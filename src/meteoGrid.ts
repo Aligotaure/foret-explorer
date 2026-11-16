@@ -15,7 +15,7 @@
 /** Case de base (≈ 4,5 km), celle de la grille fine. */
 export const BASE_STEP_LAT = 0.04;
 export const BASE_STEP_LON = 0.056;
-/** Côté d'une case commune, en cases de base : 4 × 4,5 km ≈ 18 km (choix mesuré, voir CLAUDE.md). */
+/** Côté d'une case commune, en cases de base : 4 × 4,5 km ≈ 18 km (choix mesuré, voir docs/donnees.md). */
 export const METEO_FACTOR = 4;
 export const STEP_LAT = BASE_STEP_LAT * METEO_FACTOR;
 export const STEP_LON = BASE_STEP_LON * METEO_FACTOR;

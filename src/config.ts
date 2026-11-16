@@ -1,7 +1,7 @@
 /**
  * Services publics de la Géoplateforme IGN (data.geopf.fr) : sans clé d'API,
  * données sous Licence Ouverte Etalab 2.0. Points d'accès vérifiés le 31/10/2026
- * (détails et pièges dans CLAUDE.md).
+ * (détails et pièges dans docs/donnees.md).
  */
 const GEOPF = 'https://data.geopf.fr';
 

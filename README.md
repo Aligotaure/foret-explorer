@@ -111,8 +111,9 @@ haut de page ce qui reste à corriger.
 
 ## Continuer avec Claude Code
 
-Ouvrez un terminal dans ce dossier et lancez `claude`. Le fichier `CLAUDE.md` lui donne le contexte :
-architecture, services vérifiés et leurs pièges, conventions, idées pour la suite.
+Ouvrez un terminal dans ce dossier et lancez `claude`. Le fichier `CLAUDE.md` lui donne l'essentiel
+(commandes, fichiers, pièges, conventions) et renvoie aux notes détaillées du dossier `docs/` :
+architecture, services vérifiés, limites connues, idées pour la suite.
 
 ## Vérifier
 
