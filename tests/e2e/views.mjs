@@ -445,6 +445,16 @@ export async function viewTests({ browser, base, plainBase, OUT, check, preAccep
     await island(page, 'map').click();
     await page.waitForSelector('#view-error:not([hidden])', { timeout: 10000 });
     const failure = await page.evaluate(() => ({ text: document.getElementById('view-error').textContent, button: document.querySelector('#view-error button')?.textContent }));
+    // Recherche validée par Entrée sans le code de la carte (src/main.ts) : le navigateur n'envoie
+    // pas le formulaire lui-même, qui rechargerait la page en perdant ?analytics, donc l'îlot.
+    await page.evaluate(() => {
+      window.sameVisit = true;
+    });
+    await page.locator('#search-input').fill('Annecy');
+    await page.locator('#search-input').press('Enter');
+    await page.waitForTimeout(500);
+    const searched = await page.evaluate(() => ({ sameVisit: window.sameVisit === true, search: location.search, island: document.getElementById('view-switch').getClientRects().length > 0 }));
+    check('vue injoignable : Entrée dans la recherche ne recharge pas la page, l’adresse garde ?analytics et l’îlot reste', searched.sameVisit && searched.search === '?analytics' && searched.island, JSON.stringify(searched));
     await island(page, 'analytics').click();
     const gone = await page.evaluate(() => document.getElementById('view-error').hidden);
     check(
@@ -800,15 +810,16 @@ export async function viewTests({ browser, base, plainBase, OUT, check, preAccep
     // Un geste sur la carte entre le bouton légende et l'îlot atteint bien la carte.
     const through = await page.evaluate(() => document.elementFromPoint(72, 30)?.className);
     check('mobile : la rangée de l’îlot laisse passer les gestes vers la carte', /maplibregl-canvas/.test(String(through)), String(through));
-    // Avec l'îlot, ce qui se place sous la recherche descend d'une rangée (--island-row ; section 7 :
-    // sans lui, 62 et 70 px). Valeurs calculées : bandeaux et champignon n'ont pas à être affichés.
+    // Avec l'îlot, ce qui se place sous la recherche descend d'une rangée (--island-row, 46 + 8 px) :
+    // bandeaux à 2 × 46 + 3 × 8 = 116 px, champignon de chargement tiroir ouvert à 2 × 46 + 4 × 8 =
+    // 124 px (section 7 : sans lui, 62 et 70 px). Valeurs calculées : rien n'a à être affiché.
     const banners = await page.evaluate(() => getComputedStyle(document.getElementById('grid-verdict')).top);
     await page.locator('#legend-toggle').tap();
     await page.waitForTimeout(300);
     const loaderTop = await page.evaluate(() => (document.getElementById('app').classList.contains('legend-open') ? getComputedStyle(document.getElementById('grid-loader')).top : 'légende fermée'));
     await page.locator('#legend .panel__close').tap();
     await page.waitForTimeout(300);
-    check('mobile, lien « vitrine » : bandeaux et champignon de chargement (tiroir ouvert) sous la recherche, sur la troisième rangée', banners === '108px' && loaderTop === '116px', JSON.stringify({ bandeaux: banners, chargement: loaderTop }));
+    check('mobile, lien « vitrine » : bandeaux et champignon de chargement (tiroir ouvert) sous la recherche, sur la troisième rangée', banners === '116px' && loaderTop === '124px', JSON.stringify({ bandeaux: banners, chargement: loaderTop }));
 
     await island(page, 'analytics').tap();
     await page.waitForSelector('#analytics h1');
@@ -904,12 +915,22 @@ export async function viewTests({ browser, base, plainBase, OUT, check, preAccep
       footer.length === 4 && footer.every((h) => h.startsWith('a-propos.html?analytics#')) && about.search === '?analytics' && about.back.length === 2 && about.back.every((h) => h === './?analytics') && back.search === '?analytics' && back.shown && back.mapLink === './?analytics' && plainBack.length === 2 && plainBack.every((h) => h === './'),
       JSON.stringify({ footer, about, back, plainBack }),
     );
+
+    // Le mot parmi d'autres paramètres (lien de campagne) : la règle de src/legal.ts, celle qui ouvre
+    // la vue Analytics, le reconnaît comme le script d'en-tête (tests/build.mjs n'éprouve que lui).
+    await page.goto(`${plainBase}?utm_source=x&analytics#vue=analytics`);
+    await page.waitForSelector('#analytics h1');
+    const campaign = await page.evaluate(() => ({
+      view: document.documentElement.dataset.view,
+      shown: document.getElementById('view-switch').getClientRects().length > 0,
+    }));
+    check('lien « vitrine » de campagne (?utm_source=x&analytics) : îlot et vue Analytics', campaign.view === 'analytics' && campaign.shown, JSON.stringify(campaign));
     await context.close();
   }
 
   // Téléphone, adresse ordinaire, premier accord : présentation sans îlot dans son schéma, puis la
   // recherche sur la première rangée, à côté du bouton légende (390 − 8 − 46 − 8 − 62 = 266 px), et
-  // ce qui se place sous elle une rangée plus haut qu'avec l'îlot (section 6 : 108 et 116 px).
+  // ce qui se place sous elle une rangée plus haut qu'avec l'îlot (section 6 : 116 et 124 px).
   {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
     const page = await context.newPage();

@@ -85,6 +85,12 @@ function show(view: ViewId): void {
   }
 }
 
+// La recherche (src/search.ts) n'arrive qu'avec le code de la carte. Validée par Entrée avant lui
+// (réseau lent, ou code injoignable), elle serait envoyée par le navigateur lui-même : la page se
+// rechargerait en perdant la partie « ? » de l'adresse, donc le mot d'un lien « vitrine »
+// (src/legal.ts) et l'îlot avec lui.
+byId<HTMLFormElement>('search').addEventListener('submit', (event) => event.preventDefault());
+
 initViewSwitch();
 onViewChange(show);
 show(currentView());

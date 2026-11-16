@@ -26,7 +26,8 @@ export const SHOWCASE_PARAM = 'analytics';
 /**
  * L'adresse de cette page porte le mot (`?analytics`, `?analytics=1`, `?utm_source=x&analytics`…).
  * Lu une fois, à l'ouverture : rien dans la page ne change la partie `?` de l'adresse (MapLibre et
- * src/view.ts n'écrivent que ce qui suit le `#`), donc l'îlot ne disparaît pas en cours de visite.
+ * src/view.ts n'écrivent que ce qui suit le `#`, et le formulaire de recherche n'est jamais envoyé
+ * par le navigateur : src/main.ts), donc l'îlot ne disparaît pas en cours de visite.
  */
 export const SHOWCASE = typeof location !== 'undefined' && new RegExp(`[?&]${SHOWCASE_PARAM}(?:[=&]|$)`).test(location.search);
 
