@@ -58,8 +58,9 @@ https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
   dix minutes ; pour un essai : `DEPARTEMENTS="074 073"`). Inutile en dev : la carte lit alors
   l'archive du site en ligne.
 - `bash scripts/zones/construire.sh` : tuiles des zones protégées et forêts publiques, dans l'archive
-  `public/data/zones/zones.pmtiles` (GDAL ≥ 3.8, Node ; toute la France depuis le WFS, retéléchargée
-  au plus une fois par semaine). Même remarque en dev.
+  `public/data/zones/zones.pmtiles` (GDAL ≥ 3.8 avec SpatiaLite, qui fusionne les parcelles du
+  Conservatoire du littoral ; Node ; toute la France depuis le WFS, retéléchargée au plus une fois par
+  semaine). Même remarque en dev.
 - `node scripts/meteo/mettre-a-jour.mjs --simuler --dossier /tmp/meteo --cases scripts/meteo/cases-france.json`
   : fichiers météo communs avec des séries fictives (sans `--simuler` : vrais appels à Open-Meteo,
   `--budget` en appels pondérés). En dev, la carte lit ceux du site en ligne.
@@ -150,10 +151,11 @@ PMTiles), `regles.mjs` (règles de classement des descriptions géologiques en n
 `scripts/foret/` : `parts.mjs` (parts de forêt par carré de 4,5 km → `public/foret/parts.json`,
 versionné), `mvt.mjs` (lecteur de tuiles vectorielles sans dépendance), `geometrie.mjs` (aires,
 découpage d'un anneau par un rectangle, tuiles XYZ).
-`scripts/zones/` : `telecharger.mjs` (WFS → GeoJSONSeq Lambert-93, noms nettoyés, `resume.json`),
-`construire.sh` (GPKG simplifié à 5 m → archive PMTiles, couches `protection`, `protection_nom` (un point par zone,
-pour n'afficher son nom qu'une fois : les sites des conservatoires sont faits de dizaines de parcelles)
-et `foret_publique`, `info.json`).
+`scripts/zones/` : `telecharger.mjs` (WFS → GeoJSONSeq Lambert-93, noms nettoyés, `resume.json` ; les
+parcelles du Conservatoire du littoral à part, `conservatoire.geojsonl`), `construire.sh` (GPKG simplifié
+à 5 m, parcelles du Conservatoire fusionnées par site et par type → archive PMTiles, couches
+`protection`, `protection_nom` (un point par zone, pour n'afficher son nom qu'une fois : les sites des
+conservatoires sont faits de dizaines de parcelles) et `foret_publique`, `info.json`).
 
 Flux : l'interface ne touche jamais la carte. Elle appelle `store.update()` ; `mapView.ts` est abonné au
 store et appelle `applySelection` / `applyOpacity` / `applyBasemap` / `applyGeology` /
@@ -593,7 +595,10 @@ bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
 - **Statut** : toujours visible, un fait et ce qu'il implique (« Forêt sans doute privée : il faut
   l'accord du propriétaire », « X : forêt publique »), jamais « autorisé ». C'est le garde-fou qui
   permet de replier les règles : ne pas le déplacer sous les champignons. Un test e2e vérifie qu'il se
-  voit sans rien déplier.
+  voit sans rien déplier. « Propriété publique (Conservatoire du littoral) » seulement sur un terrain
+  que le Conservatoire possède (type `cdl`) ; sur un terrain qu'il gère sans le posséder
+  (`cdl_gestion`, contrats de gestion : Vaccarès, îles Chausey…), « Propriétaire non identifié : accord
+  à demander », comme dans les autres zones protégées (test e2e pour les deux).
 - **Champignons** : du plus probable au moins probable (tri sur l'indice, sans exception parmi les
   champignons de saison ; ceux qui sont hors saison de plus d'un mois viennent ensuite, grisés et sans
   pourcentage, voir « Hors saison ») ; le
@@ -834,16 +839,23 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   depuis GitHub Actions ; **pas de CORS** : seulement au build) : `TYPENAMES=patrinat_rnn:rnn`,
   `patrinat_rnr:rnr`, `patrinat_pprnn:pprnn`, `patrinat_pprnr:pprnr`, `patrinat_rb:rb` (champ `zone` :
   Intégrale / Dirigée), `patrinat_pn:parc_national` (champ `zone` : Cœur / Adhesion, on garde le cœur),
-  `patrinat_apb:apb`, `patrinat_aphn:aphn`, `patrinat_cdl:conservatoire_littoral`, `patrinat_cen:cen`
-  (champs `nom_site`, `url_fiche` vers l'INPN, `id_mnhn`) ; `BDTOPO_V3:foret_publique` (`nature` : Forêt
+  `patrinat_apb:apb`, `patrinat_aphn:aphn`, `patrinat_cen:cen` (champs `nom_site`, `url_fiche` vers
+  l'INPN, `id_mnhn`) ; `CONSERVATOIRE_LITTORAL.PARCELLES:parcelles_protegees` (terrains du Conservatoire
+  du littoral, une parcelle cadastrale par objet ; `PROPERTYNAME=pera_id,pera_nom,type_maitrise,geom` :
+  site, nom en capitales presque sans accents, « Propriété » ou « Contrats de gestion » ; pas de fiche
+  INPN) ; `BDTOPO_V3:foret_publique` (`nature` : Forêt
   domaniale / Autre forêt publique, `toponyme`, source ONF 2021). Requête : `OUTPUTFORMAT=application/json`,
   `SRSNAME=EPSG:2154`, `BBOX=41.2,-5.3,51.2,9.7,urn:ogc:def:crs:EPSG::4326` (lat/lon en WFS 2.0 ; toute
   la France métropolitaine), `COUNT=5000` + `STARTINDEX`. France entière (03/11/2026) : 151 RNN, 191 RNR,
   18 périmètres de protection, 267 réserves biologiques, 8 cœurs de parc national, 1 062 arrêtés de
-  biotope, 26 arrêtés d'habitats naturels, 623 sites du Conservatoire du littoral, 2 552 sites des CEN ;
-  17 071 forêts publiques (1 285 domaniales ; 360 Mo de GeoJSON). Tuiles : une archive
-  `data/zones/zones.pmtiles`, zooms 9 à 11 (sur-zoom au-delà), 4 142 tuiles, 24 Mo, 3 minutes de
-  construction.
+  biotope, 26 arrêtés d'habitats naturels, 2 552 sites des CEN ;
+  17 071 forêts publiques (1 285 domaniales ; 360 Mo de GeoJSON). Conservatoire du littoral
+  (16/11/2026) : 63 895 parcelles (99 Mo de GeoJSON), 641 sites, 148 994 ha, dont 108 685 possédés et
+  40 264 gérés sans être possédés (contrats de gestion ; 46 ha sans type, tenus pour gérés), soit
+  847 terrains une fois fusionnés par site et par type (599 `cdl`, 248 `cdl_gestion`). Tuiles : une archive
+  `data/zones/zones.pmtiles`, zooms 9 à 11 (sur-zoom au-delà), 4 142 tuiles, 24 Mo. Construction
+  dans GitHub (16/11/2026, Ubuntu 26.04) : 5 min, dont 3 min 54 s de téléchargements (1 min pour les
+  parcelles du Conservatoire), 20 s pour la fusion et 31 s de découpage.
   **Refaite une fois par an** (`deploy.yml`, demande de Clément du 16/11/2026 : les zones bougent
   peu ; avant, chaque semaine) : seulement si l'archive a 365 jours ou plus (date `genere` de son
   `info.json`), si les scripts de `scripts/zones/` ont changé depuis (toute retouche, même d'un
@@ -852,13 +864,28 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   perdu : reprise du site en ligne (24 Mo), sans appeler le WFS. Une reconstruction ratée laisse
   l'archive précédente en place et est retentée à chaque publication ; `surveillance.yml` échoue
   quand l'archive en ligne a plus de 13 mois (395 jours).
-  ⚠ `patrinat_cdl:conservatoire_littoral` a disparu du WFS entre le 11 et le 16/11/2026 (HTTP 400
-  « Unknown namespace [patrinat_cdl] », absente des GetCapabilities) : toute reconstruction échoue
-  tant que `telecharger.mjs` la demande (piste 17). L'archive du 11/11/2026 garde les 623 sites.
-  Couches du Conservatoire listées le 16/11/2026 : `CONSERVATOIRE_LITTORAL.PARCELLES:parcelles_protegees`
-  (63 895 parcelles cadastrales ; site dans `pera_id` et `pera_nom`, aussi `prot_dat`,
-  `type_maitrise` ; pas de fiche INPN) et `CONSERVATOIRE_LITTORAL.PERIMETRES:perimetre_intervention`
-  (722 périmètres où le Conservatoire peut acquérir : pas des terrains protégés).
+  **Conservatoire du littoral : parcelles au lieu des sites de PatriNat** (16/11/2026). La couche
+  `patrinat_cdl:conservatoire_littoral` (623 sites, avec fiche INPN) a disparu du WFS entre le 11 et le
+  16/11/2026 (HTTP 400 « Unknown namespace [patrinat_cdl] », absente des GetCapabilities), et la
+  reconstruction échouait. Les parcelles protégées l'ont remplacée, vérifiées contre l'archive du
+  11/11/2026 (`cdl` découpé à ses tuiles du zoom 11, 20 000 points tirés de part et d'autre) :
+  98,7 % de l'ancienne surface (143 227 ha) est dans les parcelles, et 96,2 % des parcelles y étaient
+  déjà, contrats de gestion compris (98,4 %) : l'ancienne couche disait donc « Propriété publique »
+  du Vaccarès et des îles Chausey, que le Conservatoire gère sans les posséder. 616 des 622 anciens
+  noms retrouvés tels quels, 6 renommés ou regroupés ; 23 noms nouveaux (743 ha), dont 17 protégés
+  en 2024-2026. Fusion dans `construire.sh` (SQL de SpatiaLite) : par site et par type, sinon chaque
+  parcelle serait tracée en rouge ; chaque parcelle dilatée d'un mètre puis le terrain resserré
+  d'autant, car des parcelles voisines laissent des interstices de moins d'un mètre (≈ 30 km de bords
+  sur un quart des parcelles, mesuré le 16/11/2026), qui deviendraient de fins trous cernés de rouge ;
+  la construction échoue si un terrain perd sa géométrie. Archive ainsi reconstruite le 16/11/2026
+  (tuiles du zoom 11) : 148 756 ha (108 478 possédés, 40 277 gérés), 639 noms ; 14 878 contours
+  extérieurs contre 14 364 avant (sans la fusion, il y en aurait plus de 64 000) ; trous de moins de
+  3 m de large en moyenne : 129 km de contours, contre 133 km dans l'archive du 11/11/2026.
+  Étiquette : dans la plus grande parcelle du site. Noms : capitales converties (`capitales` de `telecharger.mjs` : « ILES CHAUSEY » →
+  « Iles Chausey », « -DE- » → « -de- »). Pas de lien : la couche n'en donne pas, l'INPN refuse les
+  scripts (403), et les numéros des pages du site du Conservatoire (`/siteLittoral/<n>/…`) ne sont pas
+  les `pera_id` (Agriate : 42 contre 50). Aussi listée : `CONSERVATOIRE_LITTORAL.PERIMETRES:perimetre_intervention`
+  (722 périmètres où le Conservatoire peut acquérir : pas des terrains protégés, à ne pas prendre).
   ⚠ Un cœur de parc national compte des centaines de milliers de points : pas de `Math.min(...tableau)`
   ni de `push(...tableau)` sur ces géométries (dépassement de pile).
   Exclus exprès : Natura 2000, ZNIEFF, PNR, sites classés, réserves de chasse (pas d'interdiction de
@@ -1189,11 +1216,15 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
   quelques mètres, ce que valent les données ; l'archive des sols fait 143 Mo d'un seul tenant.
 - Zones protégées et forêts publiques refaites une fois par an : une zone créée ou agrandie
   entre-temps n'apparaît qu'à la reconstruction suivante (« À propos » les dit « indicatives […]
-  dépassées »). Archive du 11/11/2026 : aucune reconstruction n'est tentée avant le 11/11/2027 ;
-  ensuite, tant que la couche du Conservatoire du littoral n'est pas remplacée (piste 17), chaque
-  publication la tente et échoue (≈ 1 min 20 s de plus), l'archive reste servie, et
-  `surveillance.yml` passe au rouge vers le 11/12/2027. Une archive reprise du site en ligne (cache
-  perdu) est tenue pour faite avec les scripts actuels.
+  dépassées »). Une archive reprise du site en ligne (cache perdu) est tenue pour faite avec les
+  scripts actuels.
+- Terrains du Conservatoire du littoral : plus de fiche officielle dans le bilan (la couche des
+  parcelles n'en donne pas) ; noms tels que la source les donne, en capitales presque sans accents
+  (« Iles Chausey ») ; sur un terrain qu'il gère, le bilan ne nomme pas le propriétaire. Un site mixte
+  est tracé en deux terrains, avec un trait entre la partie possédée et la partie gérée (198 sites).
+  `a-propos.html` (« Ce que vaut la carte ») attribue encore les zones protégées à PatriNat seul : à
+  corriger avec les autres retouches de texte en attente (sa section « Sources » nomme le
+  Conservatoire).
 - Mesure de consommation : compteurs envoyés par les navigateurs, donc ordres de grandeur (hors
   réseau, GPC ou page fermée brutalement : pas comptés) ; l'adresse de collecte est publique.
 - Comptages des forêts sur les tuiles chargées (débordent un peu de l'écran).
@@ -1324,7 +1355,3 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
 16. Carrés de 500 m prêts autour de la vue : relever aussi la marge des tuiles déjà chargées (elles
     débordent de l'écran ; à vérifier avec `querySourceFeatures`), sans rien télécharger de plus ; et
     faire démarrer avant `load` ce qui n'attend pas les tuiles (comptages exclus).
-17. Conservatoire du littoral : remplacer `patrinat_cdl:conservatoire_littoral`, retirée du WFS
-    (voir « Données et API »), par les parcelles protégées (`CONSERVATOIRE_LITTORAL.PARCELLES:parcelles_protegees`,
-    regroupées par site avec `pera_id`) : avant le 11/11/2027 (reconstruction annuelle), et avant
-    toute autre retouche de `scripts/zones/`, qui relance la reconstruction.

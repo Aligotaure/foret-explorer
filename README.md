@@ -210,8 +210,8 @@ les réactiver dans l'onglet **Actions**.
   [Licence Ouverte Etalab 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence/).
 - Géologie : © BRGM, cartes géologiques harmonisées au 1/50 000 (BD Charm-50, 2019), Licence Ouverte
   2.0, via le miroir référencé par data.gouv.fr.
-- Zones protégées : PatriNat (OFB, MNHN), via la Géoplateforme ; forêts publiques : © IGN, BD TOPO®
-  (d'après l'ONF), Licence Ouverte Etalab 2.0.
+- Zones protégées : PatriNat (OFB, MNHN) et Conservatoire du littoral (parcelles protégées), via la
+  Géoplateforme ; forêts publiques : © IGN, BD TOPO® (d'après l'ONF), Licence Ouverte Etalab 2.0.
 - Météo : [Open-Meteo](https://open-meteo.com/) (CC BY 4.0), gratuit pour un usage non commercial
   (moins de 10 000 appels par jour et 300 000 par mois), recopiée chaque jour dans les fichiers
   météo du site ; limites des départements (grille météo) : © IGN, ADMIN EXPRESS.

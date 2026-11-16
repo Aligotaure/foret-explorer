@@ -1,7 +1,9 @@
 // Télécharge, depuis le WFS de la Géoplateforme et en Lambert-93 (EPSG:2154), sur l'emprise donnée :
 //   - les espaces protégés de PatriNat (OFB, MNHN) dont le règlement peut interdire ou limiter
 //     la cueillette (réserves naturelles et biologiques, cœurs de parc national, arrêtés de
-//     protection, terrains des conservatoires) → protection.geojsonl ;
+//     protection, sites des conservatoires d'espaces naturels) → protection.geojsonl ;
+//   - les parcelles protégées du Conservatoire du littoral → conservatoire.geojsonl, une parcelle
+//     cadastrale par ligne, fusionnées ensuite par site et par maîtrise (construire.sh) ;
 //   - les forêts publiques de la BD TOPO de l'IGN (d'après l'ONF) → forets.geojsonl ;
 //   - un point d'étiquette par zone protégée (nom affiché une seule fois) → etiquettes.geojsonl ;
 // et écrit resume.json (date, nombres par type), copié ensuite en info.json à côté des tuiles.
@@ -33,20 +35,28 @@ const PROTECTION = [
   { typename: 'patrinat_pn:parc_national', type: 'pn', garder: (p) => /c(œ|oe)ur/i.test(String(p.zone ?? '')) },
   { typename: 'patrinat_apb:apb', type: 'apb' },
   { typename: 'patrinat_aphn:aphn', type: 'aphn' },
-  { typename: 'patrinat_cdl:conservatoire_littoral', type: 'cdl' },
   { typename: 'patrinat_cen:cen', type: 'cen' },
 ];
+/**
+ * Terrains du Conservatoire du littoral, parcelle par parcelle : la couche des sites de PatriNat
+ * (`patrinat_cdl:conservatoire_littoral`) a quitté le WFS entre le 11 et le 16/11/2026. Type « cdl »
+ * pour ceux qu'il possède (`type_maitrise` « Propriété »), « cdl_gestion » pour ceux qu'il gère sans
+ * les posséder (« Contrats de gestion », ou maîtrise non renseignée) : le bilan d'un coin ne dit
+ * « Propriété publique » que des premiers. Mêmes types que src/zones.ts.
+ */
+const CONSERVATOIRE = 'CONSERVATOIRE_LITTORAL.PARCELLES:parcelles_protegees';
 const FORETS = 'BDTOPO_V3:foret_publique';
 
 const fichiers = {
   protection: join(dir, 'protection.geojsonl'),
+  conservatoire: join(dir, 'conservatoire.geojsonl'),
   etiquettes: join(dir, 'etiquettes.geojsonl'),
   forets: join(dir, 'forets.geojsonl'),
   resume: join(dir, 'resume.json'),
 };
 
 /** Ordre de priorité des étiquettes (1 passe devant), et types qu'on n'étiquette pas. */
-const RANG = { rnn: 1, rnr: 1, pn: 1, rb: 2, apb: 2, aphn: 2, cdl: 3, cen: 3 };
+const RANG = { rnn: 1, rnr: 1, pn: 1, rb: 2, apb: 2, aphn: 2, cdl: 3, cdl_gestion: 3, cen: 3 };
 
 const aire = (anneau) => {
   let a = 0;
@@ -102,7 +112,8 @@ function recent() {
   }
 }
 
-async function telecharger(typename) {
+/** Tous les objets d'une couche sur l'emprise ; `champs` : seulement ces attributs (géométrie comprise). */
+async function telecharger(typename, champs) {
   const entites = [];
   for (let start = 0; ; start += PAGE) {
     const params = new URLSearchParams({
@@ -115,6 +126,7 @@ async function telecharger(typename) {
       BBOX: `${emprise},urn:ogc:def:crs:EPSG::4326`,
       COUNT: String(PAGE),
       STARTINDEX: String(start),
+      ...(champs ? { PROPERTYNAME: champs } : {}),
     });
     let page;
     for (let essai = 1; ; essai++) {
@@ -152,6 +164,40 @@ function nom(valeur) {
   return texte[0].toUpperCase() + texte.slice(1);
 }
 
+/**
+ * Nom écrit tout en capitales (sites du Conservatoire du littoral) : « ILES CHAUSEY » → « Iles Chausey »,
+ * « SAINT-HILAIRE-DE-RIEZ » → « Saint-Hilaire-de-Riez », « BAIE D'AUDIERNE » → « Baie D'Audierne »
+ * (nom() met ensuite « de », « d' »… en minuscules). Les accents absents de la source le restent.
+ */
+function capitales(valeur) {
+  const s = String(valeur ?? '').trim();
+  if (!s || /\p{Ll}/u.test(s)) return s; // déjà en minuscules et majuscules
+  const majuscule = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  const morceaux = s.toLowerCase().split(/(\s+|-)/);
+  return morceaux
+    .map((mot, i) => {
+      if (!mot || /^(\s+|-)$/.test(mot)) return mot;
+      // Dans un nom composé (« -de- », « -d'oleron ») : petits mots et élisions en minuscules.
+      const compose = morceaux[i - 1] === '-' && /\S/.test(morceaux[i - 2] ?? '');
+      const elision = /^(\p{L})(['’])(.+)$/u.exec(mot);
+      if (elision && elision[1].length === 1) return `${compose ? elision[1] : elision[1].toUpperCase()}${elision[2]}${majuscule(elision[3])}`;
+      return compose && PETITS.has(mot) ? mot : majuscule(mot);
+    })
+    .join('');
+}
+
+/** Coordonnées arrondies au centimètre : fichier plus léger, et les bords communs se recollent. */
+const arrondi = (geometrie) => {
+  const point = ([x, y]) => [Math.round(x * 100) / 100, Math.round(y * 100) / 100];
+  const coordonnees =
+    geometrie.type === 'Polygon'
+      ? geometrie.coordinates.map((anneau) => anneau.map(point))
+      : geometrie.type === 'MultiPolygon'
+        ? geometrie.coordinates.map((poly) => poly.map((anneau) => anneau.map(point)))
+        : geometrie.coordinates;
+  return { type: geometrie.type, coordinates: coordonnees };
+};
+
 /** « Périmètre De Protection De La Réserve Naturelle Nationale Du Bout Du Lac » → « Bout du Lac ». */
 const sansPerimetre = (s) =>
   s.replace(/^p[ée]rim[èe]tre de protection de la r[ée]serve naturelle (nationale |r[ée]gionale )?(de l['’]|de la |du |des |de |d['’])?/i, '');
@@ -163,6 +209,14 @@ async function construire() {
   const vus = new Set();
   const protection = [];
   const etiquettes = new Map(); // nom normalisé → meilleure étiquette
+  /** Une étiquette par nom : celle du type de meilleur rang, puis du plus grand morceau. */
+  const etiqueter = (texte, type, geometrie) => {
+    const pe = RANG[type] && texte ? pointEtiquette(geometrie) : null;
+    const deja = pe && etiquettes.get(cle(texte));
+    if (pe && (!deja || RANG[type] < deja.rang || (RANG[type] === deja.rang && pe.surface > deja.surface))) {
+      etiquettes.set(cle(texte), { nom: texte, type, rang: RANG[type], surface: pe.surface, point: pe.point });
+    }
+  };
   for (const couche of PROTECTION) {
     const entites = await telecharger(couche.typename);
     for (const f of entites) {
@@ -182,14 +236,30 @@ async function construire() {
       if (type === 'rb' && typeof p.zone === 'string' && p.zone) props.detail = p.zone; // Intégrale / Dirigée
       protection.push(ligne(props, f.geometry));
       compteurs[type] = (compteurs[type] ?? 0) + 1;
-      const pe = RANG[type] && texte ? pointEtiquette(f.geometry) : null;
-      const deja = pe && etiquettes.get(cle(texte));
-      if (pe && (!deja || RANG[type] < deja.rang || (RANG[type] === deja.rang && pe.surface > deja.surface))) {
-        etiquettes.set(cle(texte), { nom: texte, type, rang: RANG[type], surface: pe.surface, point: pe.point });
-      }
+      etiqueter(texte, type, f.geometry);
     }
     console.log(`${couche.typename} : ${entites.length} objets`);
   }
+
+  // Conservatoire du littoral : une ligne par parcelle, avec son site (`pera_id`) ; construire.sh
+  // les fusionne par site et par type. Compteurs : nombre de terrains après fusion (site × type).
+  const conservatoire = [];
+  const terrains = new Set();
+  for (const f of await telecharger(CONSERVATOIRE, 'pera_id,pera_nom,type_maitrise,geom')) {
+    const p = f.properties ?? {};
+    if (!f.geometry || p.pera_id === null || p.pera_id === undefined || p.pera_id === '') continue;
+    const type = /^propri[ée]t[ée]$/i.test(String(p.type_maitrise ?? '').trim()) ? 'cdl' : 'cdl_gestion';
+    const texte = nom(capitales(p.pera_nom));
+    const geometrie = arrondi(f.geometry);
+    conservatoire.push(ligne({ site: String(p.pera_id), type, nom: texte }, geometrie));
+    const terrain = `${p.pera_id}|${type}`;
+    if (!terrains.has(terrain)) {
+      terrains.add(terrain);
+      compteurs[type] = (compteurs[type] ?? 0) + 1;
+    }
+    etiqueter(texte, type, geometrie); // étiquette dans la plus grande parcelle du site
+  }
+  console.log(`${CONSERVATOIRE} : ${conservatoire.length} parcelles, ${terrains.size} terrains (site et maîtrise)`);
 
   const forets = [];
   for (const f of await telecharger(FORETS)) {
@@ -204,10 +274,11 @@ async function construire() {
       (compteurs[domaniale ? 'forets_domaniales' : 'autres_forets_publiques'] ?? 0) + 1;
   }
   console.log(`${FORETS} : ${forets.length} objets`);
-  if (!protection.length || !forets.length) throw new Error('aucune zone téléchargée');
+  if (!protection.length || !conservatoire.length || !forets.length) throw new Error('aucune zone téléchargée');
 
   // Écriture atomique : un téléchargement raté ne laisse pas de fichier à moitié écrit.
   writeFileSync(`${fichiers.protection}.tmp`, `${protection.join('\n')}\n`);
+  writeFileSync(`${fichiers.conservatoire}.tmp`, `${conservatoire.join('\n')}\n`);
   writeFileSync(
     `${fichiers.etiquettes}.tmp`,
     `${[...etiquettes.values()].map((e) => ligne({ nom: e.nom, type: e.type, rang: e.rang }, { type: 'Point', coordinates: e.point })).join('\n')}\n`,
@@ -222,6 +293,7 @@ async function construire() {
         compteurs,
         sources: [
           'PatriNat (OFB, MNHN), espaces protégés, via le WFS de la Géoplateforme',
+          'Conservatoire du littoral, parcelles protégées, via le WFS de la Géoplateforme',
           'IGN, BD TOPO® V3, forêts publiques (d’après l’ONF), Licence Ouverte Etalab 2.0',
         ],
       },

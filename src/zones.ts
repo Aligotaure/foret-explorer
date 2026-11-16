@@ -1,6 +1,7 @@
 /**
- * Droit de cueillir sous un point : zones protégées (PatriNat, via la Géoplateforme) et forêts
- * publiques (BD TOPO de l'IGN, d'après l'ONF), tuilées par scripts/zones/ et publiées avec le site.
+ * Droit de cueillir sous un point : zones protégées (PatriNat et Conservatoire du littoral, via la
+ * Géoplateforme) et forêts publiques (BD TOPO de l'IGN, d'après l'ONF), tuilées par scripts/zones/ et
+ * publiées avec le site.
  *
  * Ces données sont indicatives : le bilan d'un coin le dit, et ne parle du statut d'un terrain que
  * si les tuiles sont bien là (info.json lu, aucune erreur réseau, zoom suffisant, dans l'emprise).
@@ -9,9 +10,13 @@ import type { LngLat, Map as MapLibreMap, PointLike } from 'maplibre-gl';
 import { ZONES, ZONES_BASE } from './config';
 import { LAYERS, ZONE_PATTERN } from './mapStyle';
 
-export type ProtectionType = 'rnn' | 'rnr' | 'perimetre' | 'rb' | 'pn' | 'apb' | 'aphn' | 'cdl' | 'cen';
+export type ProtectionType = 'rnn' | 'rnr' | 'perimetre' | 'rb' | 'pn' | 'apb' | 'aphn' | 'cdl' | 'cdl_gestion' | 'cen';
 
-/** Mêmes identifiants que scripts/zones/telecharger.mjs. */
+/**
+ * Mêmes identifiants que scripts/zones/telecharger.mjs. « cdl » : terrain que le Conservatoire du
+ * littoral possède (le bilan dit « Propriété publique ») ; « cdl_gestion » : terrain qu'il gère sans
+ * le posséder (contrat de gestion), dont le propriétaire n'est pas connu ici.
+ */
 export const PROTECTION_LABELS: Readonly<Record<ProtectionType, string>> = {
   rnn: 'Réserve naturelle nationale',
   rnr: 'Réserve naturelle régionale',
@@ -21,6 +26,7 @@ export const PROTECTION_LABELS: Readonly<Record<ProtectionType, string>> = {
   apb: 'Arrêté de protection de biotope',
   aphn: 'Arrêté de protection d’habitat naturel',
   cdl: 'Terrain du Conservatoire du littoral',
+  cdl_gestion: 'Terrain géré par le Conservatoire du littoral',
   cen: 'Site d’un conservatoire d’espaces naturels',
 };
 

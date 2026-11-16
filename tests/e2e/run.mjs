@@ -557,12 +557,16 @@ async function desktopTests(browser, base) {
     for (let y = 130; y < H - 80; y += 23) {
       for (let x = 450; x < W - 520; x += 29) {
         const at = (layer) => m.queryRenderedFeatures([x, y], { layers: [layer] }).length > 0;
-        const prot = at('zones-protegees-hit');
+        const types = m.queryRenderedFeatures([x, y], { layers: ['zones-protegees-hit'] }).map((f) => f.properties?.type);
+        const only = (type) => types.length > 0 && types.every((t) => t === type);
+        const prot = types.length > 0;
         const pub = at('forets-publiques-hit');
         const forest = at('bdforet-hit');
-        if (prot && !pub && forest) out.prot ??= { x, y };
+        if (only('rnn') && !pub && forest) out.prot ??= { x, y };
         if (pub && !prot && forest) out.pub ??= { x, y };
         if (!pub && !prot && forest) out.priv ??= { x, y };
+        if (only('cdl') && !pub) out.cdl ??= { x, y };
+        if (only('cdl_gestion') && !pub) out.managed ??= { x, y };
       }
     }
     return out;
@@ -633,6 +637,34 @@ async function desktopTests(browser, base) {
     await page.locator('#spot .panel__close').click();
   } else {
     check('bilan : points dans une réserve, une forêt publique et une forêt privée', false, JSON.stringify(zonePoints));
+  }
+  // Conservatoire du littoral : « Propriété publique » sur les terrains qu'il possède, jamais sur ceux
+  // qu'il gère sans les posséder (contrats de gestion) ; plus de fiche INPN pour ses sites.
+  let conservatoireClicks = 0;
+  if (zonePoints.cdl && zonePoints.managed) {
+    conservatoireClicks = 2;
+    const owned = await rulesAt(zonePoints.cdl);
+    check(
+      'bilan : terrain que possède le Conservatoire du littoral, « Propriété publique », sans lien',
+      /^Terrain du Conservatoire du littoral « Dunes d’essai »/.test(owned.alert) &&
+        !owned.link &&
+        owned.status === 'Propriété publique (Conservatoire du littoral)' &&
+        /Propriété publique \(Conservatoire du littoral\) : suivez le règlement affiché sur place/.test(owned.rules),
+      `${owned.alert.slice(0, 70)} — statut : ${owned.status}`,
+    );
+    const managed = await rulesAt(zonePoints.managed);
+    check(
+      'bilan : terrain que gère le Conservatoire du littoral, propriétaire non identifié (pas « Propriété publique »)',
+      /^Terrain géré par le Conservatoire du littoral « Marais d’essai »/.test(managed.alert) &&
+        !managed.link &&
+        managed.status === 'Propriétaire non identifié : accord à demander' &&
+        /Propriétaire non identifié : demandez l’accord du propriétaire ou du gestionnaire/.test(managed.rules) &&
+        !/Propriété publique/.test(`${managed.status} ${managed.rules}`),
+      `${managed.alert.slice(0, 70)} — statut : ${managed.status}`,
+    );
+    await page.locator('#spot .panel__close').click();
+  } else {
+    check('bilan : points sur un terrain possédé et sur un terrain géré par le Conservatoire du littoral', false, JSON.stringify(zonePoints));
   }
   await page.getByRole('switch', { name: 'Afficher les forêts publiques' }).uncheck();
 
@@ -1823,7 +1855,7 @@ async function desktopTests(browser, base) {
       totals['ign.altitude.points'] > 20 &&
       totals['pages.geology'] > 0 &&
       totals['pages.zones'] > 0 &&
-      totals['app.spots'] === 7 + cityClicks,
+      totals['app.spots'] === 7 + cityClicks + conservatoireClicks,
     JSON.stringify(totals),
   );
   await page.evaluate(() => window.metrics.flush());
