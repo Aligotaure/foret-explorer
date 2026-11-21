@@ -3,6 +3,7 @@ import { byId, h, toast } from './dom';
 import { ALL_CODES } from './forestClasses';
 import { icon, type IconName } from './icons';
 import { ABOUT_URL } from './legal';
+import { showLocateHelp, type LocateFailure } from './locateHelp';
 import type { AppState, Store } from './state';
 
 function toolButton(name: IconName, label: string): HTMLButtonElement {
@@ -53,18 +54,59 @@ export function initToolbar(map: MapLibreMap, store: Store): HTMLButtonElement[]
   });
   map.addControl(geolocate, 'top-right');
   const locate = toolButton('locate', 'Me localiser');
-  locate.addEventListener('click', () => {
+  let tracking = false; // le contrôle suit (ou attend) la position
+  let failed = false; // panne déjà traitée depuis le dernier appui
+  // Panne : on arrête le suivi (sinon un nouvel appui l'éteindrait au lieu de réessayer) et on dit
+  // quoi régler, selon l'appareil (src/locateHelp.ts).
+  const fail = (failure: LocateFailure): void => {
+    if (tracking) geolocate.trigger();
+    locate.setAttribute('aria-pressed', 'false');
+    showLocateHelp(failure, start);
+  };
+  const start = (): void => {
     if (!window.isSecureContext || !('geolocation' in navigator)) {
       toast('Géolocalisation impossible ici : ouvrez la carte en https (ou sur localhost).', 5000);
       return;
     }
-    if (!geolocate.trigger()) toast('Géolocalisation pas encore prête, réessayez dans un instant');
+    failed = false;
+    // Refus déjà enregistré : le navigateur ne redemandera rien, autant dire tout de suite quoi régler.
+    const asked: Promise<string> = navigator.permissions
+      ? navigator.permissions.query({ name: 'geolocation' }).then(
+          (status) => status.state,
+          () => 'prompt',
+        )
+      : Promise.resolve('prompt');
+    void asked.then((state) => {
+      if (state === 'denied' && !tracking) fail('denied');
+      else if (!geolocate.trigger()) toast('Géolocalisation pas encore prête, réessayez dans un instant');
+    });
+  };
+  locate.addEventListener('click', start);
+  geolocate.on('trackuserlocationstart', () => {
+    tracking = true;
+    locate.setAttribute('aria-pressed', 'true');
   });
-  geolocate.on('trackuserlocationstart', () => locate.setAttribute('aria-pressed', 'true'));
-  geolocate.on('trackuserlocationend', () => locate.setAttribute('aria-pressed', 'false'));
-  geolocate.on('error', () => {
+  geolocate.on('trackuserlocationend', () => {
+    tracking = false;
     locate.setAttribute('aria-pressed', 'false');
-    toast('Position introuvable (autorisation refusée ou signal GPS absent)');
+  });
+  geolocate.on('error', (event) => {
+    if (failed) return;
+    failed = true;
+    if ((event as { code?: number }).code === 1) {
+      fail('denied');
+      return;
+    }
+    // GPS muet ou trop lent : un essai par le réseau (moins précis), sans suivi.
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (tracking) geolocate.trigger();
+        map.flyTo({ center: [position.coords.longitude, position.coords.latitude], zoom: Math.max(map.getZoom(), 12) });
+        toast('Position approximative (sans GPS) : carte centrée, sans suivi.', 5000);
+      },
+      (error) => fail(error.code === 1 ? 'denied' : 'unavailable'),
+      { enableHighAccuracy: false, timeout: 15_000, maximumAge: 600_000 },
+    );
   });
 
   // Conditions, mentions légales, confidentialité et conseils de cueillette.

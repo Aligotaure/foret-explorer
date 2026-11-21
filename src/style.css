@@ -2802,3 +2802,81 @@ html:not([data-island]) .tour-phone__island {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* « Me localiser » en panne : quoi régler, pas à pas (src/locateHelp.ts). */
+.geo-help {
+  width: min(520px, calc(100% - 24px));
+  max-height: calc(100dvh - 24px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 0;
+  border-radius: 8px;
+  background: var(--navy-900);
+  color: #e5e5ff;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+.geo-help::backdrop {
+  background: rgba(8, 8, 26, 0.74);
+}
+
+.geo-help__box {
+  padding: 18px 18px 14px;
+}
+
+.geo-help__title {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.geo-help__lead,
+.geo-help__note {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.geo-help__note {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.geo-help__steps {
+  margin: 0 0 12px;
+  padding-left: 22px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.geo-help__steps li {
+  margin-bottom: 6px;
+}
+
+.geo-help__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--gap);
+}
+
+.geo-help__btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--btn);
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: #5555e6;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.geo-help__btn--quiet {
+  border-color: var(--line);
+  background: var(--navy-800);
+  font-weight: 400;
+}

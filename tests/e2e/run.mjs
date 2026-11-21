@@ -2812,6 +2812,55 @@ async function fallbackTests(browser, base) {
   await context.close();
 }
 
+/** « Me localiser » : un refus est expliqué pas à pas, « Réessayer » repart, navigateur intégré reconnu. */
+async function locateTests(browser, base) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await preAccept(context);
+  const page = await context.newPage();
+  await installMocks(page, { tms: [], wmts: [], geocode: [], other: [] });
+  await page.goto(`${base}#carte=10.5/45.92/6.19`);
+  await waitForMap(page);
+  await page.getByRole('button', { name: 'Me localiser' }).click();
+  await page.waitForSelector('dialog.geo-help[open]', { timeout: 25000 });
+  const help = await page.evaluate(() => ({
+    text: document.querySelector('dialog.geo-help').textContent,
+    steps: document.querySelectorAll('dialog.geo-help li').length,
+  }));
+  check(
+    'localisation refusée : la fenêtre dit quoi régler',
+    /Position refusée/.test(help.text) && help.steps >= 3 && /Aucun lien ne peut ouvrir ces réglages/.test(help.text),
+    help.text.slice(0, 110),
+  );
+  await context.grantPermissions(['geolocation']);
+  await context.setGeolocation({ latitude: 44.2, longitude: 3.6 });
+  await page.locator('dialog.geo-help').getByRole('button', { name: 'Réessayer' }).click();
+  const moved = await page
+    .waitForFunction(() => Math.abs(window.map.getCenter().lat - 44.2) < 0.05, null, { timeout: 25000 })
+    .then(() => true, () => false);
+  check('localisation : « Réessayer » après accord centre la carte', moved && (await page.locator('dialog.geo-help').count()) === 0);
+  await context.close();
+
+  // Navigateur intégré à une application (ici LinkedIn sur iPhone) : on propose d'ouvrir Safari.
+  const inApp = await browser.newContext({
+    viewport: { width: 390, height: 800 },
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [LinkedInApp]/9.30',
+  });
+  await preAccept(inApp);
+  const page2 = await inApp.newPage();
+  await installMocks(page2, { tms: [], wmts: [], geocode: [], other: [] });
+  await page2.goto(`${base}#carte=10.5/45.92/6.19`);
+  await waitForMap(page2);
+  await page2.getByRole('button', { name: 'Me localiser' }).click();
+  await page2.waitForSelector('dialog.geo-help[open]', { timeout: 25000 });
+  const app = await page2.evaluate(() => ({
+    title: document.querySelector('.geo-help__title').textContent,
+    href: document.querySelector('dialog.geo-help a')?.getAttribute('href') ?? '',
+    fits: document.querySelector('dialog.geo-help').getBoundingClientRect().right <= window.innerWidth,
+  }));
+  check('localisation dans une application : « Ouvrir dans Safari » proposé', /application/.test(app.title) && app.href.startsWith('x-safari-http') && app.fits, JSON.stringify(app).slice(0, 150));
+  await inApp.close();
+}
+
 async function mobileTests(browser, base) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
   const page = await context.newPage();
@@ -2945,6 +2994,7 @@ try {
   await group('avertissement', () => disclaimerTests(browser, server.url));
   await group('bureau', () => desktopTests(browser, server.url));
   await group('secours', () => fallbackTests(browser, server.url));
+  await group('localisation', () => locateTests(browser, server.url));
   await group('cache', () => surveyCacheTests(browser, server.url));
   await group('vide', () => emptyViewTests(browser, server.url));
   await group('choix', () => chooseTests(browser, server.url));
