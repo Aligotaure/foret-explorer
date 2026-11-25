@@ -1,9 +1,12 @@
-// Parts de forêt et part bâtie par carré de 4,5 km : géométrie du calcul, lecteur de tuiles, et fichier versionné
-// (public/foret/parts.json, écrit par scripts/foret/parts.mjs). Sans réseau, sans TypeScript :
+// Ce que chaque carré de 4,5 km contient (carrés de 500 m à dessiner par champignon, part bâtie) :
+// géométrie du calcul, lecteur de tuiles, relevé sur le treillis des carrés de 500 m, et fichier
+// versionné (public/foret/parts.json, écrit par scripts/foret/parts.mjs). Sans réseau, sans TypeScript :
 //   npm run test:foret
+// (La règle elle-même, celle de la carte, est vérifiée par `npm run test:france`, qui a Vite.)
 import { readFileSync } from 'node:fs';
 import { aire, aireDans, lonLatOf, tileBounds, tileOf } from '../scripts/foret/geometrie.mjs';
 import { lireCouche } from '../scripts/foret/mvt.mjs';
+import { creerTreillis, ordreDeTrace, polygones, remplir, tracerTuile, versTreillis } from '../scripts/foret/releve.mjs';
 
 const results = [];
 function check(name, ok, detail = '') {
@@ -68,23 +71,118 @@ check(
 );
 check('lecteur de tuiles : couche absente → null', lireCouche(tuile, 'inconnue', 'code_tfv') === null);
 
+// ── Relevé des carrés de 500 m : points du treillis dans un polygone ─────────────
+const dans = (rings) => {
+  const points = [];
+  remplir(rings, (x, y) => points.push(`${x},${y}`));
+  return points.sort();
+};
+const plein = [[0, 0], [3, 0], [3, 3], [0, 3], [0, 0]];
+check(
+  'treillis : un carré de 3 de côté contient neuf points (bords ouest et sud dedans, est et nord dehors)',
+  dans([plein]).join(' ') === '0,0 0,1 0,2 1,0 1,1 1,2 2,0 2,1 2,2',
+  dans([plein]).join(' '),
+);
+const perce = [[1, 1], [1, 2], [2, 2], [2, 1], [1, 1]];
+check('treillis : un trou retire ses points', dans([plein, perce]).length === 8 && !dans([plein, perce]).includes('1,1'), dans([plein, perce]).join(' '));
+// Anneaux regroupés en polygones comme MapLibre : même sens que le premier = nouveau polygone, sens
+// contraire = trou du polygone en cours (même s'il est dehors : un morceau noté à l'envers au bord
+// d'une tuile se lit alors comme de la forêt, par la règle pair-impair).
+const ile = [[10, 10], [12, 10], [12, 12], [10, 12], [10, 10]]; // même sens que `plein`
+const groupes = polygones([plein, perce, ile, [[5, 5], [5, 5], [5, 5]]]);
+check(
+  'treillis : anneaux regroupés en polygones comme MapLibre (un polygone par contour, ses trous avec lui, anneau sans surface ignoré)',
+  groupes.length === 2 && groupes[0].length === 2 && groupes[1].length === 1 && polygones([plein]).length === 1,
+  groupes.map((g) => `${g.length} anneau(x)`).join(' + '),
+);
+const avecMorceau = polygones([plein, [...ile].reverse()]); // l'île notée à l'envers : « trou » hors du contour
+check(
+  'treillis : un morceau noté dans le sens d’un trou, hors de son contour, reste de la forêt (ses quatre points s’ajoutent aux neuf du contour)',
+  avecMorceau.length === 1 && avecMorceau[0].length === 2 && dans(avecMorceau[0]).length === 13 && dans(avecMorceau[0]).includes('10,10') && dans(avecMorceau[0]).includes('11,11'),
+  dans(avecMorceau[0]).join(' '),
+);
+// La règle de la carte (`inside` de src/fineGrid.ts), recopiée ici pour comparer point par point.
+const dedans = (rings, x, y) => {
+  let hit = false;
+  for (const ring of rings) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xa, ya] = ring[i];
+      const [xb, yb] = ring[j];
+      if (ya > y !== yb > y && x < ((xb - xa) * (y - ya)) / (yb - ya) + xa) hit = !hit;
+    }
+  }
+  return hit;
+};
+const etoile = Array.from({ length: 14 }, (_, k) => {
+  const rayon = k % 2 ? 2.3 : 5.7;
+  const angle = (k / 14) * 2 * Math.PI;
+  return [5.1 + rayon * Math.cos(angle), 4.9 + rayon * Math.sin(angle)];
+});
+const attendus = [];
+for (let y = -2; y <= 12; y++) for (let x = -2; x <= 12; x++) if (dedans([etoile], x, y)) attendus.push(`${x},${y}`);
+check(
+  'treillis : mêmes points que la règle de la carte (pair-impair) dans une étoile à sept branches',
+  attendus.length > 20 && dans([etoile]).join(' ') === attendus.sort().join(' '),
+  `${attendus.length} points attendus, ${dans([etoile]).length} trouvés`,
+);
+// Un tiers de carré de 500 m : 0,04° / 9 / 3 et 0,056° / 9 / 3.
+const PAS_LAT = 0.04 / 27;
+const PAS_LON = 0.056 / 27;
+const [tx11, ty11] = tileOf(6.13, 45.9, 11).map(Math.floor);
+const vers = versTreillis(11, tx11, ty11, 4096, PAS_LAT, PAS_LON);
+const [colonneCoin, ligneCoin] = vers(0, 0);
+const [lonCoin, latCoin] = lonLatOf(tx11, ty11, 11);
+const [colonneMilieu, ligneMilieu] = vers(2048.5, 2048.5); // ordonnée non entière : calcul direct
+const [lonMilieu, latMilieu] = lonLatOf(tx11 + 2048.5 / 4096, ty11 + 2048.5 / 4096, 11);
+check(
+  'treillis : un point de tuile tombe à sa longitude et à sa latitude (le point (r, c) est à (r + 0,5) × pas)',
+  proche((colonneCoin + 0.5) * PAS_LON, lonCoin, 1e-9) && proche((ligneCoin + 0.5) * PAS_LAT, latCoin, 1e-9) && proche((colonneMilieu + 0.5) * PAS_LON, lonMilieu, 1e-9) && proche((ligneMilieu + 0.5) * PAS_LAT, latMilieu, 1e-9),
+  `${lonCoin.toFixed(5)}, ${latCoin.toFixed(5)}`,
+);
+const bornes11 = tileBounds(11, tx11, ty11);
+const treillis = creerTreillis(bornes11, PAS_LAT, PAS_LON);
+treillis.pose(treillis.r0 + 5, treillis.c0 + 7, 3);
+treillis.pose(treillis.r0 + 5, treillis.c0 + 7, 9);
+treillis.pose(-1e6, 0, 1);
+check('treillis : le dernier écrit l’emporte, un point hors de l’emprise est ignoré', treillis.lit(treillis.r0 + 5, treillis.c0 + 7) === 9 && treillis.lit(-1e6, 0) === 0);
+check(
+  'treillis : tuiles tracées du sud au nord et d’est en ouest (là où deux polygones se recouvrent, la carte garde celui de la tuile la plus au nord, puis la plus à l’ouest)',
+  JSON.stringify(ordreDeTrace([[5, 1], [6, 1], [5, 2], [6, 2]])) === '[[6,2],[5,2],[6,1],[5,1]]',
+  JSON.stringify(ordreDeTrace([[5, 1], [6, 1], [5, 2], [6, 2]])),
+);
+// La tuile fabriquée plus haut : un carré de 100 unités, soit ≈ 330 m au zoom 11 (deux points de côté).
+const frais = creerTreillis(bornes11, PAS_LAT, PAS_LON);
+const traces = tracerTuile(frais, 11, tx11, ty11, lue, (code) => (code === 'FF1-09-09' ? 7 : 0));
+const anneau = lue.objets[0].rings.map((ring) => ring.map(([px, py]) => vers(px, py)));
+let poses = 0;
+let voulus = 0;
+for (let r = frais.r0; r < frais.r0 + frais.lignes; r++) {
+  for (let c = frais.c0; c < frais.c0 + frais.colonnes; c++) {
+    if (frais.lit(r, c) === 7) poses++;
+    if (dedans(anneau, c, r)) voulus++;
+  }
+}
+check('treillis : une tuile tracée pose son code sur les points de son polygone, et seulement eux', traces === 1 && poses === voulus && poses >= 2 && poses <= 9, `${poses} points posés, ${voulus} attendus`);
+check('treillis : un polygone dont la valeur est ignorée (rang 0) n’est pas tracé', tracerTuile(creerTreillis(bornes11, PAS_LAT, PAS_LON), 11, tx11, ty11, lue, () => 0) === 0);
+
 // ── Fichier versionné ─────────────────────────────────────────────────────────
 const parts = JSON.parse(lire('public/foret/parts.json'));
 const liste = JSON.parse(lire('scripts/meteo/cases-france.json'));
-const connus = new Set([...lire('src/forestClasses.ts').matchAll(/code: '([^']+)'/g)].map((m) => m[1]));
-check('fichier : format 1, grille de la carte (carrés 4 fois plus petits que les cases)', parts.v === 1 && proche(parts.pasLat * 4, liste.pasLat) && proche(parts.pasLon * 4, liste.pasLon), `${parts.pasLat} × ${parts.pasLon}`);
+const champignons = [...lire('src/mushrooms.ts').matchAll(/^    id: '([a-z]+)',$/gm)].map((m) => m[1]);
+check('fichier : format 2, grille de la carte (carrés 4 fois plus petits que les cases)', parts.v === 2 && proche(parts.pasLat * 4, liste.pasLat) && proche(parts.pasLon * 4, liste.pasLon), `${parts.pasLat} × ${parts.pasLon}`);
 check(
-  'fichier : seulement des types de forêt de la nomenclature',
-  connus.size === 32 && parts.codes.length > 20 && parts.codes.every((code) => connus.has(code)),
-  parts.codes.filter((code) => !connus.has(code)).join(', ') || `${parts.codes.length} types sur ${connus.size}`,
+  'fichier : les champignons de la carte, dans l’ordre, et l’empreinte des règles du calcul',
+  champignons.length === 5 && JSON.stringify(parts.champignons) === JSON.stringify(champignons) && /^[0-9a-f]{8}$/.test(parts.regles ?? ''),
+  `${parts.champignons?.join(', ')} ; règles ${parts.regles}`,
 );
 
+const PAR_CARRE = 81; // carrés de 500 m dans un carré de 4,5 km
 let carres = 0;
 let boises = 0;
 const defauts = [];
 for (const [i, j, , , altitudes] of liste.cases) {
   const id = `${i}:${j}`;
-  const lignes = parts.cases[id];
+  const lignes = parts.fin[id];
   if (!Array.isArray(lignes) || lignes.length !== 16) {
     defauts.push(`${id} : case absente ou incomplète`);
     continue;
@@ -96,43 +194,52 @@ for (const [i, j, , , altitudes] of liste.cases) {
       return;
     }
     carres++;
-    if (!Array.isArray(ligne) || ligne.length % 2) return void defauts.push(`${id}/${k} : parts mal formées`);
-    let total = 0;
-    let precedent = 101;
+    if (ligne === 0) return;
+    if (!Array.isArray(ligne) || ligne.length !== 2 * champignons.length) return void defauts.push(`${id}/${k} : mal formé`);
+    let allume = false;
     for (let n = 0; n < ligne.length; n += 2) {
-      const [rang, part] = [ligne[n], ligne[n + 1]];
-      if (!Number.isInteger(rang) || rang < 0 || rang >= parts.codes.length) defauts.push(`${id}/${k} : type n° ${rang}`);
-      if (!Number.isInteger(part) || part < 1 || part > 100 || part > precedent) defauts.push(`${id}/${k} : part ${part} après ${precedent}`);
-      precedent = part;
-      total += part;
+      const [nombre, meilleur] = [ligne[n], ligne[n + 1]];
+      if (!Number.isInteger(nombre) || nombre < 0 || nombre > PAR_CARRE) defauts.push(`${id}/${k} : ${nombre} carrés de 500 m`);
+      if (!Number.isInteger(meilleur) || meilleur < 0 || meilleur > 1000) defauts.push(`${id}/${k} : meilleur ${meilleur}`);
+      if (nombre > 0 !== meilleur > 0) defauts.push(`${id}/${k} : ${nombre} carrés pour un meilleur de ${meilleur}`);
+      allume ||= nombre > 0;
     }
-    // Chaque part est arrondie au pour cent : la somme peut dépasser 100 de quelques unités.
-    if (total > 104) defauts.push(`${id}/${k} : ${total} % de forêt`);
-    if (total > 0) boises++;
+    if (!allume) defauts.push(`${id}/${k} : rien à dessiner, devrait être écrit 0`);
+    boises++;
   });
 }
-check('fichier : un carré par carré de terre française, parts entières, décroissantes, somme ≤ 100 %', defauts.length === 0, defauts.slice(0, 4).join(' ; ') || `${carres} carrés, ${boises} boisés`);
-check('fichier : aucune case en trop', Object.keys(parts.cases).length === liste.cases.length, `${Object.keys(parts.cases).length} pour ${liste.cases.length}`);
+check(
+  'fichier : un carré par carré de terre française ; par champignon, 0 à 81 carrés de 500 m à dessiner et leur meilleur « arbres × sol » en millièmes',
+  defauts.length === 0,
+  defauts.slice(0, 4).join(' ; ') || `${carres} carrés, ${boises} avec quelque chose à dessiner`,
+);
+check('fichier : aucune case en trop', Object.keys(parts.fin).length === liste.cases.length, `${Object.keys(parts.fin).length} pour ${liste.cases.length}`);
 
-/** Part de forêt (toutes formations) du carré qui contient un point, en %. */
-function forêtEn(latitude, longitude) {
+/** [carrés de 500 m à dessiner, meilleur « arbres × sol » en millièmes] du carré qui contient un point, pour un champignon. */
+function carreEn(latitude, longitude, champignon) {
   const bi = Math.floor(latitude / parts.pasLat);
   const bj = Math.floor(longitude / parts.pasLon);
   const [ci, cj] = [Math.floor(bi / 4), Math.floor(bj / 4)];
-  const ligne = parts.cases[`${ci}:${cj}`]?.[(bi - ci * 4) * 4 + (bj - cj * 4)];
-  return ligne ? ligne.filter((_, n) => n % 2).reduce((s, v) => s + v, 0) : null;
+  const ligne = parts.fin[`${ci}:${cj}`]?.[(bi - ci * 4) * 4 + (bj - cj * 4)];
+  const rang = parts.champignons.indexOf(champignon);
+  return ligne === null || ligne === undefined ? null : ligne === 0 ? [0, 0] : [ligne[2 * rang], ligne[2 * rang + 1]];
 }
-const reperes = { Paris: forêtEn(48.86, 2.37), Fontainebleau: forêtEn(48.42, 2.65), Landes: forêtEn(44.15, -0.74), Beauce: forêtEn(48.2, 1.88) };
+const reperes = { Paris: carreEn(48.86, 2.37, 'cepe'), Beauce: carreEn(48.2, 1.88, 'cepe'), Fontainebleau: carreEn(48.42, 2.65, 'cepe'), Landes: carreEn(44.15, -0.74, 'cepe') };
 check(
-  'fichier : repères connus (Paris et la Beauce presque sans forêt, Fontainebleau et les Landes très boisées)',
-  reperes.Paris <= 2 && reperes.Beauce <= 5 && reperes.Fontainebleau >= 70 && reperes.Landes >= 60,
+  'fichier : repères connus pour les cèpes (rien à dessiner dans Paris, presque rien en Beauce, presque tout à Fontainebleau et dans les Landes)',
+  reperes.Paris[0] === 0 && reperes.Beauce[0] <= 8 && reperes.Fontainebleau[0] >= 60 && reperes.Landes[0] >= 50 && reperes.Fontainebleau[1] >= 600,
   JSON.stringify(reperes),
 );
+// Le cas qui a fait changer la règle (25/11/2026, sud-ouest d'Amiens) : un bois de résineux isolé, que
+// les carrés de 500 m dessinent à 78 % pour les chanterelles en tube, dans un carré de 4,5 km où les
+// arbres hôtes ne couvrent que 1 % de la surface. Il doit allumer son carré.
+const fricamps = carreEn(49.82, 1.99, 'chanterelle');
+check('fichier : un bois isolé allume son carré (Fricamps, Somme : un carré de 500 m à dessiner pour les chanterelles en tube)', fricamps?.[0] >= 1 && fricamps[1] >= 600, JSON.stringify(fricamps));
 
 // ── Part bâtie (zones bâties et d'activité du Plan IGN) ──────────────────────────
 const defautsBati = [];
 let batis = 0;
-for (const [id, lignes] of Object.entries(parts.cases)) {
+for (const [id, lignes] of Object.entries(parts.fin)) {
   const bati = parts.bati?.[id];
   if (!Array.isArray(bati) || bati.length !== 16) {
     defautsBati.push(`${id} : part bâtie absente ou incomplète`);

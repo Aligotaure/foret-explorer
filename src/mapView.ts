@@ -196,7 +196,7 @@ map.on('mouseleave', LAYERS.fill, () => {
 });
 
 // ── Tuiles dont dépend le relevé des carrés de 500 m (forêts, sols) ────────────
-const isSurveySource = (id: string | undefined): id is string => id === SOURCES.bdForet || id === SOURCES.geologie;
+const isSurveySource = (id: string | undefined): id is string => id === SOURCES.bdForet || id === SOURCES.bdForetSurvey || id === SOURCES.geologie;
 function noteTile(source: string, tile: unknown, ok: boolean): void {
   const at = (tile as { tileID?: { canonical?: { z: number; x: number; y: number } } } | undefined)?.tileID?.canonical;
   if (at) noteSurveyTile(source, at, ok);
@@ -226,7 +226,7 @@ map.on('error', (event) => {
   // protocole rend alors une tuile vide.)
   // BD Forêt : l'IGN répond 404 pour une tuile sans forêt (ville, mer, étranger) : pas une panne.
   const status = (event.error as { status?: number } | undefined)?.status;
-  if (status === 404 && (sourceId === SOURCES.bdForet || sourceId === SOURCES.bdForetRaster)) return;
+  if (status === 404 && (sourceId === SOURCES.bdForet || sourceId === SOURCES.bdForetSurvey || sourceId === SOURCES.bdForetRaster)) return;
   console.warn('[carte]', sourceId ?? '', event.error?.message ?? event.error);
   // Forêts ou sols illisibles ici : le relevé des carrés de 500 m y serait faux, il n'est pas gardé.
   if (isSurveySource(sourceId)) noteTile(sourceId, (event as { tile?: unknown }).tile, false);

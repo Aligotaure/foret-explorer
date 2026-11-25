@@ -58,5 +58,5 @@ une section de ce dossier.
   (`HOTSPOT_MIN_CHANCE`), 12 au plus, espacées (voir « Pastilles ») ; à partir du zoom 10,
   pourcentage dans chaque carré ; bilan : « ≈ 62 % · possible ».
   Toujours écrire « estimée » ou « ≈ » : ce n'est pas une probabilité mesurée. Sur la carte, le
-  pourcentage d'un carré de 4,5 km vaut pour sa meilleure forêt hôte (voir « Arbres hôtes ») ; un carré éteint n'est
+  pourcentage d'un carré de 4,5 km est celui de son meilleur carré de 500 m (voir « Une seule règle pour toutes les échelles ») ; un carré éteint n'est
   pas « sans champignon », un carré coloré n'est ni une promesse ni un droit de cueillir.

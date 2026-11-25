@@ -34,12 +34,12 @@ bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
 - Sous le zoom 10, ou tant que les tuiles de la BD Forêt ne sont pas arrivées (clic juste après un
   zoom), la forêt est **inconnue**, pas absente (`forestUnknown` : `'zoom'` ou `'loading'`). Le bilan
   applique alors la règle de la carte au carré de 4,5 km qui contient le point (`View.sector`,
-  `hostCover`, `isLit`) : sans arbres hôtes dans le secteur, aucune chance annoncée (« peu d'arbres
-  hôtes dans ce secteur ») ; secteur bâti à 15 % ou plus, de même (« secteur urbanisé », jamais
-  « surtout bâti » : à 16 % ce serait faux), mais seulement sous le zoom 11 (`FINE_MIN_ZOOM`) : au-delà la carte montre
-  des carrés de 500 m jusque dans les massifs en ville, et le bilan les contredirait ; sinon celle
-  de sa meilleure forêt hôte, comme le carré de la carte, et la raison le dit (« chance de la
-  meilleure forêt hôte du secteur »). Fichier des parts absent :
+  `hostCover`, `isLit`) : carré éteint (aucun carré de 500 m n'y serait dessiné), aucune chance
+  annoncée (« peu d'arbres hôtes dans ce secteur », ou « secteur urbanisé » si le carré est bâti à
+  15 % ou plus : jamais « surtout bâti », à 16 % ce serait faux) ; carré allumé, celle de son
+  meilleur carré de 500 m, comme sur la carte, et la raison le dit (« chance du meilleur coin du
+  secteur (arbres hôtes et sol) » ; le sol du point touché n'est alors pas compté en plus). Fichier
+  des parts absent :
   météo seule. Sans cela, le bilan annonçait « favorable » en pleine ville dès qu'on dézoomait.
   (Sous le zoom 10 la carte ne montre plus que des cases de 18 km, allumées dès qu'un de leurs carrés
   l'est : le bilan, au carré de 4,5 km, y est plus précis qu'elle, c'est voulu.)

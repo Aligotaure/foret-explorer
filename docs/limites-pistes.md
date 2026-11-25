@@ -44,13 +44,15 @@ une section de ce dossier.
   laisser l'ancienne position dans l'entrée de l'historique (seul Précédent la retrouve). Entre 641 et
   1187 px de large, l'îlot n'est pas centré. Graphiques de la vue Analytics : une série de barres
   (ni courbe ni comparaison de deux séries).
-- Arbres hôtes des carrés : BD Forêt de 2007 à 2018 ; seuils (10 % d'hôtes, 15 % de bâti, 3 points
-  sur 9) choisis à l'œil sur Nancy, Annecy, Lyon, Paris, Limoges et Toulouse. Un carré de 4,5 km qui
-  contient un village reste coloré s'il est assez boisé ; un
-  vrai massif collé à une ville (Versailles, Fontainebleau-ville) s'éteint à cette échelle et ne se
-  retrouve qu'aux carrés de 500 m ; en ville, un bois de moins de trois carrés de 500 m n'est pas
-  montré. Pour les chanterelles en tube (hôtes surtout résineux) la carte se vide en plaine de
-  feuillus. Part bâtie : zones généralisées du Plan IGN au zoom 10, pas les bâtiments un à un.
+- Arbres hôtes des carrés : BD Forêt de 2007 à 2018 ; seuils des carrés de 500 m (3 points sur 9 ;
+  en ville, 15 % de bâti, 5 points et 2 voisins boisés) choisis à l'œil sur Nancy, Annecy, Lyon,
+  Paris, Limoges et Toulouse ; les carrés de 4,5 km, les cases et les pastilles en découlent. Un seul
+  bois de quelques hectares suffit à allumer son carré de 4,5 km, pâle, avec son pourcentage (un carré
+  allumé sur vingt-six pour les cèpes, un sur six pour les chanterelles en tube) : à cette échelle la
+  carte dit « il y a un coin ici », pas « tout le carré est bon ». En ville, un bois de moins de
+  trois carrés de 500 m n'est pas montré ; un massif collé à une ville (Versailles, bois de Boulogne)
+  allume son carré, la ville autour restant éteinte. Part bâtie : zones généralisées du Plan IGN au
+  zoom 10, pas les bâtiments un à un.
 - Accueil : tant qu'une de ses fenêtres est ouverte, l'îlot ne répond pas ; sans stockage du
   navigateur, l'avertissement et le rappel « période de chasse » reviennent à chaque visite et la
   présentation n'est pas montrée d'office ;
@@ -116,13 +118,21 @@ une section de ce dossier.
   demande une altitude).
 - Montée en charge : première limite, le trafic de GitHub Pages (voir « Montée en charge ») ; aucun
   essai de charge n'a été fait, les chiffres viennent d'une visite jouée par un script.
-- Carrés de 4,5 km : le pourcentage de leur meilleure forêt hôte, sans facteur de sol (inconnu à
-  cette échelle) : souvent au-dessus de celui de la plupart des carrés de 500 m et du bilan au même
-  endroit. À l'inverse, à partir du zoom 12 un carré de 500 m prend son altitude exacte et peut
-  encore dépasser son carré de 4,5 km en montagne (non chiffré). `a-propos.html` (« Ce que vaut la
-  carte ») dit encore « son pourcentage vaut pour ces forêts » : à préciser (« pour la meilleure de
-  ces forêts ») avec les autres retouches de texte en attente, dans une même version des conditions. Non couvert par les tests : la
-  vue zoomée où le relevé fin ne trouve aucun arbre hôte (`fineDone` sans carré fin).
+- Échelles : un carré de 4,5 km annonce son meilleur carré de 500 m à l'altitude du carré de 4,5 km.
+  À partir du zoom 12 un carré de 500 m prend son altitude exacte : en montagne il peut alors monter
+  ou baisser de quelques points par rapport à ce que le carré de 4,5 km et la pastille annonçaient
+  (non chiffré). Le pourcentage écrit dans le fichier est arrondi au millième au-dessus : le carré de
+  4,5 km peut afficher un point de plus que son meilleur carré de 500 m. `public/foret/parts.json`
+  doit être refait quand les arbres hôtes, les sols ou les seuils changent (`npm run test:france`
+  le réclame), et après une reconstruction des tuiles des sols avec d'autres règles (rien ne le
+  réclame : à faire à la main). Le relevé lit les forêts du zoom 11 à tous les zooms : au-delà du
+  zoom 12 les lisières des carrés de 500 m sont celles de ces tuiles (à 3 m près), pas celles des
+  tuiles affichées, et la carte charge une à quatre tuiles de plus (déjà dans le cache du
+  navigateur si l'on est passé par le zoom 11). `a-propos.html` (« Ce que vaut la carte ») décrit
+  encore l'ancienne règle (« au moins 10 % de la surface », « sans tenir compte du sol ») : à
+  corriger avec les autres retouches de texte en attente, dans une même version des conditions.
+  Non couvert par les tests : la vue zoomée où le relevé fin ne trouve aucun arbre hôte (`fineDone`
+  sans carré fin).
 - MycoDB : site tiers tenu par des bénévoles ; un renommage d'espèce casse le lien sans erreur
   visible ; la fiche qualifie la comestibilité, ce que le site s'interdit d'écrire lui-même.
 - Mentions légales : `a-propos.html` présente l'éditeur comme un particulier non professionnel qui ne
@@ -163,3 +173,10 @@ une section de ce dossier.
 16. Carrés de 500 m prêts autour de la vue : relever aussi la marge des tuiles déjà chargées (elles
     débordent de l'écran ; à vérifier avec `querySourceFeatures`), sans rien télécharger de plus ; et
     faire démarrer avant `load` ce qui n'attend pas les tuiles (comptages exclus).
+17. Carrés de 500 m servis tout faits : `scripts/foret/parts.mjs` relève déjà toute la France sur
+    leurs points (40 secondes) ; en tirer une archive de tuiles éviterait à la carte de les relever
+    dans ses propres tuiles (plus d'attente des forêts détaillées, plus de pause du zoom, mêmes
+    carrés pour tous). Gros chantier : le relevé, son cache et le bilan en ville en dépendent.
+18. Altitude du meilleur carré de 500 m de chaque carré de 4,5 km dans le fichier des parts (une
+    demande d'altitude par carré, à faire une fois) : la pastille et le carré de 500 m
+    concorderaient alors aussi en montagne à partir du zoom 12.

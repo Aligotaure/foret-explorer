@@ -8,7 +8,7 @@ import {
   GRID_BUSY_MAX_MS,
   GRID_BUSY_MIN_ZOOM,
   HOST_FULL_COVER,
-  HOST_MIN_COVER,
+  HOST_MIN_TINT,
   WEATHER_MAX_CELLS,
   WEATHER_MIN_ZOOM,
   WEATHER_SUB_LABEL_MIN_ZOOM,
@@ -54,7 +54,7 @@ import {
   type Mushroom,
   type MushroomId,
 } from './mushrooms';
-import { LAYERS, SOURCES, applyOpacity, setFineVisible, setMeteoVisible } from './mapStyle';
+import { LAYERS, SOURCES, applyOpacity, setFineVisible, setMeteoVisible, surveyForest } from './mapStyle';
 import type { AppState, Store } from './state';
 import {
   atAltitude,
@@ -236,8 +236,8 @@ const sameBox = (a: Box, b: Box): boolean => a.west === b.west && a.south === b.
 
 const isAbort = (error: unknown): boolean => error instanceof DOMException && error.name === 'AbortError';
 
-/** Sources que lit le relevé des carrés de 500 m : les forêts et les sols, rien d'autre. */
-const SURVEY_SOURCES = [SOURCES.bdForet, SOURCES.geologie] as const;
+/** Sources que lit le relevé des carrés de 500 m à ce zoom : les forêts et les sols, rien d'autre. */
+const surveySources = (map: MapLibreMap): string[] => [surveyForest(map.getZoom()).source, SOURCES.geologie];
 
 /**
  * Attend que les tuiles des forêts et des sols de la vue soient arrivées et dessinées : c'est tout ce
@@ -267,7 +267,7 @@ function waitForSurveyTiles(map: MapLibreMap, signal: AbortSignal): Promise<void
     };
     // (Source inconnue de la carte : rien à attendre d'elle.)
     const loaded = (): boolean =>
-      SURVEY_SOURCES.every((id) => {
+      surveySources(map).every((id) => {
         try {
           return map.isSourceLoaded(id) !== false;
         } catch {
@@ -592,12 +592,12 @@ export class MeteoLayer {
     // Sous le seuil, un secteur ne vaut pas le déplacement : pâle, sans étiquette (et pas dessiné du
     // tout sous 35 % : un carré défavorable n'est pas envoyé à la carte, voir `drawGrid`).
     const chance = ['coalesce', ['get', 'p'], 0];
-    // Arbres hôtes du carré (`c`, part de sa surface ; −1 : inconnue, on dessine comme avant) :
-    // d'autant plus soutenu qu'il est boisé. Sous le seuil il est éteint (en mode indice, un carré
-    // éteint n'est de toute façon pas dans la source).
+    // Carrés de 500 m à dessiner dans le carré (`c`, leur part ; −1 : inconnue, on dessine comme
+    // avant) : d'autant plus soutenu qu'il en a. Un carré allumé porte toujours un `c` au-dessus de
+    // zéro ; zéro, c'est une case sans `c` (voir plus haut) : éteinte.
     const cover = ['coalesce', ['get', 'c'], 0];
-    const unlit = ['all', ['>=', cover, 0], ['<', cover, HOST_MIN_COVER]];
-    const wooded = ['case', ['<', cover, 0], 1, unlit, 0, ['interpolate', ['linear'], cover, HOST_MIN_COVER, 0.45, HOST_FULL_COVER, 1]];
+    const unlit = ['==', cover, 0];
+    const wooded = ['case', ['<', cover, 0], 1, unlit, 0, ['interpolate', ['linear'], cover, 0, HOST_MIN_TINT, HOST_FULL_COVER, 1]];
     const opacity = ['*', ['match', level, 0, 0.04, 1, 0.1, 2, 0.26, 3, 0.36, 0], wooded];
     const text = ['case', ['>=', chance, CHANCE_THRESHOLD], ['concat', ['to-string', chance], ' %'], ''];
     // Étiquettes : seulement celles des carrés de 4,5 km (`sub` = 1), jamais celles des cases entières
@@ -766,8 +766,8 @@ export class MeteoLayer {
     const features: Feature[] = [];
     const spots: Hotspot[] = [];
     /**
-     * `host` : arbres hôtes du champignon montré dans ce carré (null : inconnus, météo seule) ;
-     * `lit` : le carré est allumé (assez d'arbres hôtes, pas d'abord une ville : `isLit`).
+     * `host` : ce que le carré contient pour le champignon montré (null : inconnu, météo seule) ;
+     * `lit` : le carré est allumé (un de ses carrés de 500 m serait dessiné : `isLit`).
      */
     const add = (
       id: string,
@@ -781,8 +781,8 @@ export class MeteoLayer {
       // En mode indice un carré éteint n'est pas dessiné du tout : il n'est ni calculé ni envoyé.
       if (index && !lit) return null;
       const w = weatherOf();
-      // Champignon montré seulement. Arbres hôtes connus : l'indice vaut pour la meilleure forêt
-      // hôte du carré (`HostCover.quality`).
+      // Champignon montré seulement. Contenu du carré connu : l'indice est celui de son meilleur
+      // carré de 500 m, arbres et sol compris (`HostCover.quality`).
       const score = !index || known ? null : shown ? scoreMushroom(shown, w, month, host ? { hostQuality: host.quality } : {}) : null;
       const level = known?.l ?? score?.level ?? 0;
       // Défavorable (moins de 35 %) : pas envoyé non plus. Dessiné, il ne se voyait pas (4 %
@@ -796,11 +796,12 @@ export class MeteoLayer {
         y: +((box.south + box.north) / 2).toFixed(4),
       };
       if (index) {
-        // Niveau, chance estimée, part d'arbres hôtes (−1 : inconnue). En mode pluie, rien de tout
-        // cela : changer de champignon n'y change pas le contenu de la source.
+        // Niveau, chance estimée, part de carrés de 500 m à dessiner (−1 : inconnue ; jamais zéro
+        // pour un carré allumé, même arrondie). En mode pluie, rien de tout cela : changer de
+        // champignon n'y change pas le contenu de la source.
         properties['l'] = level;
         properties['p'] = known?.p ?? score?.chance ?? 0;
-        properties['c'] = host ? round2(host.cover) : -1;
+        properties['c'] = host ? Math.max(0.01, round2(host.cover)) : -1;
       }
       features.push({ type: 'Feature', id, properties, geometry: boxPolygon(box) });
       return properties;
@@ -824,9 +825,9 @@ export class MeteoLayer {
       } else {
         const cell = index && hosts && shown ? hostCoverOfCell(c.id, shown) : null;
         // Allumée dès qu'un de ses carrés l'est (sa teinte suit la moyenne) : une case de plaine avec
-        // une seule vraie forêt ne doit pas s'éteindre en vue d'ensemble puis réapparaître en zoomant.
+        // un seul bois ne doit pas s'éteindre en vue d'ensemble puis réapparaître en zoomant.
         const lit = !cell || cell.best >= 0;
-        const host = cell && lit ? { cover: Math.max(cell.cover, HOST_MIN_COVER), quality: cell.quality } : cell;
+        const host = cell;
         // Vue d'ensemble du mode indice : la case prend le niveau et la chance de son meilleur carré
         // de 4,5 km (à l'altitude de ce carré, pour ses arbres hôtes), ceux que sa pastille affiche et
         // que l'étiquette du carré affichera au zoom 10. Calculée pour la case entière, à son

@@ -74,19 +74,21 @@ https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
   cases, de leur point de relevé et de l'altitude de leurs 16 carrés de 4,5 km), seulement si la
   taille des cases change ; les points de relevé existants sont gardés. Pas de CORS ni d'accès depuis
   le bac à sable : à lancer en local ou dans une tâche GitHub.
-- `node scripts/foret/parts.mjs` : refait `public/foret/parts.json` (part de chaque type de forêt et
-  part bâtie de chacun des 29 483 carrés de 4,5 km), seulement si la grille change ou si l'IGN publie
-  une nouvelle BD Forêt. 889 tuiles vectorielles du zoom 10 de la BD Forêt (≈ 320 Mo, gardées dans
-  `.cache/foret/`) et autant du Plan IGN (≈ 85 Mo, `.cache/plan/`), une à deux minutes, sans
-  dépendance ; tourne en local (il traduit `src/meteoGrid.ts` lui-même).
+- `node scripts/foret/parts.mjs` : refait `public/foret/parts.json` (pour chacun des 29 483 carrés de
+  4,5 km et chaque champignon : nombre de carrés de 500 m à dessiner et meilleur « arbres × sol » ;
+  part bâtie), quand changent les arbres hôtes ou les sols d'un champignon, les seuils des carrés de
+  500 m, les règles des sols, la grille ou la BD Forêt. 3 556 tuiles du zoom 11 de la BD Forêt
+  (≈ 440 Mo, `.cache/foret/`), 889 du Plan IGN (≈ 85 Mo, `.cache/plan/`), l'archive des sols du site
+  (143 Mo, `.cache/geologie/`) : un quart d'heure la première fois, une minute ensuite ; en local.
 - `npm run test:donnees` : `test:meteo` (mise à jour de la météo commune rejouée sur plusieurs jours
   avec des séries simulées : budgets, jours manquants, journée provisoire, publication) + `test:geologie` (règles des sols
-  sur la table de toutes les descriptions de France, `tests/donnees/`) + `test:foret` (géométrie du
-  calcul des parts de forêt, lecteur de tuiles, fichier versionné ; lui seul tourne en local).
+  sur la table de toutes les descriptions de France, `tests/donnees/`) + `test:foret` (relevé des
+  carrés de 500 m sur toute la France, lecteur de tuiles, fichier versionné ; lui seul tourne en local).
   `node tests/geologie.mjs non` liste les formations encore sans sol, `sol <id>` et `grep <motif>`
   servent à régler les règles.
 - `npm run test:france` : le calcul des moyennes de France par champignon (chiffre des puces), joué
-  sur des fichiers météo fabriqués par le test ; tourne en local (il lui faut Vite). Pour fabriquer
+  sur des fichiers météo fabriqués par le test, et la règle qui relie les échelles (dont : le fichier
+  des parts est-il à refaire ?) ; tourne en local (il lui faut Vite). Pour fabriquer
   le fichier en local à partir de la météo du site en ligne (les puces du serveur de développement
   l'affichent alors) : `node scripts/meteo/france.mjs --meteo .cache/meteo-en-ligne --amorce
   https://aligotaure.github.io/foret-explorer/data/meteo/ --sortie public/data/meteo/france.json`.
@@ -125,7 +127,8 @@ Une ligne par fichier ; rôle détaillé, couches de la carte et scripts : `docs
 | `mapStyle.ts` | Style MapLibre : sources, couches, expressions, fonctions `apply*()` |
 | `forestClasses.ts` | Les 32 codes `code_tfv` : libellés, couleurs officielles, groupes, préréglages |
 | `mushrooms.ts` | Profils des 5 champignons et calcul de l'indice |
-| `forestShare.ts` | Arbres hôtes et part bâtie par carré de 4,5 km (`public/foret/parts.json`), `isLit` |
+| `fineRule.ts`, `partsBuild.ts` | Règle des carrés de 500 m, sans la carte ; `scripts/foret/parts.mjs` l'applique à toute la France |
+| `forestShare.ts` | Ce que chaque carré de 4,5 km contient par champignon (`public/foret/parts.json`), `isLit` |
 | `soils.ts`, `geology.ts` | 8 natures de sol et leurs motifs ; forêt et sol sous un point |
 | `zones.ts` | Zones protégées et forêt publique sous un point |
 | `meteoGrid.ts` | Grille météo commune et format des fichiers ; lu aussi par Node : aucun import |
@@ -191,6 +194,9 @@ vérification dans `tests/e2e/run.mjs`.
 - **`TERMS_VERSION`** (`src/legal.ts`) : la changer dès que le texte de l'avertissement ou des
   conditions (`a-propos.html`) change, en regroupant les retouches dans une seule version (chacune
   redemande l'accord). Bilan, rappel de chasse et « La carte en 3 gestes » n'en font pas partie.
+- **Échelles** : carrés de 4,5 km, cases et pastilles n'ont pas de règle à eux : ils lisent
+  `public/foret/parts.json`, calculé avec celle des carrés de 500 m (`fineRule.ts`). Arbres hôtes, sols
+  ou seuils changés : refaire le fichier (`node scripts/foret/parts.mjs`), `npm run test:france` le réclame.
 - **`SURVEY_VERSION`** (`src/fineGrid.ts`) : la changer quand les règles des sols ou la nomenclature
   des forêts changent (les relevés sont gardés 30 jours dans le navigateur).
 - **`scripts/zones/`** : toute retouche, même d'un commentaire, relance la reconstruction des zones à

@@ -33,6 +33,8 @@ export default defineConfig({
   plugins: [mapChunkPreload()],
   server: {
     open: true,
+    // Tuiles gardées par les scripts de données (des milliers de fichiers) : inutile de les surveiller.
+    watch: { ignored: ['**/.cache/**'] },
   },
   build: {
     // MapLibre pèse ~800 ko minifié : on évite l'avertissement « chunk > 500 ko ».

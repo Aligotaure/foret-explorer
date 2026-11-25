@@ -9,7 +9,7 @@
 import { mkdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { SHARE_BARE, SHARE_BUILT, SHARE_CELL, SHARE_OTHER, SHARE_THIN, installMocks } from './mocks.mjs';
+import { SHARE_BARE, SHARE_BUILT, SHARE_CELL, SHARE_LONE, SHARE_OTHER, installMocks } from './mocks.mjs';
 import { viewTests } from './views.mjs';
 
 const OUT = fileURLToPath(new URL('./shots/', import.meta.url));
@@ -872,12 +872,12 @@ async function desktopTests(browser, base) {
   check('Je cherche cèpes → grille « indice » visible', cepes.mode === 'indice' && cepes.visible === 'visible' && cepes.fill.includes('["get","l"]'), `${cepes.mode} ${cepes.visible}`);
   check('grille météo calculée', cepes.levels.length > 0 && cepes.levels.every((l) => l >= 0 && l <= 3), `niveaux ${cepes.levels.join(',')}`);
 
-  // Arbres hôtes : un carré n'est coloré que s'il en contient assez et n'est pas d'abord une ville
+  // Arbres hôtes : un carré de 4,5 km n'est coloré que si un de ses carrés de 500 m serait dessiné
   // (fichier des parts de forêt, simulé ici). Un carré éteint n'est même pas envoyé à la carte.
   // (Le test est au zoom 11,5 : on attend aussi les carrés de 500 m, qui y prennent le relais.)
   await page.waitForFunction(() => window.meteo.status.fine?.state === 'ok', null, { timeout: 20000 }).catch(() => {});
   const hosts = await page.evaluate(
-    ({ cell, squares }) => {
+    ({ cell, squares, lone }) => {
       // Un carré se reconnaît à son centre (les identifiants de texte ne survivent pas aux tuiles de MapLibre).
       const [ci, cj] = cell.split(':').map(Number);
       const centre = (k) => `${((cj * 4 + (k % 4) + 0.5) * 0.056).toFixed(3)},${((ci * 4 + Math.floor(k / 4) + 0.5) * 0.04).toFixed(3)}`;
@@ -902,6 +902,8 @@ async function desktopTests(browser, base) {
       };
       return {
         unlit: squares.map(pick),
+        lone: pick(lone),
+        loneDrawn: drawn(lone),
         wooded: pick(0),
         properties: Object.keys(by.get(centre(0)) ?? {}).sort().join(),
         opacity: JSON.stringify(window.map.getPaintProperty('meteo-cellules', 'fill-opacity')),
@@ -915,12 +917,19 @@ async function desktopTests(browser, base) {
         caveat: [...document.querySelectorAll('#legend .legend-hint--caveat')].filter((p) => !p.hidden).map((p) => p.textContent).join(' '),
       };
     },
-    { cell: SHARE_CELL, squares: [SHARE_BARE, SHARE_THIN, SHARE_OTHER, SHARE_BUILT] },
+    { cell: SHARE_CELL, squares: [SHARE_BARE, SHARE_OTHER, SHARE_BUILT], lone: SHARE_LONE },
   );
   check(
-    'carrés : sans arbre hôte du champignon (aucun arbre, 3 % de hêtres, robiniers) ou d’abord bâti (40 %), le carré n’est pas envoyé à la carte',
-    hosts.unlit.length === 4 && hosts.unlit.every((u) => u === null) && hosts.wooded?.c === 0.6 && hosts.wooded.p >= 50 && hosts.wooded.l > 0,
+    'carrés : sans rien à dessiner pour le champignon (aucun arbre, peupliers, ville sans massif), le carré n’est pas envoyé à la carte',
+    hosts.unlit.length === 3 && hosts.unlit.every((u) => u === null) && hosts.wooded?.c === 0.6 && hosts.wooded.p >= 50 && hosts.wooded.l > 0,
     JSON.stringify({ unlit: hosts.unlit, wooded: hosts.wooded }),
+  );
+  // Le cas qui a fait changer la règle (25/11/2026) : un bois isolé, dessiné en carrés de 500 m,
+  // disparaissait un cran de zoom plus haut parce que son carré de 4,5 km n'avait pas 10 % d'arbres hôtes.
+  check(
+    'carrés : un seul bois (un carré de 500 m à dessiner sur 81) allume son carré de 4,5 km, avec sa chance estimée, plus pâle qu’un carré boisé',
+    hosts.lone?.c === 0.01 && hosts.lone.p >= 50 && hosts.lone.l > 0 && hosts.loneDrawn?.fill > 0 && hosts.loneDrawn.fill < hosts.woodedDrawn?.fill && hosts.loneDrawn.line > 0,
+    JSON.stringify({ seul: hosts.lone, dessin: hosts.loneDrawn, boise: hosts.woodedDrawn }),
   );
   check(
     'carrés : seulement les valeurs du champignon montré, sous des noms fixes (les expressions ne changent pas avec lui)',
@@ -996,10 +1005,10 @@ async function desktopTests(browser, base) {
         lines: window.map.getLayer('meteo-contours').minzoom,
       };
     },
-    { cell: SHARE_CELL, squares: [SHARE_BARE, SHARE_THIN, SHARE_OTHER, SHARE_BUILT] },
+    { cell: SHARE_CELL, squares: [SHARE_BARE, SHARE_OTHER, SHARE_BUILT] },
   );
   check(
-    'vue d’ensemble : des pastilles, toutes à 70 % et plus, aucune sur un carré sans arbre hôte ou d’abord bâti ; meilleure chance « estimée » annoncée',
+    'vue d’ensemble : des pastilles, toutes à 70 % et plus, aucune sur un carré sans rien à dessiner ; meilleure chance « estimée » annoncée',
     spots.chances.length > 0 && spots.chances.every((p) => p >= 70) && spots.onUnlit === 0 && /Meilleure chance estimée dans la vue : ≈ \d+ %/.test(spots.status),
     `${spots.chances.length} pastille(s) ${spots.chances.slice(0, 5).join(', ')} ; ${spots.status.slice(0, 120)}`,
   );
@@ -1066,7 +1075,7 @@ async function desktopTests(browser, base) {
     `${lowSpot.forest} ; chances ${lowSpot.chances.join(', ')} ; ${[...lowSpot.off, ...lowSpot.reasons].join(' | ').slice(0, 200)}`,
   );
   check('bilan sous le zoom 10 : statut inconnu, accord du propriétaire rappelé, sans parenthèses imbriquées', /^Inconnu : il faut l’accord du propriétaire \(zoomez au niveau 10 ou plus pour le connaître\)$/.test(lowSpot.status.trim()), lowSpot.status);
-  check('bilan sous le zoom 10 : la raison dit que la chance est celle de la meilleure forêt hôte du secteur', lowSpot.reasons.some((r) => /chance de la meilleure forêt hôte du secteur/.test(r)), lowSpot.reasons.find((r) => /Forêt inconnue/.test(r)) ?? '');
+  check('bilan sous le zoom 10 : la raison dit que la chance est celle du meilleur coin du secteur (arbres hôtes et sol)', lowSpot.reasons.some((r) => /chance du meilleur coin du secteur \(arbres hôtes et sol\)/.test(r)), lowSpot.reasons.find((r) => /Forêt inconnue/.test(r)) ?? '');
   const bare = await page.evaluate(({ cell, k }) => {
     const [ci, cj] = cell.split(':').map(Number);
     const p = window.map.project([(cj * 4 + (k % 4) + 0.5) * 0.056, (ci * 4 + Math.floor(k / 4) + 0.5) * 0.04]);
@@ -1094,7 +1103,7 @@ async function desktopTests(browser, base) {
     log.altitude.length === altitudeBefore && /^≈ \d+ m \(d’après la grille météo\)$/.test(bareSpot.altitude) && bareSpot.rain && bareSpot.urban === '',
     `${log.altitude.length - altitudeBefore} appel(s) d’altitude ; ${bareSpot.altitude}`,
   );
-  // Même règle pour une ville avec un bois : 60 % de hêtres, mais 40 % du carré est bâti.
+  // Même règle pour une ville dont le bois ne tient à aucun massif : rien à dessiner, 40 % du carré est bâti.
   const town = await page.evaluate(({ cell, k }) => {
     const [ci, cj] = cell.split(':').map(Number);
     const p = window.map.project([(cj * 4 + (k % 4) + 0.5) * 0.056, (ci * 4 + Math.floor(k / 4) + 0.5) * 0.04]);
@@ -2736,8 +2745,14 @@ async function fallbackTests(browser, base) {
     localStorage.removeItem('foret-explorer:v1');
     localStorage.removeItem('foret-explorer:altitudes');
   });
-  await page8.goto(`${base}#carte=13.6/45.92/6.19`);
+  // (Vue à cheval sur deux forêts de la tuile simulée du zoom 11, celle que lit le relevé : une
+  // chênaie au nord, une sapinière au sud. Les forêts simulées changent d'un zoom à l'autre.)
+  await page8.goto(`${base}#carte=13.6/45.8883/6.19`);
   await waitForMap(page8);
+  await idle(page8);
+  // Grille éteinte (réglages d'office) : la carte n'affiche que les tuiles du zoom 13, la copie des
+  // forêts du zoom 11 que lit le relevé n'est pas demandée.
+  const sansGrille = { mode: await page8.evaluate(() => window.store.state.weatherMode), zoom11: log8.tms.filter((t) => t.startsWith('11/')).length };
   const fineOf = async (id) => {
     await page8.evaluate((m) => window.store.update({ mushroom: m, weatherMode: 'indice' }), id);
     await page8.waitForFunction(() => [...document.querySelectorAll('#legend .legend-hint')].some((p) => /carrés? de 500 m avec arbres hôtes/.test(p.textContent)), null, { timeout: 20000 }).catch(() => {});
@@ -2751,6 +2766,18 @@ async function fallbackTests(browser, base) {
   };
   const tube = await fineOf('chanterelle');
   const cepe = await fineOf('cepe');
+  // Le relevé lit les forêts du zoom 11 à tous les zooms d'affichage, comme le calcul fait pour toute
+  // la France (scripts/foret/parts.mjs) : sinon un carré de 500 m changerait avec le zoom où on l'a vu.
+  const releve = await page8.evaluate(() => ({
+    couche: window.map.getLayer('bdforet-releve')?.minzoom,
+    source: window.map.getSource('bdforet-releve')?.maxzoom,
+    visible: window.map.getLayoutProperty('bdforet-releve', 'visibility'),
+  }));
+  check(
+    'relevé des carrés de 500 m : il lit les forêts du zoom 11 à tous les zooms (au zoom 13,6 : tuiles du zoom 13 affichées, tuiles du zoom 11 relevées, et seulement grille d’indice allumée)',
+    sansGrille.mode === 'off' && sansGrille.zoom11 === 0 && log8.tms.some((t) => t.startsWith('13/')) && log8.tms.some((t) => t.startsWith('11/')) && releve.couche === 12 && releve.source === 11 && releve.visible === 'visible',
+    JSON.stringify({ sansGrille, tuiles11: log8.tms.filter((t) => t.startsWith('11/')).length, tuiles13: log8.tms.filter((t) => t.startsWith('13/')).length, releve }),
+  );
   check(
     'carrés de 500 m : altitudes demandées pour les seuls carrés du champignon montré (les chênaies attendent qu’on cherche des cèpes)',
     tube.drawn > 0 && tube.asked > 0 && tube.asked <= tube.hosts && cepe.hosts > tube.hosts && cepe.asked > tube.asked && cepe.asked <= cepe.hosts,

@@ -10,12 +10,17 @@
  */
 import type { MultiPolygon, Polygon, Position } from 'geojson';
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import { FINE_DIVISIONS, FINE_MAX_CELLS, FINE_MIN_HOST_SHARE, FINE_TOWN_MIN_HOST_SHARE, FINE_TOWN_MIN_NEIGHBOURS } from './config';
-import { LAYERS } from './mapStyle';
-import { scoreMushroom, soilModulation, type Level, type Mushroom } from './mushrooms';
+import { FINE_DIVISIONS, FINE_MAX_CELLS } from './config';
+import { FINE_OFFSETS, fineFactors, type Sample } from './fineRule';
+import { LAYERS, surveyForest } from './mapStyle';
+import { scoreMushroom, type Level, type Mushroom } from './mushrooms';
 import { BASE_STEP_LAT, BASE_STEP_LON, cellId, cellOfBase } from './meteoGrid';
 import { SOIL_BY_ID, type SoilId } from './soils';
 import type { WeatherSummary } from './weather';
+
+// La règle elle-même (ce qu'on relève, quels carrés dessiner) est dans fineRule.ts, sans rien de la
+// carte : le script des parts de forêt l'applique à toute la France.
+export { FINE_POINTS, fineCellsToDraw, hostShare, type FineCandidate, type Sample } from './fineRule';
 
 export const FINE_STEP_LAT = BASE_STEP_LAT / FINE_DIVISIONS;
 export const FINE_STEP_LON = BASE_STEP_LON / FINE_DIVISIONS;
@@ -69,12 +74,6 @@ export function fineCellsForBounds(b: Bounds, max = FINE_MAX_CELLS): FineCell[] 
 }
 
 // ── Relevé des forêts et des sols ────────────────────────────────────────────
-
-/** Ce qu'il y a sous un des 3 × 3 points du carré. */
-export interface Sample {
-  code: string | null;
-  soil: SoilId | null;
-}
 
 interface IndexedPolygon {
   value: string;
@@ -145,17 +144,23 @@ class CellIndex {
       const geometry = feature.geometry as Polygon | MultiPolygon;
       const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.type === 'MultiPolygon' ? geometry.coordinates : [];
       for (const rings of polygons) {
-        const outer = rings[0];
-        if (!outer?.length) continue;
+        if (!rings[0]?.length) continue;
+        // Emprise de tous les anneaux, pas du seul contour : au bord des tuiles, l'IGN note parfois
+        // un petit morceau de forêt dans le sens d'un trou, hors du contour. Le lire comme un trou du
+        // polygone (règle pair-impair) le compte bien comme de la forêt, mais encore faut-il le
+        // ranger dans les carrés qu'il touche. (Avant le 25/11/2026 : emprise du contour seul, et ces
+        // morceaux manquaient, un point sur 18 000 dans les Landes.)
         let west = Infinity;
         let south = Infinity;
         let east = -Infinity;
         let north = -Infinity;
-        for (const [x = 0, y = 0] of outer) {
-          if (x < west) west = x;
-          if (x > east) east = x;
-          if (y < south) south = y;
-          if (y > north) north = y;
+        for (const ring of rings) {
+          for (const [x = 0, y = 0] of ring) {
+            if (x < west) west = x;
+            if (x > east) east = x;
+            if (y < south) south = y;
+            if (y > north) north = y;
+          }
         }
         const entry = { value, bands: edgesByBand(rings) };
         for (let i = Math.floor(south / FINE_STEP_LAT); i <= Math.floor(north / FINE_STEP_LAT); i++) {
@@ -181,7 +186,7 @@ class CellIndex {
   }
 }
 
-const OFFSETS = [1 / 6, 1 / 2, 5 / 6] as const;
+const OFFSETS = FINE_OFFSETS;
 
 // ── Relevés gardés (mémoire, puis navigateur) ────────────────────────────────
 //
@@ -194,7 +199,8 @@ const OFFSETS = [1 / 6, 1 / 2, 5 / 6] as const;
 // SURVEY_VERSION change (à changer avec les règles des sols ou la nomenclature des forêts).
 
 const SURVEY_KEY = 'foret-explorer:releves';
-const SURVEY_VERSION = 1;
+/** 2 depuis le 25/11/2026 : le relevé lit les forêts du zoom SURVEY_TILE_ZOOM, plus celles du zoom affiché. */
+const SURVEY_VERSION = 2;
 /**
  * Une dizaine d'écrans de 1280 × 800 au zoom 11 (3 000 carrés par vue), près de cent au zoom 12,3
  * (448 carrés gardés pour une vue des Alpes, le 14/11/2026). ≈ 30 caractères par carré : 1,2 million
@@ -405,17 +411,22 @@ export function sampleCells(map: MapLibreMap, cells: readonly FineCell[]): Map<s
   });
   if (!todo.length) return out;
 
-  const forests = new CellIndex(map, LAYERS.forestHit, 'code_tfv');
+  // Les forêts du zoom SURVEY_TILE_ZOOM, quel que soit le zoom affiché (voir `surveyForest`).
+  const forests = new CellIndex(map, surveyForest(map.getZoom()).layer, 'code_tfv');
   const soils = new CellIndex(map, LAYERS.geologyHit, 'sol');
   const view = map.getBounds();
   let kept = false;
   for (const c of todo) {
     const samples: Sample[] = [];
     let complete = true;
+    // Position exacte des points, d'après le rang du carré dans la grille, et non d'après ses bords
+    // (arrondis au millionième de degré pour le dessin, soit 5 cm : assez pour faire basculer un
+    // point posé sur une lisière, un sur dix mille, et s'écarter du relevé fait pour toute la France).
+    const [i = 0, j = 0] = c.id.split(':').map(Number);
     for (const fy of OFFSETS) {
       for (const fx of OFFSETS) {
-        const x = c.west + fx * (c.east - c.west);
-        const y = c.south + fy * (c.north - c.south);
+        const x = (j + fx) * FINE_STEP_LON;
+        const y = (i + fy) * FINE_STEP_LAT;
         if (!view.contains([x, y])) {
           complete = false;
           continue;
@@ -437,59 +448,6 @@ export function sampleCells(map: MapLibreMap, cells: readonly FineCell[]): Map<s
 }
 
 export const hasForest = (samples: readonly Sample[] | undefined): boolean => Boolean(samples?.some((s) => s.code));
-
-/** Points relevés dans un carré entièrement visible (3 × 3). */
-export const FINE_POINTS = OFFSETS.length ** 2;
-const POINTS = FINE_POINTS;
-
-/**
- * Part des neuf points d'un carré qui sont sous un arbre hôte du champignon (0 à 1). Un carré à
- * cheval sur le bord de l'écran n'est relevé qu'en partie : on compte quand même sur neuf, sinon il
- * se dessinerait sur la foi d'un seul point visible, puis disparaîtrait une fois entier à l'écran.
- */
-export function hostShare(m: Mushroom, samples: readonly Sample[]): number {
-  let hosts = 0;
-  for (const s of samples) if (s.code !== null && (m.hosts[s.code] ?? 0) > 0) hosts++;
-  return hosts / POINTS;
-}
-
-/** Un carré candidat au dessin : sa part d'arbres hôtes, et s'il est en ville (carré de 4,5 km d'abord bâti). */
-export interface FineCandidate {
-  id: string;
-  share: number;
-  town: boolean;
-}
-
-/**
- * Carrés de 500 m à dessiner parmi ceux qui ont des arbres hôtes. Hors des villes : une part
- * FINE_MIN_HOST_SHARE de points sous un arbre hôte suffit. En ville, il faut en plus que le carré
- * soit franchement boisé et tienne à un massif (voir FINE_TOWN_MIN_*) : avant le 14/11/2026, le
- * moindre parc urbain posait un carré coloré au milieu des rues.
- * Seuls les voisins connus comptent : au bord de l'écran, un carré de ville n'apparaît que lorsque
- * son massif est assez visible (le contraire ferait revenir les parcs le long des bords).
- */
-export function fineCellsToDraw(candidates: readonly FineCandidate[]): Set<string> {
-  const wooded = new Set(candidates.filter((c) => c.share >= FINE_MIN_HOST_SHARE).map((c) => c.id));
-  const kept = new Set<string>();
-  for (const c of candidates) {
-    if (!wooded.has(c.id)) continue;
-    if (!c.town) {
-      kept.add(c.id);
-      continue;
-    }
-    if (c.share < FINE_TOWN_MIN_HOST_SHARE) continue;
-    const [i = 0, j = 0] = c.id.split(':').map(Number);
-    let neighbours = 0;
-    for (let di = -1; di <= 1; di++) {
-      for (let dj = -1; dj <= 1; dj++) {
-        if (!di && !dj) continue;
-        if (wooded.has(`${i + di}:${j + dj}`)) neighbours++;
-      }
-    }
-    if (neighbours >= FINE_TOWN_MIN_NEIGHBOURS) kept.add(c.id);
-  }
-  return kept;
-}
 
 // ── Altitudes (cache permanent dans le navigateur) ───────────────────────────
 
@@ -536,21 +494,12 @@ export interface FineScore {
 
 /**
  * Indice d'un carré pour un champignon : qualité moyenne des arbres hôtes présents et sol
- * moyen sous ces arbres. Null si aucun point du carré n'est sous un arbre hôte (le choix des
- * carrés à dessiner se fait avant : `fineCellsToDraw`).
+ * moyen sous ces arbres (`fineFactors`). Null si aucun point du carré n'est sous un arbre hôte (le
+ * choix des carrés à dessiner se fait avant : `fineCellsToDraw`).
  */
 export function scoreFineCell(m: Mushroom, w: WeatherSummary, month: number, samples: readonly Sample[]): FineScore | null {
-  let hosts = 0;
-  let quality = 0;
-  let soil = 0;
-  for (const s of samples) {
-    const weight = s.code ? (m.hosts[s.code] ?? 0) : 0;
-    if (weight <= 0) continue;
-    hosts++;
-    quality += weight;
-    soil += s.soil ? soilModulation(m.soils[s.soil]) : 1;
-  }
-  if (!hosts) return null;
-  const { score, level } = scoreMushroom(m, w, month, { hostQuality: quality / hosts, soilFactor: soil / hosts });
-  return { score, level, coverage: hosts / samples.length };
+  const f = fineFactors(m, samples);
+  if (!f) return null;
+  const { score, level } = scoreMushroom(m, w, month, { hostQuality: f.quality, soilFactor: f.soil });
+  return { score, level, coverage: f.hosts / samples.length };
 }

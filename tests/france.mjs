@@ -1,12 +1,15 @@
 // Moyennes de France par champignon (scripts/meteo/france.mjs, src/franceStats.ts) : le script de la
 // publication, joué sur des fichiers météo fabriqués ici pour toutes les cases du fichier des parts de
-// forêt. Sans réseau ; il lui faut Vite (dépendance du projet) :
+// forêt. Puis la règle qui relie les échelles (src/fineRule.ts, src/forestShare.ts) : un carré de
+// 4,5 km annonce ce que son meilleur carré de 500 m montrera, et le fichier versionné a été calculé
+// avec les règles du code. Sans réseau ; il lui faut Vite (dépendance du projet) :
 //   npm run test:france
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { build } from 'vite';
 
 const results = [];
 function check(name, ok, detail = '') {
@@ -15,8 +18,8 @@ function check(name, ok, detail = '') {
 }
 const racine = fileURLToPath(new URL('..', import.meta.url));
 const parts = JSON.parse(readFileSync(join(racine, 'public/foret/parts.json'), 'utf8'));
-const cases = Object.keys(parts.cases);
-const carresAvecTerre = Object.values(parts.cases).reduce((n, squares) => n + squares.filter(Boolean).length, 0);
+const cases = Object.keys(parts.fin);
+const carresAvecTerre = Object.values(parts.fin).reduce((n, squares) => n + squares.filter((square) => square !== null).length, 0);
 
 const jourAvant = (jour, k) => new Date(Date.parse(`${jour}T00:00:00Z`) - k * 86_400_000).toISOString().slice(0, 10);
 const BLOC = 8;
@@ -28,7 +31,7 @@ const BLOC = 8;
  * `altitude` (null là où le fichier des parts n'a pas de terre).
  */
 function fabriquer(dossier, jour, pluieIlYA, fichier = parts, altitude = 500) {
-  const cases = Object.keys(fichier.cases);
+  const cases = Object.keys(fichier.fin);
   mkdirSync(join(dossier, 'b'), { recursive: true });
   const dates = Array.from({ length: 31 }, (_, k) => jourAvant(jour, 30 - k));
   const pluie = dates.map((_, k) => (30 - k === pluieIlYA ? 40 : pluieIlYA >= 0 && 30 - k === pluieIlYA + 2 ? 20 : 0));
@@ -47,7 +50,7 @@ function fabriquer(dossier, jour, pluieIlYA, fichier = parts, altitude = 500) {
       p: pluie,
       x: dates.map(() => 14),
       n: dates.map(() => 8),
-      a: fichier.cases[id].map((square) => (square ? altitude : null)),
+      a: fichier.fin[id].map((square) => (square !== null ? altitude : null)),
     };
   }
   for (const [bloc, cells] of blocs) writeFileSync(join(dossier, 'b', `${bloc}.json`), JSON.stringify({ v: 1, dates, cells }));
@@ -89,7 +92,7 @@ check(
   JSON.stringify(m),
 );
 check(
-  'seuls les carrés où le champignon peut pousser sont comptés (arbres hôtes, hors villes) : moins que les carrés de France, et moins encore pour les chanterelles en tube',
+  'seuls les carrés que la carte allume sont comptés (un carré de 500 m à dessiner au moins) : moins que les carrés de France, et moins encore pour les chanterelles en tube',
   n.cepe > 10_000 && n.cepe < carresAvecTerre && n.chanterelle > 1_000 && n.chanterelle < n.cepe,
   `${carresAvecTerre} carrés avec de la terre ; comptés : ${JSON.stringify(n)}`,
 );
@@ -121,40 +124,151 @@ check(
   `500 m : ${JSON.stringify(m)} ; 2 500 m : ${JSON.stringify(haut.file.moyennes)}`,
 );
 
-// ── La qualité des arbres hôtes compte : deux cases d'essai, tous leurs carrés couverts à 100 % par
-// des chênes décidus (hôte typique des cèpes, poids 1) ou par des chênes sempervirents (poids 0,6).
-// Un calcul qui tiendrait tous les hôtes pour parfaits rendrait la même moyenne dans les deux cas.
-const essai = (code) => {
+// ── Ce que vaut le meilleur carré de 500 m compte : deux cases d'essai, dans chacun de leurs carrés
+// 40 carrés de 500 m à dessiner pour les cèpes, dont le meilleur vaut 1 (hêtraie sur bon sol) ou 0,6.
+// Un calcul qui tiendrait tous les carrés pour parfaits rendrait la même moyenne dans les deux cas.
+const rangCepe = parts.champignons.indexOf('cepe');
+const essai = (carre) => {
   const deux = cases.slice(0, 2);
-  return { v: 1, pasLat: parts.pasLat, pasLon: parts.pasLon, codes: [code], cases: Object.fromEntries(deux.map((id) => [id, Array.from({ length: 16 }, () => [0, 100])])), bati: Object.fromEntries(deux.map((id) => [id, Array(16).fill(0)])) };
+  return { v: 2, pasLat: parts.pasLat, pasLon: parts.pasLon, champignons: parts.champignons, fin: Object.fromEntries(deux.map((id) => [id, Array.from({ length: 16 }, () => carre)])), bati: Object.fromEntries(deux.map((id) => [id, Array(16).fill(0)])) };
 };
-const typique = calculer('2026-10-20', 9, { fichier: essai('FF1G01-01') });
-const moinsBon = calculer('2026-10-20', 9, { fichier: essai('FF1G06-06') });
+const pourCepes = (nombre, meilleur) => parts.champignons.flatMap((_, k) => (k === rangCepe ? [nombre, meilleur] : [0, 0]));
+const typique = calculer('2026-10-20', 9, { fichier: essai(pourCepes(40, 1000)) });
+const moinsBon = calculer('2026-10-20', 9, { fichier: essai(pourCepes(40, 600)) });
 check(
-  'qualité des hôtes : sous des chênes sempervirents (poids 0,6) la moyenne des cèpes est plus basse que sous des chênes décidus (poids 1), à météo égale',
+  'meilleur carré de 500 m : s’il vaut 0,6 (arbres × sol) la moyenne des cèpes est plus basse que s’il vaut 1, à météo égale',
   typique.file.carres.cepe === 32 && moinsBon.file.carres.cepe === 32 && moinsBon.file.moyennes.cepe < typique.file.moyennes.cepe - 5 && moinsBon.file.moyennes.cepe > 0,
-  `chênes décidus : ${typique.file.moyennes.cepe} % ; chênes sempervirents : ${moinsBon.file.moyennes.cepe} % (${typique.file.carres.cepe} carrés)`,
+  `meilleur à 1 : ${typique.file.moyennes.cepe} % ; à 0,6 : ${moinsBon.file.moyennes.cepe} % (${typique.file.carres.cepe} carrés)`,
 );
-// Meilleure forêt du carré (15/11/2026) : 60 % de chênes sempervirents (poids 0,6) et 5 % de chênes
-// décidus (poids 1) valent comme une chênaie décidue pure ; avec 1 % de décidus seulement (sous le
-// seuil de 2 %), comme des sempervirents purs. Un calcul à la moyenne des hôtes (0,63 et 0,61)
-// rendrait deux chiffres intermédiaires.
-const melange = (partDuMeilleur) => {
-  const deux = cases.slice(0, 2);
-  return { v: 1, pasLat: parts.pasLat, pasLon: parts.pasLon, codes: ['FF1G06-06', 'FF1G01-01'], cases: Object.fromEntries(deux.map((id) => [id, Array.from({ length: 16 }, () => [0, 60, 1, partDuMeilleur])])), bati: Object.fromEntries(deux.map((id) => [id, Array(16).fill(0)])) };
-};
-const avecBonneForet = calculer('2026-10-20', 9, { fichier: melange(5) });
-const presqueSans = calculer('2026-10-20', 9, { fichier: melange(1) });
+// Un seul carré de 500 m à dessiner suffit à compter le carré (c'est lui que la carte allume), et le
+// nombre ne change pas le pourcentage : c'est celui du meilleur.
+const unSeul = calculer('2026-10-20', 9, { fichier: essai(pourCepes(1, 1000)) });
 check(
-  'meilleure forêt du carré : 5 % de chênes décidus parmi 60 % de sempervirents valent une chênaie décidue pure ; 1 % (sous le seuil de 2 %) ne compte pas',
-  avecBonneForet.file.carres.cepe === 32 && avecBonneForet.file.moyennes.cepe === typique.file.moyennes.cepe && presqueSans.file.moyennes.cepe === moinsBon.file.moyennes.cepe && typique.file.moyennes.cepe > moinsBon.file.moyennes.cepe,
-  `5 % de décidus : ${avecBonneForet.file.moyennes.cepe} % (chênaie décidue pure : ${typique.file.moyennes.cepe} %) ; 1 % : ${presqueSans.file.moyennes.cepe} % (sempervirents purs : ${moinsBon.file.moyennes.cepe} %)`,
+  'un seul carré de 500 m à dessiner : le carré de 4,5 km est compté, au même pourcentage que s’il en avait quarante',
+  unSeul.file.carres.cepe === 32 && unSeul.file.moyennes.cepe === typique.file.moyennes.cepe,
+  `un seul : ${unSeul.file.moyennes.cepe} % ; quarante : ${typique.file.moyennes.cepe} %`,
 );
-// Une ville : mêmes carrés boisés à 100 %, mais bâtis à 15 % : aucun n'est compté, pas de moyenne.
-const ville = essai('FF1G01-01');
-for (const id of Object.keys(ville.bati)) ville.bati[id] = Array(16).fill(15);
-const urbain = calculer('2026-10-20', 9, { fichier: ville });
-check('carrés bâtis à 15 % ou plus : aucun n’est compté, le champignon n’a pas de moyenne', !('cepe' in urbain.file.moyennes) && !('cepe' in urbain.file.carres), JSON.stringify(urbain.file));
+// Rien à dessiner (plaine sans arbres hôtes, ou ville dont aucun bois ne tient à un massif) : pas compté.
+const vide = calculer('2026-10-20', 9, { fichier: essai(0) });
+check('carrés sans rien à dessiner : aucun n’est compté, le champignon n’a pas de moyenne', !('cepe' in vide.file.moyennes) && !('cepe' in vide.file.carres), JSON.stringify(vide.file));
+
+// ── La règle qui relie les échelles ─────────────────────────────────────────────────────────────
+// Le code de la carte, pour Node (comme le font les scripts) : la règle des carrés de 500 m, le
+// format du fichier, l'indice et la météo. Une seule fabrication : les modules se partagent.
+const dossierCode = mkdtempSync(join(tmpdir(), 'regle-'));
+let regle;
+try {
+  const entree = (nom) => join(racine, 'src', `${nom}.ts`);
+  await build({
+    root: racine,
+    configFile: false,
+    logLevel: 'warn',
+    build: {
+      ssr: true,
+      outDir: dossierCode,
+      emptyOutDir: true,
+      copyPublicDir: false,
+      rollupOptions: {
+        input: { fineRule: entree('fineRule'), forestShare: entree('forestShare'), mushrooms: entree('mushrooms'), weather: entree('weather') },
+        output: { entryFileNames: '[name].mjs', chunkFileNames: 'morceaux/[name]-[hash].mjs' },
+      },
+    },
+  });
+  const charger = (nom) => import(pathToFileURL(join(dossierCode, `${nom}.mjs`)).href);
+  regle = { ...(await charger('fineRule')), ...(await charger('forestShare')), ...(await charger('mushrooms')), ...(await charger('weather')) };
+} finally {
+  rmSync(dossierCode, { recursive: true, force: true });
+}
+const { MUSHROOMS, surveySquare, fineFactors, packSquare, rulesSignature, useForestShare, hostCover, isLit, scoreMushroom, squareScore, weatherCeiling, chanceOf, noEstimate, parseBlock, summarize, summaryAtAltitude, temperaturesAt } = regle;
+
+check(
+  'fichier versionné : calculé avec les règles du code (arbres hôtes, sols, seuils des carrés de 500 m). Sinon, le refaire : node scripts/foret/parts.mjs',
+  parts.regles === rulesSignature(),
+  `fichier ${parts.regles}, code ${rulesSignature()}`,
+);
+check('fichier versionné : les champignons du code, dans le même ordre', JSON.stringify(parts.champignons) === JSON.stringify(MUSHROOMS.map((m) => m.id)), parts.champignons.join(', '));
+
+const cepe = MUSHROOMS.find((m) => m.id === 'cepe');
+/** Neuf points, dont les `hotes` premiers sous une forêt `code` sur un sol `soil`. */
+const points = (hotes, code = 'FF1-09-09', soil = null) => Array.from({ length: 9 }, (_, k) => (k < hotes ? { code, soil } : { code: null, soil: null }));
+const carre500 = (id, samples, inner = true) => ({ id, samples, inner });
+const vu = (m, ville, cellules) => {
+  const r = surveySquare(m, ville, cellules);
+  return `${r.count} · ${r.best.toFixed(3)}`;
+};
+check(
+  'règle : hors des villes, trois points sur neuf sous un arbre hôte suffisent, deux non ; un carré qui borde le carré jugé n’est pas compté',
+  vu(cepe, false, [carre500('10:10', points(3))]) === '1 · 1.000' && vu(cepe, false, [carre500('10:10', points(2))]) === '0 · 0.000' && vu(cepe, false, [carre500('10:10', points(9), false)]) === '0 · 0.000',
+  [vu(cepe, false, [carre500('10:10', points(3))]), vu(cepe, false, [carre500('10:10', points(2))])].join(' | '),
+);
+check(
+  'règle : le meilleur est le produit « arbres × sol » d’un carré à dessiner (hêtraie sur calcaire : 1 × 0,76 pour les cèpes) ; un meilleur arbre sur deux points seulement ne compte pas',
+  vu(cepe, false, [carre500('10:10', points(4, 'FF1-09-09', 'calcaire'))]) === '1 · 0.760' && vu(cepe, false, [carre500('10:10', points(9, 'FF1G06-06')), carre500('10:11', points(2, 'FF1-09-09'))]) === '1 · 0.600',
+  [vu(cepe, false, [carre500('10:10', points(4, 'FF1-09-09', 'calcaire'))]), vu(cepe, false, [carre500('10:10', points(9, 'FF1G06-06')), carre500('10:11', points(2, 'FF1-09-09'))])].join(' | '),
+);
+check(
+  'règle de ville : un carré tout boisé mais isolé (un parc) ne compte pas ; tenu à un massif (deux voisins boisés, même hors du carré jugé) il compte ; quatre points sur neuf ne suffisent pas',
+  vu(cepe, true, [carre500('10:10', points(9))]) === '0 · 0.000' &&
+    vu(cepe, true, [carre500('10:10', points(9)), carre500('10:11', points(3), false), carre500('11:11', points(3), false)]) === '1 · 1.000' &&
+    vu(cepe, true, [carre500('10:10', points(4)), carre500('10:11', points(9), false), carre500('11:11', points(9), false)]) === '0 · 0.000',
+  vu(cepe, true, [carre500('10:10', points(9)), carre500('10:11', points(3), false), carre500('11:11', points(3), false)]),
+);
+
+// Un carré de 4,5 km d'essai, varié : une hêtraie sur calcaire, une sapinière sur granite, un mélange
+// sur moraine, une chênaie verte, un bois trop petit pour être dessiné (deux points), sans sol connu
+// par endroits. Pour chaque champignon de saison, à trois altitudes : ce que le carré de 4,5 km
+// annonce (fichier écrit puis relu, comme le fait la carte) doit être ce que montre son meilleur
+// carré de 500 m (calculé comme `scoreFineCell`), à un point près vers le haut (l'arrondi du fichier).
+const melange = [{ code: 'FF31', soil: 'moraine' }, { code: 'FF31', soil: 'moraine' }, { code: 'FF32', soil: null }, { code: 'FF1-00-00', soil: 'limon' }, { code: 'FF2-52-52', soil: 'gres' }, { code: null, soil: null }, { code: null, soil: null }, { code: 'FO1', soil: 'humide' }, { code: 'FF1G01-01', soil: 'marne' }];
+const terrain = [
+  carre500('900:900', points(5, 'FF1-09-09', 'calcaire')),
+  carre500('900:903', points(7, 'FF2G61-61', 'cristallin')),
+  carre500('902:901', melange),
+  carre500('904:904', points(9, 'FF1G06-06', 'eboulis')),
+  carre500('906:906', points(2, 'FF1G01-01', 'gres')),
+  carre500('907:902', points(3, 'FP', null)),
+];
+const celluleEssai = cases[0];
+const fichierEssai = { v: 2, pasLat: parts.pasLat, pasLon: parts.pasLon, champignons: MUSHROOMS.map((m) => m.id), fin: { [celluleEssai]: Array.from({ length: 16 }, (_, k) => (k === 0 ? packSquare(MUSHROOMS.map((m) => surveySquare(m, false, terrain))) : 0)) }, bati: { [celluleEssai]: Array(16).fill(0) } };
+const dossierMeteo = mkdtempSync(join(tmpdir(), 'regle-meteo-'));
+let ecarts = [];
+let compares = 0;
+let plusHaut = 0;
+try {
+  for (const [jour, pluieIlYA] of [['2026-10-20', 9], ['2026-10-20', 4], ['2026-04-20', 9], ['2026-11-25', 12]]) {
+    fabriquer(dossierMeteo, jour, pluieIlYA, fichierEssai);
+    const bloc = JSON.parse(readFileSync(join(dossierMeteo, 'b', `${Math.floor(Number(celluleEssai.split(':')[0]) / BLOC)}_${Math.floor(Number(celluleEssai.split(':')[1]) / BLOC)}.json`), 'utf8'));
+    const serie = parseBlock(bloc).get(celluleEssai);
+    const w = summarize(serie, jour);
+    const mois = Number(jour.slice(5, 7));
+    if (!useForestShare(fichierEssai)) throw new Error('fichier d’essai refusé');
+    for (const m of MUSHROOMS) {
+      if (noEstimate(m, mois)) continue;
+      const releve = surveySquare(m, false, terrain);
+      const annonce = hostCover(celluleEssai, 0, m);
+      for (const altitude of [200, 900, 1500]) {
+        const gros = isLit(annonce) ? chanceOf(squareScore(m, weatherCeiling(m, w, mois), temperaturesAt(w, altitude), annonce.quality)) : 0;
+        let fin = 0;
+        for (const c of terrain) {
+          const f = fineFactors(m, c.samples);
+          if (!f || f.hosts < 3) continue; // hors des villes : trois points sur neuf
+          fin = Math.max(fin, scoreMushroom(m, summaryAtAltitude(w, altitude), mois, { hostQuality: f.quality, soilFactor: f.soil }).chance);
+        }
+        compares++;
+        if (gros > fin) plusHaut++;
+        if (gros < fin || gros > fin + 1 || isLit(annonce) !== releve.count > 0) ecarts.push(`${m.id} ${jour} ${altitude} m : carré de 4,5 km ${gros} %, meilleur carré de 500 m ${fin} %`);
+      }
+    }
+  }
+} finally {
+  rmSync(dossierMeteo, { recursive: true, force: true });
+}
+check(
+  'échelles : le carré de 4,5 km annonce la chance estimée de son meilleur carré de 500 m (jamais moins, au plus un point de plus), pour chaque champignon de saison, quatre météos, trois altitudes',
+  compares >= 30 && ecarts.length === 0,
+  ecarts.slice(0, 3).join(' ; ') || `${compares} comparaisons, dont ${plusHaut} à un point au-dessus`,
+);
+useForestShare(parts);
 
 const failed = results.filter((ok) => !ok).length;
 console.log(`\n${results.length - failed}/${results.length} vérifications OK`);
