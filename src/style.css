@@ -1378,38 +1378,39 @@ li.is-off .swatch {
   font-variant-numeric: tabular-nums;
 }
 
-/* « Y aller » (directions.ts) : la voiture de l'en-tête, pastille pleine pour qu'on la voie, et le
-   choix qu'elle déplie sous l'en-tête, dans le panneau (il rognerait une bulle) : des puces à
-   liseré, comme celles de « Je cherche… ». Pas de bloc blanc ici (retour de Clément). */
+/* « Y aller » (directions.ts) : dans l'en-tête, une puce à liseré avec une voiture, et le choix
+   qu'elle déplie sous l'en-tête, dans le panneau (il rognerait une bulle). Tout est en puces à
+   liseré, comme « Je cherche… » : ni bloc blanc, ni icône dans un rond (refusés par Clément). */
 .directions-btn {
-  display: grid;
+  display: inline-flex;
   flex: none;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lavender-soft);
+  font: inherit;
+  font-size: 13.5px;
+  white-space: nowrap;
   cursor: pointer;
-  transition:
-    background-color 0.15s,
-    box-shadow 0.15s;
 }
 
 .directions-btn svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .directions-btn:hover {
-  background: #7f7ff6;
+  background: rgba(106, 106, 244, 0.18);
 }
 
-/* Choix déplié : un halo autour de la pastille. */
+/* Choix déplié : puce pleine, comme une puce cochée de « Je cherche… ». */
 .directions-btn[aria-expanded='true'] {
-  box-shadow: 0 0 0 3px rgba(133, 133, 246, 0.4);
+  background: var(--accent);
+  color: #fff;
 }
 
 .directions {
@@ -1467,8 +1468,7 @@ a.directions__btn svg {
 /* Téléphone : cibles à la taille du doigt. */
 @media (max-width: 640px) {
   .directions-btn {
-    width: 40px;
-    height: 40px;
+    min-height: 36px;
   }
 
   .directions__btn {

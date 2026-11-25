@@ -1,5 +1,5 @@
 /**
- * « Y aller » : le bouton voiture de l'en-tête du bilan. Il déplie, juste sous l'en-tête, les
+ * « Y aller » : la puce à la voiture de l'en-tête du bilan. Elle déplie, juste sous l'en-tête, les
  * applications de navigation d'un téléphone, et « Copier les coordonnées » pour toutes les autres.
  *
  * Chaque lien est celui que l'éditeur de l'application documente pour un site web : il ouvre
@@ -12,9 +12,10 @@
  * tous, sauf Plans, qui n'existe que sur les appareils Apple.
  *
  * Le choix se déplie dans le panneau, sous l'en-tête, plutôt qu'en bulle flottante : le panneau
- * rognerait une bulle, et sur téléphone elle masquerait le bilan. Habillage : une pastille ronde pour
- * la voiture, des puces à liseré comme celles de « Je cherche… » pour le choix (retour de Clément sur
- * la première version, 25/11/2026 : de gros rectangles blancs sous l'en-tête, « moche »).
+ * rognerait une bulle, et sur téléphone elle masquerait le bilan. Habillage, validé par Clément sur
+ * maquette le 26/11/2026 : des puces à liseré comme celles de « Je cherche… », pour « Y aller »
+ * (voiture et texte) comme pour le choix. Deux versions refusées avant : de gros rectangles blancs
+ * sous l'en-tête et une voiture dans un rectangle, puis une voiture dans une pastille ronde.
  *
  * Avant le 25/11/2026, « Copier les coordonnées » et « Itinéraire ↗ » (Google Maps seul) étaient tout
  * en bas du bilan : sur téléphone il fallait faire défiler le tiroir pour les trouver (demande de
@@ -52,14 +53,15 @@ export function navApps(lat: string, lng: string, apple: boolean = isAppleDevice
 const PANEL_ID = 'spot-directions';
 
 /**
- * Le bouton voiture et ce qu'il déplie. `button` va dans l'en-tête du bilan, `panel` juste dessous :
+ * La puce « Y aller » et ce qu'elle déplie. `button` va dans l'en-tête du bilan, `panel` juste dessous :
  * ni l'un ni l'autre n'est redessiné avec le bilan (qui l'est jusqu'à trois fois par clic).
  */
 export class Directions {
   readonly button = h(
     'button',
-    { class: 'directions-btn', type: 'button', 'aria-expanded': 'false', 'aria-controls': PANEL_ID, 'aria-label': 'Y aller : itinéraire ou coordonnées', title: 'Y aller' },
+    { class: 'directions-btn', type: 'button', 'aria-expanded': 'false', 'aria-controls': PANEL_ID, 'aria-label': 'Y aller : itinéraire ou coordonnées' },
     icon('car'),
+    'Y aller',
   );
   private readonly list = h('div', { class: 'directions__list' });
   readonly panel = h(

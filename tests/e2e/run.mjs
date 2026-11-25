@@ -848,8 +848,8 @@ async function desktopTests(browser, base) {
     check('bilan : Échap replie l’explication et rend le clavier au bouton « ? »', helpClosed.hidden === true && helpClosed.focus === 'help-btn' && helpClosed.spot, JSON.stringify(helpClosed));
     check('surbrillance du polygone cliqué', spot.highlight === JSON.stringify(['==', ['get', 'id'], target.id]), spot.highlight);
 
-    // « Y aller » : la voiture de l'en-tête, à côté de « Ce coin », déplie les applications de
-    // navigation et « Copier les coordonnées » (avant le 25/11/2026 : deux boutons tout en bas du bilan).
+    // « Y aller » : la puce à la voiture de l'en-tête, à côté de « Ce coin », déplie les applications
+    // de navigation et « Copier les coordonnées » (avant le 25/11/2026 : deux boutons tout en bas du bilan).
     const coords = (await page.locator('#spot .spot__coords').textContent()) ?? '';
     const [lat, lng] = coords.split(', ');
     const goBefore = await page.evaluate(() => {
@@ -858,11 +858,14 @@ async function desktopTests(browser, base) {
       const r = button?.getBoundingClientRect();
       return {
         inHeader: Boolean(button && header?.contains(button) && header.querySelector('.panel__title')?.textContent === 'Ce coin'),
-        seen: Boolean(r && r.width >= 36 && r.height >= 36 && r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth),
-        // Pastille pleine et ronde (les autres boutons de l'en-tête sont transparents) : c'est ce qui la fait voir.
-        filled: button ? getComputedStyle(button).backgroundColor : '',
-        round: button ? getComputedStyle(button).borderRadius : '',
-        close: getComputedStyle(document.querySelector('#spot .panel__close')).backgroundColor,
+        seen: Boolean(r && r.height >= 30 && r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth),
+        // Une puce à liseré, voiture et texte, comme celles de « Je cherche… » : ni icône dans un
+        // rond, ni bloc plein (les deux ont été refusés par Clément).
+        text: button?.textContent ?? '',
+        car: Boolean(button?.querySelector('svg')),
+        pill: Boolean(r && r.width > 2 * r.height),
+        border: button ? getComputedStyle(button).borderTopWidth : '',
+        background: button ? getComputedStyle(button).backgroundColor : '',
         expanded: button?.getAttribute('aria-expanded'),
         hidden: document.getElementById('spot-directions')?.hidden,
         label: button?.getAttribute('aria-label') ?? '',
@@ -870,8 +873,9 @@ async function desktopTests(browser, base) {
       };
     });
     check(
-      'bilan : voiture « Y aller » dans l’en-tête, à côté de « Ce coin », pastille pleine et visible ; plus rien en bas du bilan',
-      goBefore.inHeader && goBefore.seen && goBefore.filled !== goBefore.close && goBefore.round === '50%' && goBefore.expanded === 'false' && goBefore.hidden === true && /^Y aller/.test(goBefore.label) && !goBefore.below,
+      'bilan : puce « Y aller » (voiture et texte) dans l’en-tête, à côté de « Ce coin », à liseré, visible ; plus rien en bas du bilan',
+      goBefore.inHeader && goBefore.seen && goBefore.text === 'Y aller' && goBefore.car && goBefore.pill && goBefore.border === '1px' && goBefore.background === 'rgba(0, 0, 0, 0)' &&
+        goBefore.expanded === 'false' && goBefore.hidden === true && /^Y aller/.test(goBefore.label) && !goBefore.below,
       JSON.stringify(goBefore),
     );
     await page.locator('#spot .directions-btn').click();
@@ -893,14 +897,14 @@ async function desktopTests(browser, base) {
           const r = box(b);
           return r.height >= 28 && r.top >= p.top && r.bottom <= p.bottom && r.left >= p.left && r.right <= p.right;
         }),
-        // Des puces à liseré, sans fond, et une voiture qui reste colorée : pas de bloc blanc sous
-        // l'en-tête (retour de Clément sur la première version).
+        // Des puces à liseré, sans fond, et une puce « Y aller » qui reste colorée : pas de bloc
+        // blanc sous l'en-tête (retour de Clément sur la première version).
         white: [document.querySelector('#spot .directions-btn'), ...panel.querySelectorAll('.directions__btn')].filter((b) => getComputedStyle(b).backgroundColor === 'rgb(255, 255, 255)').length,
         plain: [...panel.querySelectorAll('.directions__btn')].every((b) => getComputedStyle(b).backgroundColor === 'rgba(0, 0, 0, 0)'),
       };
     });
     check(
-      'bilan : la voiture déplie Google Maps, Waze et « Copier les coordonnées » en puces à liseré, liens vers le point touché',
+      'bilan : « Y aller » déplie Google Maps, Waze et « Copier les coordonnées » en puces à liseré, liens vers le point touché',
       goOpen.hidden === false && goOpen.expanded === 'true' &&
         goOpen.links.join(' | ') === `Google Maps → https://www.google.com/maps/dir/?api=1&destination=${lat}%2C${lng} _blank noopener | Waze → https://waze.com/ul?ll=${lat}%2C${lng}&navigate=yes _blank noopener` &&
         goOpen.buttons.join() === 'Copier les coordonnées' && goOpen.inside && goOpen.aboveBody && goOpen.seen && goOpen.white === 0 && goOpen.plain,
@@ -939,7 +943,7 @@ async function desktopTests(browser, base) {
       focus: document.activeElement?.className,
       spot: !document.getElementById('spot').hidden,
     }));
-    check('bilan : Échap replie le choix et rend le clavier à la voiture', goClosed.hidden === true && goClosed.expanded === 'false' && goClosed.focus === 'directions-btn' && goClosed.spot, JSON.stringify(goClosed));
+    check('bilan : Échap replie le choix et rend le clavier à « Y aller »', goClosed.hidden === true && goClosed.expanded === 'false' && goClosed.focus === 'directions-btn' && goClosed.spot, JSON.stringify(goClosed));
     // Plans n'existe que sur les appareils Apple (un iPad se présente comme un Mac) ; à l'ouest de
     // Greenwich la longitude est négative.
     const apps = await page.evaluate(async () => {
@@ -3216,7 +3220,7 @@ async function mobileTests(browser, base) {
   });
   check('mobile : bilan en tiroir bas', sheet.bottom >= 840 && sheet.width === 390 && sheet.legendHidden, JSON.stringify(sheet));
   await page.screenshot({ path: `${OUT}09-mobile-bilan.png` });
-  // « Y aller » : la voiture se voit dès l'ouverture du tiroir (avant le 25/11/2026 : « Itinéraire »
+  // « Y aller » : la puce se voit dès l'ouverture du tiroir (avant le 25/11/2026 : « Itinéraire »
   // tout en bas, après un long défilement), à la taille du doigt ; son choix tient dans le tiroir.
   const car = await page.evaluate(() => {
     const r = document.querySelector('#spot .directions-btn').getBoundingClientRect();
@@ -3238,8 +3242,8 @@ async function mobileTests(browser, base) {
     };
   });
   check(
-    'mobile : voiture « Y aller » visible dès l’ouverture du tiroir, à la taille du doigt ; son choix tient dans le tiroir, puces de 40 px',
-    car.seen && car.width >= 40 && car.height >= 40 && choice.hidden === false && choice.labels === 'Google Maps | Waze | Copier les coordonnées' && choice.heights.every((v) => v >= 40) && choice.inside && choice.fits && choice.body > 150,
+    'mobile : puce « Y aller » visible dès l’ouverture du tiroir, à la taille du doigt ; son choix tient dans le tiroir, puces de 40 px',
+    car.seen && car.width >= 80 && car.height >= 36 && choice.hidden === false && choice.labels === 'Google Maps | Waze | Copier les coordonnées' && choice.heights.every((v) => v >= 40) && choice.inside && choice.fits && choice.body > 150,
     `${JSON.stringify(car)} ; ${choice.labels} ; hauteurs ${choice.heights.join()} ; bilan visible sur ${choice.body} px`,
   );
   await page.screenshot({ path: `${OUT}09b-mobile-y-aller.png` });
