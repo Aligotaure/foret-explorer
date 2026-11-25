@@ -266,8 +266,10 @@ export class SpotPanel {
         { class: 'panel__header' },
         h('span', { class: 'panel__icon' }, icon('target')),
         h('div', { class: 'spot__heading' }, h('h2', { class: 'panel__title' }, 'Ce coin'), this.coords),
-        this.directions.button,
+        // La croix avant « Y aller » dans le code (le style la remet à droite) : au clavier et au
+        // lecteur d'écran, ce que « Y aller » déplie vient ainsi juste après lui.
         close,
+        this.directions.button,
       ),
       this.directions.panel,
       this.body,

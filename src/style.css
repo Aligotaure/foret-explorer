@@ -1382,6 +1382,7 @@ li.is-off .swatch {
    qu'elle déplie sous l'en-tête, dans le panneau (il rognerait une bulle). Tout est en puces à
    liseré, comme « Je cherche… » : ni bloc blanc, ni icône dans un rond (refusés par Clément). */
 .directions-btn {
+  position: relative;
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -1407,10 +1408,17 @@ li.is-off .swatch {
   background: rgba(106, 106, 244, 0.18);
 }
 
-/* Choix déplié : puce pleine, comme une puce cochée de « Je cherche… ». */
+/* Choix déplié : puce pleine. Texte foncé sur lavande (contraste 5,6 ; du blanc sur la couleur
+   d'accent n'atteint que 4,2, sous le seuil de lisibilité de 4,5 pour un texte de cette taille). */
 .directions-btn[aria-expanded='true'] {
-  background: var(--accent);
-  color: #fff;
+  border-color: var(--lavender);
+  background: var(--lavender);
+  color: var(--navy-900);
+}
+
+/* Dans le code, la croix précède « Y aller » (spot.ts : ordre du clavier) ; à l'écran elle reste à droite. */
+.panel--spot .panel__close {
+  order: 1;
 }
 
 .directions {
@@ -1433,6 +1441,7 @@ li.is-off .swatch {
 }
 
 .directions__btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1465,7 +1474,8 @@ a.directions__btn svg {
   color: var(--lavender);
 }
 
-/* Téléphone : cibles à la taille du doigt. */
+/* Téléphone : les puces restent fines (36 et 40 px), leur zone tactile fait 44 px de haut, comme les
+   deux boutons qu'elles remplacent (même moyen que le « ? » : un pseudo-élément qui déborde). */
 @media (max-width: 640px) {
   .directions-btn {
     min-height: 36px;
@@ -1474,6 +1484,21 @@ a.directions__btn svg {
   .directions__btn {
     min-height: 40px;
     font-size: 14px;
+  }
+
+  .directions-btn::after,
+  .directions__btn::after {
+    position: absolute;
+    content: '';
+  }
+
+  /* (Le pseudo-élément part de l'intérieur du liseré : 34 + 2 × 5 et 38 + 2 × 3 font 44 px.) */
+  .directions-btn::after {
+    inset: -5px 0;
+  }
+
+  .directions__btn::after {
+    inset: -3px 0;
   }
 }
 

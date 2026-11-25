@@ -852,6 +852,9 @@ async function desktopTests(browser, base) {
     // de navigation et « Copier les coordonnées » (avant le 25/11/2026 : deux boutons tout en bas du bilan).
     const coords = (await page.locator('#spot .spot__coords').textContent()) ?? '';
     const [lat, lng] = coords.split(', ');
+    // Plans n'est proposé que sur un appareil Apple : sur un Mac, le navigateur des tests en est un
+    // (les contrôles ne doivent pas dépendre de la machine qui les joue).
+    const appleHost = await page.evaluate(async () => (await import('/src/directions.ts')).isAppleDevice());
     const goBefore = await page.evaluate(() => {
       const button = document.querySelector('#spot .directions-btn');
       const header = document.querySelector('#spot .panel__header');
@@ -888,8 +891,13 @@ async function desktopTests(browser, base) {
       return {
         hidden: panel.hidden,
         expanded: document.querySelector('#spot .directions-btn').getAttribute('aria-expanded'),
-        links: [...panel.querySelectorAll('a')].map((a) => `${a.textContent} → ${a.getAttribute('href')} ${a.target} ${a.rel}`),
+        // Libellé visible d'un lien : son texte sans la mention réservée aux lecteurs d'écran.
+        links: [...panel.querySelectorAll('a')].map((a) => `${a.firstChild.textContent} → ${a.getAttribute('href')} ${a.target} ${a.rel}`),
+        // Ce qu'un lecteur d'écran entend : ce que fait le lien, et qu'il s'ouvre ailleurs.
+        spoken: [...panel.querySelectorAll('a')].map((a) => a.textContent),
         buttons: [...panel.querySelectorAll('button')].map((b) => b.textContent),
+        // La croix reste à droite de « Y aller », bien qu'elle le précède dans le code.
+        crossRight: box(document.querySelector('#spot .panel__close')).left >= box(document.querySelector('#spot .directions-btn')).right,
         // Déplié dans le panneau, sous l'en-tête : rien n'est rogné, le bilan reste dessous.
         inside: p.top >= spot.top && p.bottom <= spot.bottom + 1 && p.left >= spot.left && p.right <= spot.right + 1,
         aboveBody: p.bottom <= body.top + 1 && body.height > 100,
@@ -906,9 +914,15 @@ async function desktopTests(browser, base) {
     check(
       'bilan : « Y aller » déplie Google Maps, Waze et « Copier les coordonnées » en puces à liseré, liens vers le point touché',
       goOpen.hidden === false && goOpen.expanded === 'true' &&
-        goOpen.links.join(' | ') === `Google Maps → https://www.google.com/maps/dir/?api=1&destination=${lat}%2C${lng} _blank noopener | Waze → https://waze.com/ul?ll=${lat}%2C${lng}&navigate=yes _blank noopener` &&
-        goOpen.buttons.join() === 'Copier les coordonnées' && goOpen.inside && goOpen.aboveBody && goOpen.seen && goOpen.white === 0 && goOpen.plain,
-      `${goOpen.links.join(' | ')} ; ${goOpen.buttons.join()} ; dans le panneau : ${goOpen.inside}, au-dessus du bilan : ${goOpen.aboveBody}, blocs blancs : ${goOpen.white}`,
+        goOpen.links.join(' | ') ===
+          [
+            `Google Maps → https://www.google.com/maps/dir/?api=1&destination=${lat}%2C${lng} _blank noopener noreferrer`,
+            `Waze → https://waze.com/ul?ll=${lat}%2C${lng}&navigate=yes _blank noopener noreferrer`,
+            ...(appleHost ? [`Plans → https://maps.apple.com/directions?destination=${lat},${lng}&mode=driving _blank noopener noreferrer`] : []),
+          ].join(' | ') &&
+        goOpen.spoken.every((t) => / : itinéraire \(nouvel onglet\)$/.test(t)) &&
+        goOpen.buttons.join() === 'Copier les coordonnées' && goOpen.inside && goOpen.aboveBody && goOpen.seen && goOpen.white === 0 && goOpen.plain && goOpen.crossRight,
+      `${goOpen.links.join(' | ')} ; lu : ${goOpen.spoken[0]} ; ${goOpen.buttons.join()} ; dans le panneau : ${goOpen.inside}, au-dessus du bilan : ${goOpen.aboveBody}, blocs blancs : ${goOpen.white}`,
     );
     // Copie : le presse-papiers reçoit « latitude, longitude » ; s'il refuse, elles s'affichent.
     const copied = await page.evaluate(async () => {
@@ -935,7 +949,12 @@ async function desktopTests(browser, base) {
       copied.written.join('|') === coords && copied.ok === 'Coordonnées copiées' && copied.refused === coords,
       JSON.stringify(copied),
     );
-    await page.locator('#spot-directions a').first().focus();
+    // Au clavier, ce que « Y aller » déplie vient juste après lui : Tab mène au premier lien, pas à
+    // la croix (elle le précède dans le code, voir spot.ts).
+    await page.locator('#spot .directions-btn').focus();
+    await page.keyboard.press('Tab');
+    const tabbed = await page.evaluate(() => ({ app: document.activeElement?.dataset?.app ?? '', tag: document.activeElement?.tagName, label: document.activeElement?.getAttribute('aria-label') ?? '' }));
+    check('bilan : au clavier, Tab passe de « Y aller » au premier lien de son choix, pas à la croix', tabbed.tag === 'A' && tabbed.app === 'google', JSON.stringify(tabbed));
     await page.keyboard.press('Escape');
     const goClosed = await page.evaluate(() => ({
       hidden: document.getElementById('spot-directions').hidden,
@@ -3222,9 +3241,12 @@ async function mobileTests(browser, base) {
   await page.screenshot({ path: `${OUT}09-mobile-bilan.png` });
   // « Y aller » : la puce se voit dès l'ouverture du tiroir (avant le 25/11/2026 : « Itinéraire »
   // tout en bas, après un long défilement), à la taille du doigt ; son choix tient dans le tiroir.
+  const appleHost = await page.evaluate(async () => (await import('/src/directions.ts')).isAppleDevice());
+  // Zone tactile d'une puce : la puce elle-même, agrandie par son pseudo-élément (style.css).
   const car = await page.evaluate(() => {
-    const r = document.querySelector('#spot .directions-btn').getBoundingClientRect();
-    return { width: Math.round(r.width), height: Math.round(r.height), seen: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth };
+    const button = document.querySelector('#spot .directions-btn');
+    const r = button.getBoundingClientRect();
+    return { width: Math.round(r.width), height: Math.round(r.height), touch: Math.round(parseFloat(getComputedStyle(button, '::after').height)), seen: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth };
   });
   await page.locator('#spot .directions-btn').tap();
   const choice = await page.evaluate(() => {
@@ -3233,8 +3255,9 @@ async function mobileTests(browser, base) {
     const p = panel.getBoundingClientRect();
     return {
       hidden: panel.hidden,
-      labels: [...panel.querySelectorAll('.directions__btn')].map((b) => b.textContent).join(' | '),
+      labels: [...panel.querySelectorAll('.directions__btn')].map((b) => (b.tagName === 'A' ? b.firstChild.textContent : b.textContent)).join(' | '),
       heights: [...panel.querySelectorAll('.directions__btn')].map((b) => Math.round(b.getBoundingClientRect().height)),
+      touch: [...panel.querySelectorAll('.directions__btn')].map((b) => Math.round(parseFloat(getComputedStyle(b, '::after').height))),
       inside: p.top >= spot.top && p.bottom <= innerHeight && p.left >= 0 && p.right <= innerWidth,
       fits: [...panel.querySelectorAll('.directions__btn')].every((b) => b.getBoundingClientRect().right <= innerWidth - 8),
       body: Math.round(document.querySelector('#spot .spot__body').getBoundingClientRect().height),
@@ -3242,9 +3265,10 @@ async function mobileTests(browser, base) {
     };
   });
   check(
-    'mobile : puce « Y aller » visible dès l’ouverture du tiroir, à la taille du doigt ; son choix tient dans le tiroir, puces de 40 px',
-    car.seen && car.width >= 80 && car.height >= 36 && choice.hidden === false && choice.labels === 'Google Maps | Waze | Copier les coordonnées' && choice.heights.every((v) => v >= 40) && choice.inside && choice.fits && choice.body > 150,
-    `${JSON.stringify(car)} ; ${choice.labels} ; hauteurs ${choice.heights.join()} ; bilan visible sur ${choice.body} px`,
+    'mobile : puce « Y aller » visible dès l’ouverture du tiroir ; son choix tient dans le tiroir ; zones tactiles de 44 px, comme les deux boutons remplacés',
+    car.seen && car.width >= 80 && car.touch >= 44 && choice.hidden === false && choice.labels === ['Google Maps', 'Waze', ...(appleHost ? ['Plans'] : []), 'Copier les coordonnées'].join(' | ') &&
+      choice.touch.length > 0 && choice.touch.every((v) => v >= 44) && choice.inside && choice.fits && choice.body > 150,
+    `${JSON.stringify(car)} ; ${choice.labels} ; hauteurs ${choice.heights.join()}, zones tactiles ${choice.touch.join()} ; bilan visible sur ${choice.body} px`,
   );
   await page.screenshot({ path: `${OUT}09b-mobile-y-aller.png` });
   // Un autre coin touché : le choix se replie et ses liens visent le nouveau point. Sur iPhone
@@ -3258,7 +3282,7 @@ async function mobileTests(browser, base) {
       hidden: panel.hidden,
       expanded: document.querySelector('#spot .directions-btn').getAttribute('aria-expanded'),
       coords: document.querySelector('#spot .spot__coords').textContent,
-      links: [...panel.querySelectorAll('a')].map((a) => `${a.textContent} ${a.getAttribute('href')}`).join(' | '),
+      links: [...panel.querySelectorAll('a')].map((a) => `${a.firstChild.textContent} ${a.getAttribute('href')}`).join(' | '),
     };
   });
   await page.evaluate(() => delete navigator.userAgent);

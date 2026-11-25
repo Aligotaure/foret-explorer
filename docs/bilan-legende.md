@@ -24,6 +24,11 @@ bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
   comme celles de « Je cherche… » ; la puce « Y aller » se remplit quand le choix est déplié. Deux
   versions refusées avant : de gros boutons blancs sous l'en-tête et une voiture dans un rectangle,
   puis une voiture dans une pastille ronde. Ni bloc blanc ni icône dans un rond ici (tests e2e).
+  Relecture du 26/11/2026 : dans le code la croix précède « Y aller » (le style la remet à droite),
+  pour qu'au clavier et au lecteur d'écran le choix suive sa puce ; sur téléphone les puces restent
+  fines (36 et 40 px) mais leur zone tactile fait 44 px, comme les deux boutons remplacés ; la puce
+  dépliée est en texte foncé sur lavande (du blanc sur la couleur d'accent n'atteint que 4,2 de
+  contraste) ; chaque lien dit « itinéraire (nouvel onglet) » aux lecteurs d'écran.
   Une page web ne peut pas savoir quelles applications sont installées : chaque lien est celui que
   l'éditeur documente pour un site web, qui ouvre l'application si elle est là, son site sinon
   (adresses et sources en tête de `directions.ts`, relues le 25/11/2026). Le choix se replie par

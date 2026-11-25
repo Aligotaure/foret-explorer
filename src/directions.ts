@@ -94,8 +94,15 @@ export class Directions {
     copy.addEventListener('click', () => this.copy());
     this.list.replaceChildren(
       ...navApps(lat, lng).map((app) =>
-        // Lu hors de son contexte (liste des liens d'un lecteur d'écran), « Waze » seul ne dit pas ce que fait le lien.
-        h('a', { class: 'directions__btn', 'data-app': app.id, 'aria-label': `Itinéraire avec ${app.label}`, href: app.href, target: '_blank', rel: 'noopener' }, app.label, icon('external')),
+        h(
+          'a',
+          { class: 'directions__btn', 'data-app': app.id, href: app.href, target: '_blank', rel: 'noopener noreferrer' },
+          app.label,
+          // Pour un lecteur d'écran, qui lit les liens hors de leur contexte : ce que fait le lien, et
+          // qu'il s'ouvre ailleurs (même mention que les autres liens du site, legendExtras.ts).
+          h('span', { class: 'visually-hidden' }, ' : itinéraire (nouvel onglet)'),
+          icon('external'),
+        ),
       ),
       copy,
     );
