@@ -29,10 +29,11 @@ une section de ce dossier.
   l'avertissement et la présentation, bloquant comme l'avertissement (`gate.ts` : 3 s, ni Échap ni
   clic à côté), bouton « J'ai compris ». Texte de Clément, orthographe et ponctuation corrigées
   seulement : « ATTENTION : PÉRIODE DE CHASSE du … au … » en rouge et en gras (`#ff8080`, 7,3 pour 1
-  sur le fond), chasubles, danger réel, puis, depuis le 25/11/2026 (texte dicté par Clément, non
-  vérifié), « Pour *augmenter* votre sécurité, allez dans les forêts communales, où les chasseurs sont
-  tenus d'indiquer si une chasse est en cours par des panneaux » (avant : « demandez au propriétaire
-  (s'il est sympa) »).
+  sur le fond), chasubles, danger réel, puis, depuis le 25/11/2026, « Pour **augmenter** votre sécurité, repérez
+  les panneaux « chasse en cours » au bord des routes : ils sont obligatoires pour les battues au
+  grand gibier. Sans panneau, restez prudent : les autres chasses ne sont pas signalées. » (arrêté du
+  5 octobre 2020, lu dans des extraits repris par des préfectures, pas dans le texte intégral ;
+  avant : « demandez au propriétaire (s'il est sympa) »).
   - **Dates** : Code de l'environnement, article R424-7 (en vigueur depuis le 05/05/2012, relu sur
     Légifrance le 15/11/2026). L'ouverture générale doit tenir entre le premier dimanche de septembre
     (Corse ; deuxième dimanche pour les anciennes régions du Sud, troisième pour celles du Nord) et le

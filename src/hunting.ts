@@ -112,7 +112,7 @@ export function showHunting(): Promise<void> {
       { class: 'hunting__text' },
       'Pour ',
       h('strong', {}, 'augmenter'),
-      ' votre sécurité, allez dans les forêts communales, où les chasseurs sont tenus d’indiquer si une chasse est en cours par des panneaux.',
+      ' votre sécurité, repérez les panneaux « chasse en cours » au bord des routes : ils sont obligatoires pour les battues au grand gibier. Sans panneau, restez prudent : les autres chasses ne sont pas signalées.',
     ),
   );
   const dialog = h(
