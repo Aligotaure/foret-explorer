@@ -76,32 +76,24 @@ export const METEO_BASE = import.meta.env.DEV
   : new URL('data/meteo/', PAGE).href;
 
 /**
- * Parts de forêt de chaque carré de 4,5 km (scripts/foret/parts.mjs ; fichier versionné, servi avec le
- * site, en développement aussi). Un carré d'indice n'est coloré que si les arbres hôtes du champignon
- * y couvrent au moins HOST_MIN_COVER de la surface, et d'autant plus qu'ils en couvrent (teinte
- * pleine à HOST_FULL_COVER) : centres-villes, mer et plaines sans arbres restent éteints.
+ * Ce que chaque carré de 4,5 km contient pour chaque champignon (scripts/foret/parts.mjs ; fichier
+ * versionné, servi avec le site, en développement aussi) : le nombre de ses carrés de 500 m que la
+ * carte dessinerait, et ce que vaut le meilleur. Un carré d'indice est allumé dès qu'il en a un
+ * (`isLit` de forestShare.ts), et d'autant plus soutenu qu'il en a : teinte à HOST_MIN_TINT de sa
+ * force pour un seul bois, pleine quand HOST_FULL_COVER de ses carrés de 500 m sont à dessiner.
  *
- * Seuil relevé de 5 à 10 % le 14/11/2026 : à 5 %, 85 % des carrés de France s'allumaient pour les
- * cèpes, donc presque toutes les villes et tous les villages (72 % à 10 %).
+ * Avant le 25/11/2026 : allumé à partir de 10 % de sa surface sous des arbres hôtes, teinte pleine à
+ * 50 %. Les deux mesures se suivent (10 % de surface ≈ 14 % de carrés de 500 m à dessiner, 50 % ≈
+ * 70 % : mesuré sur les 27 530 carrés de France qui ont des hôtes du cèpe) : un carré allumé avant
+ * garde la même teinte, à peu de chose près.
  */
 export const FOREST_SHARE_URL = new URL('foret/parts.json', PAGE).href;
-export const HOST_MIN_COVER = 0.1;
-export const HOST_FULL_COVER = 0.5;
-/**
- * Le pourcentage d'un carré de 4,5 km est celui de sa meilleure forêt hôte, pourvu qu'elle couvre au
- * moins cette part du carré, en % comme dans le fichier (2 % ≈ 40 ha, soit deux carrés de 500 m).
- *
- * Avant le 15/11/2026 : la qualité moyenne de tous ses hôtes. Retour de Clément : des carrés de
- * 500 m à 70 % et plus sans pastille en vue d'ensemble. Mesuré au nord-est d'Annecy, trompettes : un
- * carré de 4,5 km fait de 28 % de sapin-épicéa (poids 0,3) et de 4 % de hêtraie (poids 1) valait
- * 57 %, alors que 14 de ses carrés de 500 m, sur la hêtraie, atteignaient 70 à 77 %. Le seuil pèse
- * peu : 266 cases à pastille pour les trompettes à 1 %, 259 à 2 %, 242 à 5 % (181 avec la moyenne).
- */
-export const HOST_BEST_MIN_PERCENT = 2;
+export const HOST_MIN_TINT = 0.3;
+export const HOST_FULL_COVER = 0.7;
 /**
  * Part bâtie d'un carré de 4,5 km (zones bâties et zones d'activité du Plan IGN, même fichier) à
- * partir de laquelle il reste éteint : c'est d'abord une ville, même s'il contient un bois. Les
- * carrés de 500 m, eux, montrent ce bois quand on zoome.
+ * partir de laquelle il est d'abord une ville : ses carrés de 500 m suivent alors la règle de ville
+ * (FINE_TOWN_MIN_*), et lui ne s'allume que s'il en reste un à dessiner (un massif, pas un parc).
  */
 export const BUILT_MAX_COVER = 0.15;
 /**
@@ -117,6 +109,13 @@ export const FINE_MIN_HOST_SHARE = 0.3;
  */
 export const FINE_TOWN_MIN_HOST_SHARE = 0.5;
 export const FINE_TOWN_MIN_NEIGHBOURS = 2;
+
+/**
+ * Pastille touchée en vue d'ensemble : la carte zoome sur son carré de 4,5 km, qui remplit alors la
+ * partie libre de l'écran, sans dépasser ce zoom (un carré de 500 m y fait ≈ 75 px de côté). Sur
+ * téléphone l'écran est étroit : le carré tient à un zoom un peu inférieur à 12.
+ */
+export const HOTSPOT_MAX_ZOOM = 13;
 
 /** Météo de secours : Open-Meteo en direct (gratuit, sans clé, usage non commercial). */
 export const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
@@ -172,6 +171,16 @@ export const WEATHER_SUB_LABEL_MIN_ZOOM = 10;
  * légende dit de zoomer un peu).
  */
 export const FINE_MIN_ZOOM = 11;
+/**
+ * Zoom des tuiles de forêt que lit le relevé des carrés de 500 m, à tous les zooms d'affichage, dans
+ * la carte (mapStyle.ts : source `bdforet-releve`) comme dans le calcul fait pour toute la France
+ * (scripts/foret/parts.mjs). L'IGN simplifie ses tuiles à chaque zoom : relevé sur celles du zoom
+ * affiché, un même carré changeait un peu selon le zoom où on l'avait vu la première fois (mesuré
+ * près d'Amiens le 25/11/2026 : entre les tuiles des zooms 10 et 11, 3 carrés de 4,5 km sur 15
+ * différaient, de 2 points ou d'un carré de 500 m). Égal à FINE_MIN_ZOOM : jusqu'au zoom 12 ce sont
+ * les tuiles déjà affichées.
+ */
+export const SURVEY_TILE_ZOOM = 11;
 export const FINE_DIVISIONS = 9;
 export const FINE_MAX_CELLS = 6500;
 /**

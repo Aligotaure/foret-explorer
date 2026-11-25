@@ -9,6 +9,7 @@ import {
   GLYPHS_URL,
   LABEL_FONT,
   FINE_MIN_ZOOM,
+  SURVEY_TILE_ZOOM,
   TILES,
   WEATHER_LABEL_MIN_ZOOM,
   WEATHER_SUB_LABEL_MIN_ZOOM,
@@ -25,6 +26,8 @@ export const SOURCES = {
   ortho: 'ortho',
   bdForetRaster: 'bdforet-raster',
   bdForet: 'bdforet',
+  /** Les mêmes tuiles, arrêtées au zoom SURVEY_TILE_ZOOM : celles que lit le relevé des carrés de 500 m. */
+  bdForetSurvey: 'bdforet-releve',
   geologie: 'geologie',
   meteo: 'meteo',
   meteoFine: 'meteo-fin',
@@ -44,6 +47,8 @@ export const LAYERS = {
   fill: 'bdforet-fill',
   /** Copie invisible et non filtrée : sert à savoir quelle forêt se trouve sous un clic. */
   forestHit: 'bdforet-hit',
+  /** Copie invisible des forêts du zoom SURVEY_TILE_ZOOM, au-delà de ce zoom : relevé des carrés de 500 m. */
+  forestSurvey: 'bdforet-releve',
   /** Nature du sol : motifs par-dessus les forêts. */
   geology: 'geologie-motifs',
   /** Copie invisible de la géologie, toujours chargée, pour le bilan d'un coin. */
@@ -72,7 +77,19 @@ export const LAYERS = {
 /** Couches forêt qui suivent la sélection de la légende. */
 const FILTERED_LAYERS = [LAYERS.fill, LAYERS.outline] as const;
 const METEO_LAYERS = [LAYERS.meteoFill, LAYERS.meteoLine, LAYERS.meteoLabel] as const;
-const FINE_LAYERS = [LAYERS.meteoFineFill, LAYERS.meteoFineLine, LAYERS.meteoFineLabel] as const;
+// (Avec les carrés de 500 m, la couche que lit leur relevé : hors du mode indice, ses tuiles ne sont
+// pas demandées.)
+const FINE_LAYERS = [LAYERS.meteoFineFill, LAYERS.meteoFineLine, LAYERS.meteoFineLabel, LAYERS.forestSurvey] as const;
+
+/**
+ * Couche et source que lit le relevé des carrés de 500 m au zoom d'affichage `zoom` : toujours les
+ * forêts du zoom SURVEY_TILE_ZOOM. Jusqu'à ce zoom compris, ce sont les tuiles affichées
+ * (`bdforet-hit`) ; au-delà, la carte affiche des tuiles plus fines, et le relevé lit une copie
+ * invisible arrêtée à ce zoom (`bdforet-releve`).
+ */
+export function surveyForest(zoom: number): { layer: string; source: string } {
+  return Math.floor(zoom) > SURVEY_TILE_ZOOM ? { layer: LAYERS.forestSurvey, source: SOURCES.bdForetSurvey } : { layer: LAYERS.forestHit, source: SOURCES.bdForet };
+}
 
 /** Filtre qui ne correspond à aucun polygone (surbrillance vide). */
 const NO_HIGHLIGHT: FilterSpecification = ['==', ['get', 'id'], '__aucun__'];
@@ -154,6 +171,16 @@ export function buildStyle(state: AppState): StyleSpecification {
         bounds: FRANCE_BOUNDS,
         attribution: ATTRIBUTION.bdForet,
       },
+      // Les forêts que lit le relevé des carrés de 500 m (`surveyForest`) : mêmes tuiles, jamais plus
+      // fines que le zoom SURVEY_TILE_ZOOM. Le relevé ne dépend plus du zoom où on regarde, et il lit
+      // exactement ce que scripts/foret/parts.mjs a lu pour toute la France.
+      [SOURCES.bdForetSurvey]: {
+        type: 'vector',
+        tiles: [TILES.bdForetVector],
+        minzoom: SURVEY_TILE_ZOOM,
+        maxzoom: SURVEY_TILE_ZOOM,
+        bounds: FRANCE_BOUNDS,
+      },
       [SOURCES.geologie]: {
         type: 'vector',
         tiles: [archiveTiles(`${GEOLOGY_TILES_BASE}${GEOLOGY.archive}`)],
@@ -212,6 +239,15 @@ export function buildStyle(state: AppState): StyleSpecification {
         ...forestFilter,
       },
       { id: LAYERS.forestHit, type: 'fill', ...vector, minzoom: BDFORET.minZoom, paint: { 'fill-opacity': 0 } },
+      {
+        id: LAYERS.forestSurvey,
+        type: 'fill',
+        source: SOURCES.bdForetSurvey,
+        'source-layer': BDFORET.sourceLayer,
+        minzoom: SURVEY_TILE_ZOOM + 1,
+        layout: { visibility: visibility(state.weatherMode === 'indice') },
+        paint: { 'fill-opacity': 0, 'fill-antialias': false },
+      },
       {
         id: LAYERS.geology,
         type: 'fill',

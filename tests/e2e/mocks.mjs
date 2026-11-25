@@ -341,31 +341,36 @@ const COMPLETION = {
 /** Case commune et carrés particuliers du fichier simulé des parts de forêt (voir `forestShare`). */
 export const SHARE_CELL = '287:27';
 export const SHARE_BARE = 1; // carré sans aucun arbre
-export const SHARE_THIN = 2; // 3 % de hêtres : sous le seuil
-export const SHARE_OTHER = 5; // 80 % de robiniers : pas un hôte du cèpe
-// (le carré 6 est celui que touche le test du bilan sous le zoom 10 : ne pas le prendre)
-export const SHARE_BUILT = 10; // 60 % de hêtres, mais 40 % de bâti : une ville avec un bois
+export const SHARE_LONE = 2; // un seul bois : un carré de 500 m à dessiner sur 81
+export const SHARE_OTHER = 5; // des peupliers : hôtes des morilles, pas du cèpe
+// (les autres carrés sont ordinaires : le test du bilan sous le zoom 10 touche l'un d'eux)
+export const SHARE_BUILT = 10; // une ville (40 % de bâti) dont le bois ne tient à aucun massif : rien à dessiner
 
 /**
- * Parts de forêt simulées : partout 60 % de hêtraie (hôte du cèpe) et rien de bâti, sauf quatre
- * carrés de la case `SHARE_CELL`, au centre de la vue des tests (Annecy), qui servent à vérifier que
- * la carte s'éteint là où il n'y a pas d'arbres hôtes, et sur une ville même boisée.
+ * Fichier simulé de ce que contient chaque carré de 4,5 km (format 2 : par champignon, le nombre de
+ * ses carrés de 500 m à dessiner et le meilleur « arbres × sol » en millièmes) : partout une hêtraie
+ * sur 49 carrés de 500 m (60 % du carré ; hôte typique des cèpes, girolles et trompettes, moins bon
+ * pour les chanterelles en tube et les morilles) et rien de bâti, sauf quatre carrés de la case
+ * `SHARE_CELL`, au centre de la vue des tests (Annecy) : la carte s'éteint là où il n'y a rien à
+ * dessiner, et s'allume pour un seul bois.
  */
 function forestShare() {
-  const codes = ['FF1-09-09', 'FF1-14-14'];
-  const cases = {};
+  const champignons = ['cepe', 'girolle', 'trompette', 'chanterelle', 'morille'];
+  const hetraie = (n) => [n, 1000, n, 1000, n, 1000, n, 500, n, 300];
+  const fin = {};
   const bati = {};
   for (let i = 270; i <= 300; i++) {
     for (let j = 15; j <= 40; j++) {
-      cases[`${i}:${j}`] = Array.from({ length: 16 }, () => [0, 60]);
+      fin[`${i}:${j}`] = Array.from({ length: 16 }, () => hetraie(49));
       bati[`${i}:${j}`] = Array.from({ length: 16 }, () => 0);
     }
   }
-  cases[SHARE_CELL][SHARE_BARE] = [];
-  cases[SHARE_CELL][SHARE_THIN] = [0, 3];
-  cases[SHARE_CELL][SHARE_OTHER] = [1, 80];
+  fin[SHARE_CELL][SHARE_BARE] = 0;
+  fin[SHARE_CELL][SHARE_LONE] = hetraie(1);
+  fin[SHARE_CELL][SHARE_OTHER] = [0, 0, 0, 0, 0, 0, 0, 0, 49, 1000];
+  fin[SHARE_CELL][SHARE_BUILT] = 0;
   bati[SHARE_CELL][SHARE_BUILT] = 40;
-  return { v: 1, genere: '2026-11-14', source: 'essai', pasLat: 0.04, pasLon: 0.056, codes, cases, bati };
+  return { v: 2, genere: '2026-11-25', source: 'essai', pasLat: 0.04, pasLon: 0.056, regles: 'essai', champignons, fin, bati };
 }
 
 /**

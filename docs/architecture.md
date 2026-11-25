@@ -29,13 +29,15 @@ une section de ce dossier.
 | `legendExtras.ts` | Sections « Je cherche… » (fiche, lien MycoDB), « Météo », « Nature du sol », « Droit de cueillir » |
 | `ui.ts` | Section repliable (chevron = bouton, titre cliquable aussi), interrupteur, titre avec icône (partagés par les panneaux) |
 | `mushrooms.ts` | Profils des 5 champignons (hôtes, sols, saison, températures, délai après pluie, précautions, fiche MycoDB) et indice (raisons, ce qui l'annule) |
-| `forestShare.ts` | Arbres hôtes et part bâtie de chaque carré de 4,5 km, lus dans `public/foret/parts.json` : part de surface et qualité de la meilleure forêt hôte par champignon, et la règle d'allumage d'un carré (`isLit`) |
+| `fineRule.ts` | La règle des carrés de 500 m, sans rien de la carte ni du navigateur : points relevés, carrés à dessiner (`fineCellsToDraw`, règle de ville), ce que valent les arbres et le sol d'un carré (`fineFactors`) ; la même règle appliquée à un carré de 4,5 km (`surveySquare`) ; empreinte des règles (`rulesSignature`) |
+| `partsBuild.ts` | Ce que `scripts/foret/parts.mjs` lit du code de la carte (Vite en fait une version pour Node) ; le site ne le charge pas |
+| `forestShare.ts` | Ce que chaque carré de 4,5 km contient pour chaque champignon, lu dans `public/foret/parts.json` : part de ses carrés de 500 m à dessiner, ce que vaut le meilleur (arbres hôtes × sol), part bâtie ; règle d'allumage d'un carré (`isLit`) |
 | `soils.ts` | 8 natures de sol, champignons associés, motifs dessinés au canevas |
 | `geology.ts` | Motifs fournis à MapLibre (`styleimagemissing`), forêt et sol sous un point |
 | `meteoGrid.ts` | Grille météo commune (cases de 0,16° × 0,224°, blocs de 8 × 8, 16 carrés de 4,5 km par case : `subBox`, `subIndexAt`), format des fichiers, dates ; lu aussi par Node (scripts) : aucun import |
 | `weather.ts` | Fichiers météo communs (index, blocs), résumé de 30 jours daté (épisodes de pluie, gel, `rain20` pour l'humidité, jour estimé), `atAltitude`, `summaryAtAltitude`, Open-Meteo en secours (cache du jour), altitude IGN |
 | `meteoLayer.ts` | Grille météo sur la vue, à tous les zooms (toute la France d'un coup en vue d'ensemble) : pluie cumulée ou indice du champignon choisi : cases de 18 km et pastilles sous le zoom 10, carrés de 4,5 km à partir du zoom 10, allumés à la mesure de leurs arbres hôtes, hors des villes ; carrés fins en mode indice ; rien pour un champignon hors saison. Règles de fluidité en tête de classe |
-| `fineGrid.ts` | Carrés de 500 m : découpage, relevé forêt/sol (index spatial sur `queryRenderedFeatures`), gardé d'une visite à l'autre (`foret-explorer:releves`), altitudes en cache permanent, choix des carrés à dessiner (`fineCellsToDraw` : plus sévère en ville), indice par carré |
+| `fineGrid.ts` | Carrés de 500 m : découpage, relevé forêt/sol (index spatial sur `queryRenderedFeatures` ; forêts du zoom 11 à tous les zooms, `surveyForest`), gardé d'une visite à l'autre (`foret-explorer:releves`), altitudes en cache permanent, choix des carrés à dessiner (`fineCellsToDraw` : plus sévère en ville), indice par carré |
 | `metrics.ts` | Compteurs de consommation des API (en mémoire) et envoi groupé au serveur de mesure |
 | `metricsSchema.ts` | Liste des compteurs, partagée avec `worker/` (un compteur absent est refusé par le serveur) |
 | `spot.ts` | Bilan d'un coin au clic, la réponse d'abord : zone protégée, terrain (forêt, sol, altitude, statut), une ligne par champignon, bouton « ? », pluie, règles repliées |
@@ -56,8 +58,11 @@ PMTiles), `regles.mjs` (règles de classement des descriptions géologiques en n
 4,5 km), `cases-france.json` (versionné), `france.mjs` (moyennes de France par champignon →
 `data/meteo/france.json`, à chaque publication : il fabrique avec Vite une version de
 `src/franceStats.ts` lisible par Node, dans `.cache/france/`, et l'appelle).
-`scripts/foret/` : `parts.mjs` (parts de forêt par carré de 4,5 km → `public/foret/parts.json`,
-versionné), `mvt.mjs` (lecteur de tuiles vectorielles sans dépendance), `geometrie.mjs` (aires,
+`scripts/foret/` : `parts.mjs` (pour chaque carré de 4,5 km et chaque champignon, ce que la carte y
+dessinerait en carrés de 500 m, et la part bâtie → `public/foret/parts.json`, versionné ; il applique
+la règle de `src/fineRule.ts`, que Vite lui fabrique pour Node dans `.cache/parts/`), `releve.mjs`
+(forêts et sols relevés sur le treillis des points des carrés de 500 m, dans l'ordre où la carte lit
+les polygones), `mvt.mjs` (lecteur de tuiles vectorielles sans dépendance), `geometrie.mjs` (aires,
 découpage d'un anneau par un rectangle, tuiles XYZ).
 `scripts/zones/` : `telecharger.mjs` (WFS → GeoJSONSeq Lambert-93, noms nettoyés, `resume.json` ; les
 parcelles du Conservatoire du littoral à part, `conservatoire.geojsonl`), `construire.sh` (GPKG simplifié
@@ -72,7 +77,8 @@ contrôle dans `legend.ts` ou `legendExtras.ts`, effet dans `mapStyle.ts`, abonn
 vérification dans `tests/e2e/run.mjs`.
 
 Couches (ordre) : `base-plan`, `base-ortho`, `bdforet-overview` (raster, zoom < 10), `bdforet-fill`
-(filtrée), `bdforet-hit` (invisible, non filtrée : forêt sous un clic), `geologie-motifs`,
+(filtrée), `bdforet-hit` (invisible, non filtrée : forêt sous un clic), `bdforet-releve` (invisible,
+mode indice, zoom ≥ 12 : les forêts du zoom 11, pour le relevé des carrés de 500 m), `geologie-motifs`,
 `geologie-hit` (invisible : sol sous un clic), `bdforet-outline`, `zones-protegees` (hachures),
 `forets-publiques` (tirets, sur demande), `zones-protegees-hit`, `forets-publiques-hit` (invisibles :
 statut sous un clic, zoom ≥ 10), `meteo-cellules`, `meteo-contours`, `meteo-fin-cellules`,
@@ -120,60 +126,136 @@ seuil de 50 % (`CHANCE_THRESHOLD`), et précise « (pastilles à partir de 70 %)
 posée ; à partir du zoom 10 elle ne regarde que les carrés dont une partie est à l'écran, et la
 source des pastilles est vidée une fois pour toutes.
 
-Arbres hôtes (`forestShare.ts`, `public/foret/parts.json`, mode indice) : avant le 14/11/2026, cases
-et carrés ne regardaient que la météo (Paris affichait « 78 % · favorable », le bilan au même point
-« ≈ 0 % »). Désormais un carré n'est coloré (`isLit`) que si les arbres hôtes du champignon y couvrent
-au moins `HOST_MIN_COVER` (10 %) de la surface et si moins de `BUILT_MAX_COVER` (15 %) est bâti, et
-d'autant plus qu'ils en couvrent (teinte pleine à `HOST_FULL_COVER`, 50 %) ; son indice est multiplié
-par la qualité de sa meilleure forêt hôte (voir « Meilleure forêt du carré » ci-dessous ; pas par le
-sol, inconnu à cette échelle : le bilan, qui regarde la forêt et le sol du point, peut différer dans
-les deux sens). Seuils du 14/11/2026 : à 5 % d'hôtes
-et sans regarder le bâti, 85 % des carrés de France s'allumaient pour les cèpes (25 154 sur 29 483),
-dont 1 624 bâtis à 15 % ou plus : toutes les villes étaient colorées (Nancy : 80 à 84 % sur le
-centre). Avec 10 % et 15 % : 20 025 carrés (68 %). Les parts s'additionnent en pour cent entiers
-(`forestShare.ts`) : 0,07 + 0,01 + 0,01 + 0,01 fait 0,0999… et laisserait éteints 450 carrés à 10 % pile. Un carré éteint n'est pas envoyé à la carte, un carré défavorable (moins de 35 %) non plus (voir « Sans carré ») : ni
-teinte, ni quadrillage, ni étiquette, ni pastille. Propriétés d'un carré : celles du champignon
-montré seulement, sous des noms fixes (`l` niveau, `p` chance estimée, `c` part d'hôtes de 0 à 1 ;
-`c` = −1 si le fichier manque : la grille se dessine alors comme avant et la légende le dit). Les
-cases du mode pluie n'en portent aucune. Case entière (zoom < 10) :
-moyenne de ses carrés (pastille : voir ci-dessus). Aux zooms des carrés de 500 m, la grille des
-cases reste en fond sans étiquette dès que le relevé fin est fait (`fineDone`), même s'il n'a trouvé
-aucun arbre hôte. Fichier : par case commune, 16 carrés `[rang du code, part en %, …]` (null : pas de
-terre française) dans `cases`, et leur part bâtie en % dans `bati` (champ ajouté le 14/11/2026, même
-format `v: 1` : un fichier sans lui se lit encore, rien n'est alors tenu pour bâti) ; 993 ko, 236 ko
-compressé ; aux limites de départements des polygones de la BD Forêt se recouvrent (99 carrés ramenés
-à 100 %). Part bâtie : zones bâties et zones d'activité du Plan IGN (voir « Données et API ») ;
-3 544 carrés bâtis à 10 % ou plus, 2 067 à 15 %, 1 025 à 25 %, 303 à 50 %, 8 397 à 0 %. Les identifiants de texte des cases (« I:J/k ») ne
-survivent pas aux tuiles de MapLibre : dans les tests, un carré se reconnaît à son centre (`x`, `y`).
-Simulé dans les tests e2e (`forestShare()` de `mocks.mjs`). Le fichier est chargé dans tous les modes ; un échec
-de réseau se retente au plus toutes les 30 secondes, un fichier d'un autre format jamais. Une case
-entière est allumée dès qu'un de ses carrés l'est (sa teinte suit la moyenne). La police des
-étiquettes est vide dans les tests : aucune étiquette n'y est dessinée, on y évalue donc les
-expressions de MapLibre carré par carré (`map.style.getLayer(…).paint.get(…).evaluate(…)`). Le mois
-est figé en octobre dans les tests de bureau (saison des champignons).
+**Clic sur une pastille** (demande de Clément du 25/11/2026 : « au clic sur l'une d'elles ça zoome
+sur l'emplacement du carré qui concerne cette pastille » ; `MeteoLayer.hotspotAt`, `showSquare` de
+`mapView.ts`). La carte zoome sur le carré de 4,5 km dont la pastille porte le chiffre : il remplit
+la partie libre de l'écran (à droite de la légende quand elle est ouverte sur grand écran, sous la
+barre du haut, à gauche des boutons), sans dépasser le zoom 13 (`HOTSPOT_MAX_ZOOM`). Aucun bilan
+ne s'ouvre, et celui qui était ouvert se ferme (il parlait d'un autre coin, comme après une
+recherche de lieu). Ailleurs sur la carte, un clic ouvre toujours le bilan du coin.
+- **Portée** : la pastille est cherchée jusqu'à 8 px du point touché (`HOTSPOT_REACH_PX` : en vue
+  large les petites font 4,5 px de rayon) ; plusieurs à portée : la plus proche, puis la plus forte.
+  Sa position, que les tuiles de la carte arrondissent à 150 m, suffit à dire quel carré est le
+  sien.
+- **Ce qu'on trouve à l'arrivée** : les carrés de 500 m du carré, dont le meilleur affiche le
+  chiffre de la pastille (voir « Une seule règle pour toutes les échelles »). Essayé sur la vraie
+  carte le 25/11/2026, chanterelles en tube : vue France (1 142 pastilles à l'écran), pastille à 95 %
+  → zoom 12,9, meilleur carré de 500 m à 95 %, carrés dessinés 5,1 s après le clic (dont 3,3 s de
+  déplacement) ; vue régionale, 90 % → 90 %, 3,4 s ; téléphone (390 × 844), 90 % → 90 %, zoom 11,8,
+  2,5 s.
+- **Le dire** : le pointeur devient une main sur une pastille ; la légende ajoute « Touchez une
+  pastille pour zoomer sur son carré. » à l'état de la grille quand une pastille est à l'écran, et
+  « Comment c'est calculé » le dit aussi. Animations réduites : MapLibre va au carré d'un coup.
 
-**Meilleure forêt du carré** (15/11/2026, retour de Clément : « on voit bien des 70 et plus [en
-zoomant] et pourtant aucune pastille » ; `HOST_BEST_MIN_PERCENT`, `coversOf` de `forestShare.ts`). La
-pastille d'une case reprend son meilleur carré de 4,5 km, et celui-ci faisait la moyenne de toutes
-ses forêts hôtes, alors qu'un carré de 500 m ne compte que la sienne. Mesuré au nord-est d'Annecy
-(case 287:28, trompettes) : meilleur carré de 4,5 km à 62 %, donc pas de pastille, et 29 carrés de
-500 m à 70-77 % dans la vue. Le carré qui en contient 14 a 28 % de sapin-épicéa (poids 0,3 pour les
-trompettes), 18 % de forêt mixte à conifères (0,6), 11 % de forêt mixte à feuillus (0,9) et 4 % de
-hêtraie (1) : moyenne 0,55, soit 57 %. Désormais la qualité d'un carré est le poids de son meilleur
-hôte **présent sur au moins 2 % du carré** (≈ 40 ha, deux carrés de 500 m), et jamais moins que
-l'ancienne moyenne (aucun carré ne baisse). Les trois carrés de cet exemple passent de 57, 62 et
-51 % à 78, 74 et 74 % ; leurs meilleurs carrés de 500 m sont à 77, 74 et 71 % : sous le zoom 12, un
-carré de 500 m ne dépasse plus son carré de 4,5 km (même altitude, et le sol ne fait que baisser).
-- **Tout suit la même valeur** (`HostCover.quality`) : étiquette du carré au zoom 10, teinte et
-  pastille de la case, bilan d'un coin dont la forêt est inconnue (« chance de la meilleure forêt
-  hôte du secteur »), proposition du bandeau « risque de chou blanc », moyenne de France des puces.
-  Changer les pastilles seules aurait posé une pastille à 78 % sur un carré affiché à 57 %.
-- **Effet mesuré le 15/11/2026, France entière** (`ecart-pastilles.mjs`, `ecart-moyennes.mjs`,
-  `apres-regle.mjs`) : cases à pastille, cèpes 75 → 110, girolles 0 → 41, trompettes 181 → 259,
-  chanterelles en tube 125 → 180 ; carrés de 4,5 km à 70 % ou plus, 447 → 891, 0 → 212, 1 493 →
-  2 145, 1 016 → 1 584. Le seuil pèse peu (trompettes : 266 cases à 1 %, 252 à 3 %, 242 à 5 %). Tout
-  carré allumé de France a au moins un hôte à 2 % ou plus.
-- Aucun fichier ni appel en plus (`parts.json` donne déjà la part de chaque type de forêt par
-  carré), aucune expression de la carte changée. Le fichier des parts simulé des tests e2e n'a
-  qu'un type de forêt par carré : la règle se vérifie dans `tests/france.mjs` (5 % d'un bon hôte
-  parmi 60 % d'un médiocre valent le bon ; 1 % ne compte pas ; échoue avec l'ancienne moyenne).
+**Une seule règle pour toutes les échelles** (`fineRule.ts`, `forestShare.ts`,
+`public/foret/parts.json`, mode indice ; 25/11/2026). Retours de Clément : « sur certaines forêts où
+il y a pourtant 70 % de chance […] si je dézoome d'un cran j'ai plus rien », puis : « corriger ça
+partout, pas juste un pansement ». Les carrés de 500 m suivent une règle de points (`fineCellsToDraw` :
+trois des neuf points relevés sous un arbre hôte ; en ville, cinq, et deux voisins boisés). Les carrés
+de 4,5 km en suivaient une autre, de surface : allumés à 10 % d'arbres hôtes et moins de 15 % de bâti,
+au pourcentage de leur meilleure forêt (2 % du carré au moins), sans le sol. Mesuré au sud-ouest
+d'Amiens, chanterelles en tube : sept carrés de 500 m dessinés de 48 à 78 %, dans des carrés de
+4,5 km où les hôtes couvrent 0 à 5 % de la surface, donc tous éteints, sous un bandeau « risque de
+chou blanc ». Aucun seuil de surface ne règle cela : un bois de 8 ha suffit à un carré de 500 m, soit
+0,4 % d'un carré de 4,5 km (et l'ancien fichier arrondissait au pour cent).
+- **La règle des carrés de 500 m est appliquée une fois à toute la France** par
+  `scripts/foret/parts.mjs` (`surveySquare` de `fineRule.ts` : les fonctions mêmes de la carte). Pour
+  chaque carré de 4,5 km et chaque champignon, le fichier donne le nombre de ses carrés de 500 m à
+  dessiner (0 à 81) et ce que vaut le meilleur, arbres hôtes × sol (millièmes, arrondi au-dessus).
+  Un carré de 4,5 km est **allumé dès qu'il en a un** (`isLit`), d'autant plus soutenu qu'il en a
+  (`c` : leur part ; `HOST_MIN_TINT` pour un seul, pleine teinte à `HOST_FULL_COVER`, 70 %, soit les
+  50 % de surface d'avant), et **son pourcentage est celui de son meilleur carré de 500 m**, sol
+  compris (`HostCover.quality` × la météo à l'altitude du carré de 4,5 km, `squareScore`). Les villes
+  n'ont plus de règle à part à cette échelle : celle des carrés de 500 m est dans le compte (Paris
+  intra-muros : 0 carré ; forêt de Fontainebleau : 77 sur 81).
+- **Tout ce qui est plus large suit**, sans autre règle : étiquette et teinte du carré de 4,5 km, case
+  de 18 km et pastille (son meilleur carré), « meilleure chance de la vue », bandeau « risque de chou
+  blanc » et sa proposition, moyenne de France des puces, bilan d'un coin dont la forêt est inconnue
+  (« chance du meilleur coin du secteur (arbres hôtes et sol) » ; le sol du point touché n'y est pas
+  compté une seconde fois ; carré éteint : « peu d'arbres hôtes dans ce secteur », ou « secteur
+  urbanisé » s'il est bâti à 15 % ou plus).
+- **Mêmes forêts dans la carte et dans le calcul.** L'IGN simplifie ses tuiles à chaque zoom, et le
+  relevé de la carte lisait celles du zoom affiché : un carré de 500 m changeait un peu selon le zoom
+  où on l'avait vu en premier (entre les zooms 10 et 11, près d'Amiens : 3 carrés de 4,5 km sur 15
+  différaient, de 2 points ou d'un carré de 500 m). Il lit maintenant toujours les forêts du zoom 11
+  (`SURVEY_TILE_ZOOM`, `surveyForest` : `bdforet-hit` jusqu'au zoom 12, puis `bdforet-releve`, copie
+  invisible dont la source s'arrête au zoom 11), et le script lit ces tuiles-là. Les sols sont déjà
+  ceux du zoom 11, le dernier de l'archive. `SURVEY_VERSION` est passée à 2.
+- **Lus de la même façon, au point près** (`scripts/foret/releve.mjs`, `CellIndex` de `fineGrid.ts`).
+  Quatre détails séparaient encore les deux relevés ; chacun a été trouvé en comparant point par
+  point : (1) là où deux polygones voisins se recouvrent d'un liseré, la carte garde le premier que
+  rend MapLibre, soit le dernier objet de la tuile la plus au nord, puis la plus à l'ouest
+  (`ordreDeTrace`) ; (2) MapLibre ne rend pas un objet qui tient tout entier dans la marge d'une
+  tuile ; (3) au bord des tuiles, l'IGN note parfois un petit morceau de forêt dans le sens d'un trou,
+  hors de son contour : la carte ne rangeait un polygone que d'après son contour et le manquait ; (4)
+  la carte plaçait ses points d'après les bords du carré arrondis au millionième de degré (5 cm), de
+  quoi faire basculer un point posé sur une lisière. Écarts avant ces corrections : 6 points sur
+  18 468 dans les Landes ; après : 0 point sur 52 542 (Jura, Landes, Vosges).
+- **Tuiles vides à tort** : pendant le téléchargement en rafale des 3 556 tuiles, le service de l'IGN
+  en a rendu 12 « vides » alors qu'elles sont pleines (24 carrés boisés à 40 % en ressortaient sans
+  un carré de 500 m). Une tuile vide n'est crue que si sa tuile mère du zoom 10 n'a pas de forêt à
+  cet endroit, sinon elle est redemandée (`tuileForet`) ; et le script signale tout carré qui avait
+  quelque chose à dessiner dans le fichier précédent et n'a plus rien.
+- **Vérifié sur la vraie carte** le 25/11/2026 (données réelles, 1280 × 800 : carrés de 4,5 km
+  dessinés au zoom 10,5 comparés au relevé de la carte au zoom 11,3) : voir « Mesures » plus bas.
+- **Fichier** (`v: 2`) : `champignons` (ordre des paires), `fin` (par case commune, 16 carrés :
+  `[nombre, meilleur en millièmes, …]` par champignon, `0` : rien à dessiner pour aucun, `null` : pas
+  de terre française), `bati` (part bâtie en %, zones bâties et d'activité du Plan IGN : 2 067
+  carrés à 15 % ou plus), `regles` (empreinte de ce dont le résultat dépend : arbres hôtes et sols de
+  chaque champignon, seuils des carrés de 500 m ; `rulesSignature`). 1 097 ko, 320 ko compressé
+  (993 et 249 avant). Chargé dans tous les modes ; un échec de réseau se retente au plus toutes les
+  30 secondes, un fichier d'un autre format jamais (la grille se dessine alors sans regarder la
+  forêt, `c` = −1, et la légende le dit).
+- **À refaire** (`node scripts/foret/parts.mjs`, une minute tuiles en cache) quand changent les
+  arbres hôtes ou les sols d'un champignon (`mushrooms.ts`), les seuils des carrés de 500 m
+  (`config.ts`), les règles des sols (`scripts/geologie/`), la grille ou la BD Forêt.
+  `npm run test:france` échoue tant que l'empreinte du fichier n'est pas celle du code, et vérifie la
+  règle elle-même : sur un carré d'essai, pour chaque champignon de saison, quatre météos et trois
+  altitudes, le carré de 4,5 km annonce la chance estimée de son meilleur carré de 500 m (jamais
+  moins, un point de plus au plus).
+- **Ce que porte un carré envoyé à la carte** : les valeurs du champignon montré seulement, sous des
+  noms fixes (`l` niveau, `p` chance estimée, `c` part de carrés de 500 m à dessiner, jamais zéro
+  pour un carré allumé ; −1 si le fichier manque). Un carré éteint n'est pas envoyé, un carré
+  défavorable (moins de 35 %) non plus (voir « Sans carré ») : ni teinte, ni quadrillage, ni
+  étiquette, ni pastille. Les cases du mode pluie n'en portent aucune. Case entière (zoom < 10) :
+  allumée dès qu'un de ses carrés l'est, teinte selon la moyenne de leurs `c`. Aux zooms des carrés de
+  500 m, la grille reste en fond sans étiquette dès que le relevé fin est fait (`fineDone`), même
+  s'il n'a trouvé aucun arbre hôte.
+- **Tests** : les identifiants de texte des cases (« I:J/k ») ne survivent pas aux tuiles de
+  MapLibre, un carré s'y reconnaît à son centre (`x`, `y`). Le fichier est simulé dans les tests e2e
+  (`forestShare()` de `mocks.mjs` : une hêtraie partout, un carré sans arbre, un carré avec un seul
+  bois, un carré de peupliers, une ville sans massif). La police des étiquettes y est vide : on
+  évalue les expressions de MapLibre carré par carré
+  (`map.style.getLayer(…).paint.get(…).evaluate(…)`). Le mois est figé en octobre dans les tests de
+  bureau. Les forêts simulées changent d'un zoom à l'autre : à partir du zoom 12, le relevé (zoom 11)
+  n'y voit pas les forêts affichées.
+
+**Mesures du 25/11/2026** (météo du 24/11, France entière, `mesure.mjs` : ancien code et son fichier,
+puis nouveau) :
+
+| Champignon | Carrés de 4,5 km allumés | à 50 % ou plus | à 70 % ou plus | Cases à pastille | Moyenne de France |
+|---|---|---|---|---|---|
+| Cèpes | 20 025 → 27 514 | 12 512 → 15 678 | 6 327 → 6 718 | 792 → 765 | 49 → 47 % |
+| Girolles | 19 566 → 27 380 | 5 103 → 5 877 | 232 → 78 | 67 → 35 | 33 → 31 % |
+| Trompettes | 19 034 → 27 068 | 14 469 → 18 874 | 9 224 → 8 083 | 953 → 858 | 62 → 57 % |
+| Chanterelles en tube | 6 622 → 15 813 | 5 915 → 13 693 | 5 174 → 9 579 | 793 → 1 302 | 76 → 68 % |
+
+Aucun carré allumé avant ne s'éteint. Parmi les carrés nouvellement allumés, ceux à 70 % ou plus,
+donc invisibles avant sans zoomer : 1 682 pour les cèpes, 6 pour les girolles, 1 499 pour les
+trompettes, 4 660 pour les chanterelles en tube. Un carré de 4,5 km sur vingt-cinq n'a qu'un seul
+carré de 500 m à dessiner (1 038 pour les cèpes, 2 763 pour les chanterelles en tube). Le sol, compté
+désormais, baisse environ un carré sur deux de ceux qui étaient allumés (en moyenne de 2 à 4 points,
+24 à 28 au plus).
+
+Sur la vraie carte, en dix lieux (sud-ouest d'Amiens, Annecy, Landes, Fontainebleau, Paris, Vosges,
+Bourges, Bretagne, Corrèze, Jura) et pour trois champignons : 453 carrés de 4,5 km entiers dans la
+vue, dont le fichier annonce chaque fois le nombre exact de carrés de 500 m que la carte s'apprête à
+dessiner, et le pourcentage de son meilleur carré de 500 m dessiné (453 sur 453 ; avant la
+correction, près d'Amiens : 0 sur 11 parmi les carrés qui ont un bois, tous éteints).
+
+Avant (pour mémoire) : le 14/11/2026, cases et carrés ne regardaient que la météo (Paris affichait
+« 78 % · favorable ») ; seuil d'allumage à 5 % d'arbres hôtes, relevé à 10 % avec la règle des 15 %
+de bâti (à 5 % et sans le bâti, 85 % des carrés de France s'allumaient pour les cèpes, toutes les
+villes comprises). Le 15/11/2026, « meilleure forêt du carré » : le pourcentage du carré était celui
+de son meilleur hôte présent sur 2 % du carré au moins, au lieu de la moyenne de ses hôtes (retour de
+Clément : « on voit bien des 70 et plus [en zoomant] et pourtant aucune pastille »).
