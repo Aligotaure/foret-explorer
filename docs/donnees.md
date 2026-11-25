@@ -140,6 +140,65 @@ Vérifié le 31/10/2026 (en-têtes CORS compris, depuis GitHub Actions) :
   `CQL_FILTER` et `PROPERTYNAME` acceptés. Avec GeoServer, `BBOX=` et `CQL_FILTER=` ne se combinent
   pas : mettre la boîte dans le CQL.
 
+## Coupes datées (`scripts/coupes/`, `src/cuts.ts`)
+
+Ajout du 25/11/2026 (demande de Clément : tenir compte de l'âge des arbres ; plan arrêté avec lui).
+La BD Forêt date de 2007 à 2018 : une forêt coupée, brûlée ou abattue depuis y est encore une forêt
+en place.
+
+- **Source** : European Forest Disturbance Atlas (Viana-Soto, Senf et al.), version 3.0.0 du
+  13/09/2026, publié sur Zenodo (fiche 21722408 ; toutes versions : doi 10.5281/zenodo.8389085),
+  CC BY 4.0, sans compte. Satellites Landsat, pixels de 30 m, EPSG:3035, de 1985 à 2024. Une seule
+  couche est lue, « année de la dernière perturbation » (`latest_disturbance_france_v30.tif`, coupe,
+  tempête, scolytes ou incendie) : 49 Mo dans une archive `France.zip` de 5,2 Go, repérée dans la
+  table des matières de l'archive et demandée par plage d'octets (HTTP « Range »).
+- **Pièges** : Zenodo refuse le nom de client que Node donne d'office (HTTP 403, « unusual
+  traffic ») : le script se nomme `script-de-donnees/1.0`, sans rien qui désigne le site. Le nom de
+  la couche porte la version (`_v30`) : elle est cherchée par motif. La dernière version se lit à
+  `…/api/records/21722408/versions/latest`. Aucune dépendance : lecteur d'image TIFF (tuiles LZW ou
+  Deflate, prédicteur), projection EPSG:3035 et lecteur d'archive zip (zip64) sont écrits dans
+  `scripts/coupes/`, et éprouvés par `tests/coupes.mjs` sur une image et une archive fabriquées.
+- **Fichiers** (`public/data/coupes/`, non versionnés) : `index.json` (grille, `depuis` et `jeune` :
+  bornes des deux périodes, `dernierAn`, `genere`, `atlas`, liste des blocs) et `b/<bloc>.json`
+  (blocs de 8 × 8 cases communes, comme la météo). Par case, ses 16 × 81 carrés de 500 m en trois
+  caractères chacun, soit 18 bits : les neuf points que la carte relève dans un carré (`OFFSETS` de
+  `fineGrid.ts`, sud → nord puis ouest → est), d'abord « récent » (moins de 10 ans l'année de la
+  fabrication : 2017 et après), puis « jeune » (10 à 20 ans : 2007 à 2016). Une case sans point daté
+  est absente. La carte refuse un index d'un autre format ou d'une autre grille.
+- **Mesuré le 25/11/2026** : 45 blocs, 7,4 Mo, 679 Ko compressés (82 Ko pour le plus gros) ;
+  2 388 123 carrés lus, 207 410 avec au moins un point récent, 181 698 avec au moins un point jeune ;
+  7 s de calcul, 28 s téléchargement compris. Les fichiers faits par le script depuis Zenodo sont
+  identiques, octet pour octet, à ceux faits à partir de l'image téléchargée à la main.
+- **Refaits une fois par an** (`deploy.yml`), comme les zones : cache d'Actions sous un nom par
+  exécution ; cache perdu : reprise du site en ligne (`reprendre.mjs`, sans rien demander à Zenodo) ;
+  refaits s'ils ont 365 jours, si `scripts/coupes/` ou `public/foret/parts.json` ont changé, ou s'il
+  n'y en a nulle part. Une reconstruction ratée laisse les fichiers précédents ; sans aucun fichier,
+  la publication écrit un index sans bloc (`construire.mjs --vide` : la carte demande l'index, et un
+  fichier absent laisserait une erreur 404 dans la console). `surveillance.yml` échoue quand les
+  fichiers en ligne ont plus de 13 mois, ou pas de date.
+- **Dans la carte** : demandés en même temps que la météo quand des carrés de 500 m vont être
+  dessinés (mode indice, zoom `FINE_MIN_ZOOM` et plus), attendus `CUTS_WAIT_MS` (2 s) au plus, puis
+  gardés pour la visite ; demandés aussi à l'ouverture d'un bilan sous une forêt. Aucun dessin en
+  plus (le facteur change `p` et `l`, rien d'autre). Absents ou en panne : la carte fait sans.
+  Compteurs `pages.coupes` et `pages.coupes.errors`. Règles de l'indice : voir « Coupes récentes ».
+- **Ce que vaut la donnée** (mesures du 25/11/2026 sur l'image entière ; forêt de référence : celle
+  de la BD Forêt, 17,86 Mha d'après `parts.json`) : 3,55 Mha portent une date, soit 19,9 % de la
+  forêt (6,9 % de 2015 à 2024, 4,7 % de 2005 à 2014, 8,3 % de 1985 à 2004). 2000 ressort (171 000 ha,
+  après les tempêtes de décembre 1999), 2022 aussi (203 000 ha) ; 1985 et 1986 sont anormalement
+  hautes (146 000 et 132 000 ha, cause non établie). Sur les 20 815 carrés de 4,5 km boisés à 10 %
+  ou plus et bâtis à moins de 15 %, le carré médian a 3,4 % de sa forêt datée depuis 2015 ; 764 en
+  ont un quart ou plus (Landes, Limousin, Morvan surtout).
+  **Contrôle sur photos** : dix pixels datés de 2016 à 2020, tirés au hasard (graine fixe), comparés
+  aux photos aériennes de l'IGN par millésime : huit coupes réelles (dont une datée au moins trois
+  ans trop tard, et une simple rangée d'arbres), deux fausses alertes (une forêt restée debout, une
+  prairie). Dix points ne mesurent pas un taux ; les auteurs annoncent 18,4 % de fausses alertes et
+  19,8 % d'événements manqués. La couche des causes de l'atlas (47,5 % récolte, 33,9 % tempête ou
+  scolytes, 9,2 % incendie, 9,4 % mêlées) ne trie pas les fausses alertes : elle n'est pas lue.
+  **« Sans date » ne veut pas dire « vieille forêt »** : la forêt a progressé de plus de 20 % depuis
+  1985 (ministère, « Milieux forestiers en France, état des connaissances en 2025 ») ; ces bois
+  jeunes, jamais coupés, sont invisibles pour l'atlas. Scripts de mesure et planches du contrôle :
+  hors dépôt (`.cache/efda/` de la copie de travail de Clément).
+
 ## Météo commune (`meteo.yml`, `scripts/meteo/`, `src/meteoGrid.ts`)
 
 - Cases de 4 × 4 cases de base = 0,16° × 0,224° (≈ 18 km) : 1 972 cases pour la France métropolitaine

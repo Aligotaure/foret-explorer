@@ -30,6 +30,7 @@ une section de ce dossier.
 | `ui.ts` | Section repliable (chevron = bouton, titre cliquable aussi), interrupteur, titre avec icône (partagés par les panneaux) |
 | `mushrooms.ts` | Profils des 5 champignons (hôtes, sols, saison, températures, délai après pluie, précautions, fiche MycoDB) et indice (raisons, ce qui l'annule) |
 | `forestShare.ts` | Arbres hôtes et part bâtie de chaque carré de 4,5 km, lus dans `public/foret/parts.json` : part de surface et qualité de la meilleure forêt hôte par champignon, et la règle d'allumage d'un carré (`isLit`) |
+| `cuts.ts` | Coupes et dégâts datés par satellite, par carré de 500 m : fichiers de `public/data/coupes/` (index, blocs de la vue), points touchés d'un carré (`cutPointsOf`, `cutPointsAt`), part en mots (`shareWords`) ; absents : la carte fait sans |
 | `soils.ts` | 8 natures de sol, champignons associés, motifs dessinés au canevas |
 | `geology.ts` | Motifs fournis à MapLibre (`styleimagemissing`), forêt et sol sous un point |
 | `meteoGrid.ts` | Grille météo commune (cases de 0,16° × 0,224°, blocs de 8 × 8, 16 carrés de 4,5 km par case : `subBox`, `subIndexAt`), format des fichiers, dates ; lu aussi par Node (scripts) : aucun import |
