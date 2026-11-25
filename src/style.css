@@ -2015,13 +2015,6 @@ a.btn-square {
   font-weight: 800;
 }
 
-.hunting__body .hunting__dates {
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 12.5px;
-  line-height: 1.45;
-}
-
 .hunting__body .hunting__text {
   margin-top: 14px;
   font-size: 15.5px;

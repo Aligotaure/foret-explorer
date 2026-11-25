@@ -104,15 +104,16 @@ export function showHunting(): Promise<void> {
     h('p', { id: 'hunting-alert', class: 'hunting__alert' }, h('strong', {}, `ATTENTION : PÉRIODE DE CHASSE ${seasonLabel(season)}`)),
     h(
       'p',
-      { class: 'hunting__dates' },
-      'Dates nationales de l’ouverture générale (hors Alsace et Moselle) ; le préfet fixe celles de chaque département. Sanglier et chevreuil peuvent être chassés dès le 1er juin, selon le département.',
+      { class: 'hunting__text' },
+      'Même avec des chasubles visibles, certains chasseurs peuvent vous tirer dessus. Ce danger est réel : ne le sous-estimez pas, même pour une bonne omelette.',
     ),
     h(
       'p',
       { class: 'hunting__text' },
-      'Même avec des chasubles visibles, certains chasseurs peuvent vous tirer dessus. Ce danger est réel : ne le sous-estimez pas, même pour une bonne omelette.',
+      'Pour ',
+      h('em', {}, 'augmenter'),
+      ' votre sécurité, allez dans les forêts communales, où les chasseurs sont tenus d’indiquer si une chasse est en cours par des panneaux.',
     ),
-    h('p', { class: 'hunting__text' }, 'Pour votre sécurité, demandez au propriétaire (s’il est sympa) quand vous pourriez pratiquer son terrain.'),
   );
   const dialog = h(
     'dialog',
