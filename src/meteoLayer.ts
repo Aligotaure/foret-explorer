@@ -120,6 +120,12 @@ export type MeteoStatus =
 /** Grandes pastilles de la vue d'ensemble, au plus. */
 const HOTSPOT_MAX = 12;
 
+/**
+ * Pastille touchée : on la cherche jusqu'à cette distance du point (pixels). En vue large les petites
+ * pastilles font 4,5 px de rayon : au doigt, impossible de les viser au pixel près.
+ */
+const HOTSPOT_REACH_PX = 8;
+
 /** Un secteur candidat à une pastille : sa chance estimée, son niveau, où la poser. */
 export interface Hotspot {
   p: number;
@@ -157,7 +163,8 @@ export const RAIN_STEPS: readonly { min: number; color: string; label: string }[
 /** Champignon montré par la grille « indice » : celui recherché, sinon le cèpe. */
 export const indexMushroom = (state: AppState): MushroomId => state.mushroom ?? 'cepe';
 
-interface Box {
+/** Une emprise, en degrés. */
+export interface Box {
   west: number;
   south: number;
   east: number;
@@ -667,6 +674,38 @@ export class MeteoLayer {
     this.setSource(SOURCES.meteoTop, points);
     const best = Math.max(0, ...seen.map((c) => c.p));
     return best >= CHANCE_THRESHOLD ? best : null;
+  }
+
+  /**
+   * Pastille de la vue d'ensemble sous un point de l'écran (à HOTSPOT_REACH_PX près) : l'emprise du
+   * carré de 4,5 km dont elle porte le chiffre, pour y zoomer (demande de Clément du 25/11/2026 : « au
+   * clic sur l'une d'elles ça zoome sur l'emplacement du carré qui concerne cette pastille »).
+   * Plusieurs à portée : la plus proche du point, puis la plus forte. null : pas de pastille là.
+   */
+  hotspotAt(point: { x: number; y: number }): Box | null {
+    if (this.store.state.weatherMode !== 'indice' || !this.map.getLayer(LAYERS.meteoTop)) return null;
+    const hits = this.map.queryRenderedFeatures(
+      [
+        [point.x - HOTSPOT_REACH_PX, point.y - HOTSPOT_REACH_PX],
+        [point.x + HOTSPOT_REACH_PX, point.y + HOTSPOT_REACH_PX],
+      ],
+      { layers: [LAYERS.meteoTop] },
+    );
+    let best: { x: number; y: number; distance: number; p: number } | null = null;
+    for (const f of hits) {
+      if (f.geometry.type !== 'Point') continue;
+      const [x = 0, y = 0] = f.geometry.coordinates;
+      const at = this.map.project([x, y]);
+      const distance = Math.hypot(at.x - point.x, at.y - point.y);
+      const p = Number(f.properties?.['p'] ?? 0);
+      if (!best || distance < best.distance - 0.5 || (distance < best.distance + 0.5 && p > best.p)) best = { x, y, distance, p };
+    }
+    if (!best) return null;
+    // La pastille est posée au centre de son carré ; sa position, que les tuiles de la carte
+    // arrondissent (à 150 m près), suffit à dire lequel.
+    const south = Math.floor(best.y / BASE_STEP_LAT) * BASE_STEP_LAT;
+    const west = Math.floor(best.x / BASE_STEP_LON) * BASE_STEP_LON;
+    return { west, south, east: west + BASE_STEP_LON, north: south + BASE_STEP_LAT };
   }
 
   /** Plus de carrés de 500 m à montrer (zoom, mode, vue hors de France) : leur relevé est oublié aussi. */
@@ -1246,7 +1285,9 @@ export function describeStatus(s: MeteoStatus, state: AppState): string {
           ? ''
           : s.best === null
             ? ` Aucun secteur à ${CHANCE_THRESHOLD} % ou plus dans la vue.`
-            : ` Meilleure chance estimée dans la vue : ≈ ${s.best} %${s.spots && s.best < HOTSPOT_MIN_CHANCE ? ` (pastilles à partir de ${HOTSPOT_MIN_CHANCE} %)` : ''}.`;
+            : ` Meilleure chance estimée dans la vue : ≈ ${s.best} %${s.spots && s.best < HOTSPOT_MIN_CHANCE ? ` (pastilles à partir de ${HOTSPOT_MIN_CHANCE} %)` : ''}.` +
+              // (Une pastille au moins est à l'écran : dire qu'elle se touche.)
+              (s.spots && s.best >= HOTSPOT_MIN_CHANCE ? ' Touchez une pastille pour zoomer sur son carré.' : '');
       // Sans le fichier des parts de forêt, la grille ne sait pas où sont les arbres : autant le dire.
       const blind = state.weatherMode === 'indice' && !s.hosts ? ' Arbres hôtes inconnus pour le moment : les secteurs sont colorés, forêt ou non.' : '';
       return `${s.cells} cases de ${CELL_KM} km · ${what}${until}.${best}${blind}${source}${fineText(s.fine)}`;

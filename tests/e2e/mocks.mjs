@@ -343,7 +343,7 @@ export const SHARE_CELL = '287:27';
 export const SHARE_BARE = 1; // carré sans aucun arbre
 export const SHARE_LONE = 2; // un seul bois : un carré de 500 m à dessiner sur 81
 export const SHARE_OTHER = 5; // des peupliers : hôtes des morilles, pas du cèpe
-// (le carré 6 est celui que touche le test du bilan sous le zoom 10 : ne pas le prendre)
+// (les autres carrés sont ordinaires : le test du bilan sous le zoom 10 touche l'un d'eux)
 export const SHARE_BUILT = 10; // une ville (40 % de bâti) dont le bois ne tient à aucun massif : rien à dessiner
 
 /**

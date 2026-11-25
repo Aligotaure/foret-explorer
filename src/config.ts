@@ -110,6 +110,13 @@ export const FINE_MIN_HOST_SHARE = 0.3;
 export const FINE_TOWN_MIN_HOST_SHARE = 0.5;
 export const FINE_TOWN_MIN_NEIGHBOURS = 2;
 
+/**
+ * Pastille touchée en vue d'ensemble : la carte zoome sur son carré de 4,5 km, qui remplit alors la
+ * partie libre de l'écran, sans dépasser ce zoom (un carré de 500 m y fait ≈ 75 px de côté). Sur
+ * téléphone l'écran est étroit : le carré tient à un zoom un peu inférieur à 12.
+ */
+export const HOTSPOT_MAX_ZOOM = 13;
+
 /** Météo de secours : Open-Meteo en direct (gratuit, sans clé, usage non commercial). */
 export const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
 /**

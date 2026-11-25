@@ -1059,8 +1059,88 @@ async function desktopTests(browser, base) {
   await page.waitForFunction(() => window.map.getZoom() < 10 && window.map.querySourceFeatures('meteo').some((f) => f.properties.sub === 0), null, { timeout: 15000 }).catch(() => {});
   await idle(page);
 
+  // Clic sur une pastille : la carte zoome sur son carré de 4,5 km, sans ouvrir de bilan (demande de
+  // Clément du 25/11/2026 : « au clic sur l'une d'elles ça zoome sur l'emplacement du carré »).
+  await page.waitForFunction(() => window.map.queryRenderedFeatures({ layers: ['meteo-points'] }).length > 0, null, { timeout: 15000 }).catch(() => {});
+  const hot = await page.evaluate(() => {
+    // Les pastilles de la partie libre de la carte (ni sous la légende, ni sous les boutons).
+    const legend = document.getElementById('legend').getBoundingClientRect();
+    const seen = new Map();
+    for (const f of window.map.queryRenderedFeatures({ layers: ['meteo-points'] })) {
+      const [lon, lat] = f.geometry.coordinates;
+      const at = window.map.project([lon, lat]);
+      if (at.x > legend.right + 40 && at.x < innerWidth - 110 && at.y > 120 && at.y < innerHeight - 120) seen.set(`${lon.toFixed(2)},${lat.toFixed(2)}`, { x: at.x, y: at.y, lon, lat });
+    }
+    const c = window.map.getCenter();
+    return { spots: [...seen.values()], view: { center: [c.lng, c.lat], zoom: window.map.getZoom() }, hint: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '' };
+  });
+  const dot = hot.spots[0];
+  if (!dot) check('clic sur une pastille : zoom sur son carré de 4,5 km', false, 'aucune pastille dans la partie libre de la carte');
+  else {
+    await page.mouse.move(dot.x, dot.y);
+    await page.waitForTimeout(150);
+    const cursorOn = await page.evaluate(() => window.map.getCanvas().style.cursor);
+    const altitudeAsked = log.altitude.length;
+    await page.mouse.click(dot.x, dot.y);
+    await page.waitForFunction(() => window.map.getZoom() >= 11 && !window.map.isMoving(), null, { timeout: 15000 }).catch(() => {});
+    await idle(page);
+    const landed = await page.evaluate(({ lon, lat }) => {
+      // Le carré de la pastille : celui de la grille qui contient son centre.
+      const [bi, bj] = [Math.floor(lat / 0.04), Math.floor(lon / 0.056)];
+      const square = { west: bj * 0.056, east: (bj + 1) * 0.056, south: bi * 0.04, north: (bi + 1) * 0.04 };
+      const sw = window.map.project([square.west, square.south]);
+      const ne = window.map.project([square.east, square.north]);
+      const legend = document.getElementById('legend').getBoundingClientRect();
+      return {
+        zoom: +window.map.getZoom().toFixed(2),
+        box: { left: Math.round(sw.x), right: Math.round(ne.x), top: Math.round(ne.y), bottom: Math.round(sw.y) },
+        free: { left: Math.round(legend.right), right: innerWidth, bottom: innerHeight },
+        spot: window.spot.isOpen,
+        legend: window.store.state.legendOpen,
+      };
+    }, dot);
+    const side = Math.min(landed.box.right - landed.box.left, landed.box.bottom - landed.box.top);
+    check(
+      'pastille : le pointeur devient une main, et la légende dit qu’elle se touche',
+      cursorOn === 'pointer' && /Touchez une pastille pour zoomer sur son carré\./.test(hot.hint),
+      `pointeur « ${cursorOn} » ; ${hot.hint.slice(-70)}`,
+    );
+    check(
+      'clic sur une pastille : la carte zoome sur son carré de 4,5 km, entier dans la partie libre de l’écran (à droite de la légende), jusqu’au zoom 13 au plus',
+      landed.zoom >= 11.5 && landed.zoom <= 13 && landed.box.left >= landed.free.left && landed.box.right <= landed.free.right && landed.box.top >= 0 && landed.box.bottom <= landed.free.bottom && side >= 300,
+      JSON.stringify(landed),
+    );
+    check(
+      'clic sur une pastille : pas de bilan ouvert, aucune altitude demandée pour un bilan, la légende reste ouverte',
+      !landed.spot && landed.legend && (await page.evaluate(() => !document.querySelector('#spot .verdict'))) && log.altitude.length >= altitudeAsked,
+      JSON.stringify({ bilan: landed.spot, legende: landed.legend }),
+    );
+    await page.screenshot({ path: `${OUT}03c-pastille-carre.png` });
+    // Retour à la vue d'ensemble pour la suite.
+    await page.evaluate((view) => window.map.jumpTo(view), hot.view);
+    await page.waitForFunction(() => window.map.getZoom() < 10 && window.map.querySourceFeatures('meteo').some((f) => f.properties.sub === 0), null, { timeout: 15000 }).catch(() => {});
+    await idle(page);
+    await page.waitForFunction(() => window.map.queryRenderedFeatures({ layers: ['meteo-points'] }).length > 0, null, { timeout: 15000 }).catch(() => {});
+  }
+
   // Bilan sous le zoom 10 : la forêt y est inconnue (pas absente), l'indice ne retombe pas à zéro.
-  await page.mouse.click(760, 470);
+  // (Hors de portée de toute pastille : y cliquer zoomerait. Le centre d'un carré ordinaire de la
+  // case des tests, à plus de 40 px de la pastille la plus proche.)
+  const plain = await page.evaluate(
+    ({ cell, special }) => {
+      const [ci, cj] = cell.split(':').map(Number);
+      const dots = window.map.queryRenderedFeatures({ layers: ['meteo-points'] }).map((f) => window.map.project(f.geometry.coordinates));
+      const legend = document.getElementById('legend').getBoundingClientRect();
+      for (let k = 0; k < 16; k++) {
+        if (special.includes(k)) continue;
+        const at = window.map.project([(cj * 4 + (k % 4) + 0.5) * 0.056, (ci * 4 + Math.floor(k / 4) + 0.5) * 0.04]);
+        if (at.x > legend.right + 30 && at.x < innerWidth - 110 && at.y > 110 && at.y < innerHeight - 110 && dots.every((d) => Math.hypot(d.x - at.x, d.y - at.y) > 40)) return { x: at.x, y: at.y, k };
+      }
+      return null;
+    },
+    { cell: SHARE_CELL, special: [SHARE_BARE, SHARE_LONE, SHARE_OTHER, SHARE_BUILT] },
+  );
+  await page.mouse.click(plain?.x ?? 760, plain?.y ?? 470);
   await page.waitForSelector('#spot .verdict', { timeout: 10000 });
   const lowSpot = await page.evaluate(() => ({
     forest: document.querySelector('#spot .spot__row dd')?.textContent ?? '',

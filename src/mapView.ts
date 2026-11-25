@@ -6,7 +6,7 @@
  */
 import maplibregl from 'maplibre-gl';
 import { Protocol } from 'pmtiles';
-import { BDFORET, FRANCE_BOUNDS, MAP_MAX_ZOOM, MAP_MIN_ZOOM } from './config';
+import { BDFORET, FRANCE_BOUNDS, HOTSPOT_MAX_ZOOM, MAP_MAX_ZOOM, MAP_MIN_ZOOM } from './config';
 import { countClasses } from './counts';
 import { byId, debounce, toast } from './dom';
 import { registerSoilPatterns } from './geology';
@@ -24,7 +24,7 @@ import {
   applyZones,
   buildStyle,
 } from './mapStyle';
-import { MeteoLayer } from './meteoLayer';
+import { MeteoLayer, type Box } from './meteoLayer';
 import { flush, sessionTotals, startMetrics, track, trackMapRequest } from './metrics';
 import { initSearch } from './search';
 import { SpotPanel } from './spot';
@@ -183,17 +183,40 @@ map.on(
   }, 1000),
 );
 
-// ── Clic sur la carte : bilan du coin (forêt, sol, altitude, météo, champignons) ─
+// ── Clic sur la carte : une pastille → zoom sur son carré ; ailleurs → bilan du coin ─────────
+/**
+ * Zoome sur un carré de 4,5 km, celui d'une pastille touchée en vue d'ensemble : il remplit la partie
+ * libre de la carte (à côté de la légende quand elle est ouverte sur grand écran ; sous la barre du
+ * haut, à gauche des boutons), jusqu'au zoom HOTSPOT_MAX_ZOOM. Le bilan ouvert parlait d'un autre
+ * coin : il se ferme, comme après une recherche de lieu. Animations réduites : MapLibre y va d'un coup.
+ */
+function showSquare(square: Box): void {
+  spot.close();
+  const frame = map.getContainer().getBoundingClientRect();
+  const legendEdge = wideScreen && store.state.legendOpen ? byId('legend').getBoundingClientRect().right - frame.left : 0;
+  map.fitBounds(
+    [
+      [square.west, square.south],
+      [square.east, square.north],
+    ],
+    { padding: { top: 76, bottom: 44, left: Math.max(0, legendEdge) + 28, right: 76 }, maxZoom: HOTSPOT_MAX_ZOOM },
+  );
+}
 map.on('click', (event) => {
   if (!wideScreen) store.update({ legendOpen: false });
+  const square = meteo.hotspotAt(event.point);
+  if (square) return showSquare(square);
   void spot.open(event.lngLat, event.point);
 });
-map.on('mouseenter', LAYERS.fill, () => {
-  map.getCanvas().style.cursor = 'pointer';
-});
-map.on('mouseleave', LAYERS.fill, () => {
-  map.getCanvas().style.cursor = '';
-});
+// Le pointeur dit ce qui se touche : une forêt (bilan du coin), une pastille (zoom sur son carré).
+for (const layer of [LAYERS.fill, LAYERS.meteoTop]) {
+  map.on('mouseenter', layer, () => {
+    map.getCanvas().style.cursor = 'pointer';
+  });
+  map.on('mouseleave', layer, () => {
+    map.getCanvas().style.cursor = '';
+  });
+}
 
 // ── Tuiles dont dépend le relevé des carrés de 500 m (forêts, sols) ────────────
 const isSurveySource = (id: string | undefined): id is string => id === SOURCES.bdForet || id === SOURCES.bdForetSurvey || id === SOURCES.geologie;
