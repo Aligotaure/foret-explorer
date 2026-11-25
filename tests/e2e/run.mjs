@@ -222,7 +222,8 @@ async function disclaimerTests(browser, base) {
       button: b.textContent,
       text: d.textContent.replace(/\s+/g, ' '),
       alert: alert.textContent,
-      emphasis: d.querySelector('.hunting__text em')?.textContent,
+      emphasis: d.querySelector('.hunting__text strong')?.textContent,
+      emphasisWeight: Number(getComputedStyle(d.querySelector('.hunting__text strong') ?? d).fontWeight),
       color: getComputedStyle(alert).color,
       weight: Number(getComputedStyle(alert.querySelector('strong')).fontWeight),
       fits: body.scrollHeight <= body.clientHeight + 1,
@@ -241,7 +242,7 @@ async function disclaimerTests(browser, base) {
   );
   check(
     'chasse : chasubles, danger réel, forêts communales et panneaux ; plus de ligne sur l’origine des dates ; lisible sans défiler',
-    ['Même avec des chasubles visibles, certains chasseurs peuvent vous tirer dessus', 'Ce danger est réel', 'même pour une bonne omelette', 'Pour augmenter votre sécurité, allez dans les forêts communales, où les chasseurs sont tenus d’indiquer si une chasse est en cours par des panneaux.'].every((w) => hunt.text.includes(w)) && !/préfet|propriétaire|ouverture générale/.test(hunt.text) && hunt.emphasis === 'augmenter' && hunt.fits,
+    ['Même avec des chasubles visibles, certains chasseurs peuvent vous tirer dessus', 'Ce danger est réel', 'même pour une bonne omelette', 'Pour augmenter votre sécurité, allez dans les forêts communales, où les chasseurs sont tenus d’indiquer si une chasse est en cours par des panneaux.'].every((w) => hunt.text.includes(w)) && !/préfet|propriétaire|ouverture générale/.test(hunt.text) && hunt.emphasis === 'augmenter' && hunt.emphasisWeight >= 700 && hunt.fits,
     hunt.text.slice(0, 90),
   );
   await page.screenshot({ path: `${OUT}00a-chasse.png` });

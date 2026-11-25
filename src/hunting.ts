@@ -111,7 +111,7 @@ export function showHunting(): Promise<void> {
       'p',
       { class: 'hunting__text' },
       'Pour ',
-      h('em', {}, 'augmenter'),
+      h('strong', {}, 'augmenter'),
       ' votre sécurité, allez dans les forêts communales, où les chasseurs sont tenus d’indiquer si une chasse est en cours par des panneaux.',
     ),
   );
