@@ -2,7 +2,7 @@
  * Sections ajoutées au panneau « Légendes » : « Je cherche… », nature du sol, météo.
  * Comme le reste du panneau, elles ne touchent jamais la carte : elles lisent et modifient le Store.
  */
-import { BDFORET, BUILT_MAX_COVER, FINE_MIN_ZOOM, GEOLOGY, HOST_BEST_MIN_PERCENT, HOST_MIN_COVER, WEATHER_SUB_MIN_ZOOM, ZONES } from './config';
+import { BDFORET, BUILT_MAX_COVER, FINE_MIN_ZOOM, GEOLOGY, WEATHER_SUB_MIN_ZOOM, ZONES } from './config';
 import { h } from './dom';
 import { CLASS_BY_CODE } from './forestClasses';
 import { ABOUT_URL } from './legal';
@@ -366,7 +366,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
       h(
         'p',
         {},
-        `Un carré de 4,5 km n’est coloré que si les arbres hôtes du champignon y couvrent au moins ${Math.round(HOST_MIN_COVER * 100)} % de la surface (BD Forêt de l’IGN) et si moins de ${Math.round(BUILT_MAX_COVER * 100)} % est bâti (Plan IGN) ; il l’est d’autant plus qu’il est boisé. Son pourcentage est celui de sa meilleure forêt hôte (si elle couvre au moins ${HOST_BEST_MIN_PERCENT} % du carré), sans tenir compte du sol : les carrés de 500 m disent où elle se trouve. En ville, les carrés de 500 m ne montrent que les vrais massifs, pas les parcs. Le bilan d’un coin, lui, regarde la forêt et le sol du point touché : son chiffre peut différer, plus haut ou plus bas.`,
+        `Un carré de 4,5 km est coloré dès qu’un de ses carrés de 500 m le serait pour ce champignon (forêts de la BD Forêt de l’IGN), et d’autant plus qu’il en compte. Son pourcentage est celui du meilleur d’entre eux, arbres hôtes et sol compris : en zoomant, les carrés de 500 m disent où il se trouve. En ville (secteur bâti à ${Math.round(BUILT_MAX_COVER * 100)} % ou plus, d’après le Plan IGN), les carrés de 500 m ne montrent que les vrais massifs, pas les parcs. Le bilan d’un coin, lui, regarde la forêt et le sol du point touché : son chiffre peut différer, plus haut ou plus bas.`,
       ),
       h(
         'p',
@@ -376,7 +376,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
       h(
         'p',
         {},
-        `En dessous de 35 %, la carte ne dessine pas de carré. En dessous de ${CHANCE_THRESHOLD} %, peu d’espoir sans connaître un coin précis : elle n’étiquette que les carrés au-dessus, et si la vue n’en a aucun, un bandeau le dit et propose le champignon de saison qui y a la meilleure chance estimée. En vue d’ensemble, une pastille marque chaque secteur à ${HOTSPOT_MIN_CHANCE} % et plus (les plus grandes : les meilleurs de la vue ; les petites grandissent en zoomant) : son chiffre est celui du meilleur carré de 4,5 km de la case. Pour un point précis, touchez la carte. Météo : Open-Meteo (modèles, pas de pluviomètres).`,
+        `En dessous de 35 %, la carte ne dessine pas de carré. En dessous de ${CHANCE_THRESHOLD} %, peu d’espoir sans connaître un coin précis : elle n’étiquette que les carrés au-dessus, et si la vue n’en a aucun, un bandeau le dit et propose le champignon de saison qui y a la meilleure chance estimée. En vue d’ensemble, une pastille marque chaque secteur à ${HOTSPOT_MIN_CHANCE} % et plus (les plus grandes : les meilleurs de la vue ; les petites grandissent en zoomant) : son chiffre est celui du meilleur carré de 4,5 km de la case, et la toucher zoome sur ce carré. Pour un point précis, touchez la carte. Météo : Open-Meteo (modèles, pas de pluviomètres).`,
       ),
       h(
         'p',

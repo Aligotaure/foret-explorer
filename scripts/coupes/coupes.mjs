@@ -3,14 +3,14 @@
 //
 // Source : « année de la dernière perturbation » de l'atlas européen des perturbations forestières
 // (une image de la France, pixels de 30 m, EPSG:3035). La carte relève forêts et sols en neuf points
-// par carré de 500 m (src/fineGrid.ts) : on lit l'année sous ces mêmes neuf points, pour que la carte
+// par carré de 500 m (src/fineRule.ts) : on lit l'année sous ces mêmes neuf points, pour que la carte
 // sache, point par point, si l'arbre hôte qu'elle y voit est encore debout.
 //
 // Deux périodes, comptées depuis l'année de fabrication : « récent » (moins de 10 ans) et « jeune »
 // (10 à 20 ans). Un carré tient en 18 bits (neuf points × deux périodes), écrits en trois caractères.
 import { versLaea } from './projection.mjs';
 
-/** Découpage d'un carré de 4,5 km et points relevés dans un carré de 500 m : ceux de src/fineGrid.ts. */
+/** Découpage d'un carré de 4,5 km et points relevés dans un carré de 500 m : ceux de src/fineRule.ts. */
 export const DIVISIONS = 9;
 export const POINTS = [1 / 6, 1 / 2, 5 / 6];
 /** Côté d'une case commune en carrés de 4,5 km, et d'un bloc (un fichier) en cases : ceux de src/meteoGrid.ts. */

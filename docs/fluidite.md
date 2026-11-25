@@ -138,7 +138,7 @@ carré vu en entier ne change pas (BD Forêt et sols sont des données fixes) :
   carré ses neuf points en 18 caractères (rang du code, rang du sol ; « - » : rien), ou 2 caractères
   si les neuf se valent. Oublié en bloc 30 jours après sa première écriture (`SURVEY_MAX_DAYS`), et
   dès que `SURVEY_VERSION` change : **la changer quand les règles des sols ou la nomenclature des
-  forêts changent.**
+  forêts changent** (2 depuis le 25/11/2026 : le relevé lit les forêts du zoom 11 à tous les zooms).
 - **Vue déjà relevée** (`isSurveyed` : tous ses carrés entièrement visibles sont gardés ; ceux du
   bord de l'écran, relevés en partie, ne le sont jamais) : carrés dessinés tout de suite à partir du
   cache, sans attendre les tuiles ; **pas de pause du zoom** ni de champignon, et la mise à jour part
@@ -236,7 +236,8 @@ la fluidité.
 - (Depuis la règle « Meilleure forêt du carré » du 15/11/2026, ces moyennes montent un peu : ce
   jour-là, cèpes 12 → 14 %, girolles 12 → 13 %, trompettes 39 → 42 %, chanterelles en tube 43 → 50 %.)
 - **Moyenne de France** : moyenne des chances estimées sur les carrés de 4,5 km que la carte peut
-  allumer pour ce champignon (`isLit` : 10 % d'arbres hôtes, moins de 15 % de bâti), chaque carré
+  allumer pour ce champignon (`isLit` : un de ses carrés de 500 m serait dessiné ; avant le
+  25/11/2026 : 10 % d'arbres hôtes, moins de 15 % de bâti), chaque carré
   comptant pour un, calculés comme la carte (`squareScore`). Villes, plaines sans hôtes et mer n'y
   sont pas. Pas de chiffre pour un champignon sans estimation ce mois-ci. Le 14/11/2026 : cèpes
   18 %, girolles 17 %, trompettes 46 %, chanterelles en tube 48 % (20 025, 19 566, 19 034 et 6 622

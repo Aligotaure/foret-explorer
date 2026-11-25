@@ -1,5 +1,5 @@
 import maplibregl, { type LngLat, type Map as MapLibreMap, type PointLike } from 'maplibre-gl';
-import { BDFORET, BUILT_MAX_COVER, DIRECT_PAST_DAYS, FINE_MIN_ZOOM, GEOLOGY, HOST_MIN_COVER, SPOT_ALTITUDE_TIMEOUT_MS, SPOT_ALTITUDE_WAIT_MS } from './config';
+import { BDFORET, BUILT_MAX_COVER, DIRECT_PAST_DAYS, FINE_MIN_ZOOM, GEOLOGY, SPOT_ALTITUDE_TIMEOUT_MS, SPOT_ALTITUDE_WAIT_MS } from './config';
 import { countPoints, cutPeriods, cutPointsAt, loadCuts, shareWords, type CutPoints } from './cuts';
 import { h, toast } from './dom';
 import { hostCover, isLit, loadForestShare } from './forestShare';
@@ -472,12 +472,12 @@ export class SpotPanel {
     }
     if (!sector) return null;
     // Forêt inconnue sous le point : la règle du carré de la carte. Fichier des parts absent : météo
-    // seule. La part bâtie ne compte que sous le zoom des carrés de 500 m : au-delà la carte les
-    // dessine jusque dans les massifs en ville, et le bilan les contredirait.
+    // seule. Carré allumé : il y a un coin à estimer (son meilleur carré de 500 m). Éteint : la carte
+    // n'y dessinerait aucun carré de 500 m non plus, faute d'arbres hôtes, ou, en ville, parce
+    // qu'aucun bois n'y tient à un massif.
     const host = hostCover(v.sector.cell, v.sector.k, m);
-    if (!host) return null;
-    if (host.cover < HOST_MIN_COVER) return out('peu d’arbres hôtes dans ce secteur');
-    return v.zoom < FINE_MIN_ZOOM && !isLit(host) ? out(URBAN, false) : null;
+    if (!host || isLit(host)) return null;
+    return host.built >= BUILT_MAX_COVER ? out(URBAN, false) : out('peu d’arbres hôtes dans ce secteur');
   }
 
   /** Les tuiles de la BD Forêt de la vue ne sont pas toutes arrivées. */
@@ -667,10 +667,11 @@ export class SpotPanel {
         const out = excluded?.get(m.id);
         if (out) return [{ id: m.id, score: 0, chance: 0, level: 0, reasons: [], blocker: out.why, dormant: out.dormant, bare: out.dormant || !out.zero }];
         if (!w) return [];
-        // Forêt inconnue sous le point : la chance vaut pour la meilleure forêt hôte du secteur
-        // (carré de 4,5 km), comme sur la carte. Fichier des parts absent : météo seule.
+        // Forêt inconnue sous le point : la chance vaut pour le meilleur coin du secteur (carré de
+        // 4,5 km), comme sur la carte : ses arbres et son sol, donc pas le sol du point touché en
+        // plus. Fichier des parts absent : météo seule.
         const host = v.forestUnknown ? hostCover(v.sector.cell, v.sector.k, m) : null;
-        return [scoreMushroom(m, w, month, host ? { ...context, hostQuality: host.quality } : context)];
+        return [scoreMushroom(m, w, month, host ? { ...context, soil: null, hostQuality: host.quality } : context)];
       });
     // Secteur urbanisé (carré de 4,5 km bâti à BUILT_MAX_COVER ou plus ; la part bâtie ne dépend pas du
     // champignon) : le conseil s'affiche que le bilan estime ou non. Fichier des parts absent : inconnu.

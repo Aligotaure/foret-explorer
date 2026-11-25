@@ -8,7 +8,7 @@
 // de l'archive, puis demandée par plage d'octets). Aucune dépendance. Une à deux minutes.
 //
 // À relancer une fois par an (une version de l'atlas par an environ ; deploy.yml s'en charge), ou si
-// la grille change (src/meteoGrid.ts, src/fineGrid.ts, public/foret/parts.json).
+// la grille change (src/meteoGrid.ts, src/fineRule.ts, public/foret/parts.json).
 //
 // Usage : node scripts/coupes/construire.mjs [--sortie public/data/coupes] [--parts public/foret/parts.json]
 //         [--cache .cache/coupes] [--annee 2026]

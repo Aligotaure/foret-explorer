@@ -277,7 +277,7 @@ check('index : grille, dernière année, blocs', index.v === 1 && index.division
 check('écriture : 18 bits en trois caractères', ecrire(0) === 'AAA' && ecrire((1 << 18) - 1) === '___' && ecrire(1) === 'AAB' && ecrire(1 << 9) === 'AIA');
 
 // ── Mêmes réglages que la carte ──────────────────────────────────────────────
-check('neuf points par carré : ceux de src/fineGrid.ts', /const OFFSETS = \[1 \/ 6, 1 \/ 2, 5 \/ 6\] as const;/.test(lire('src/fineGrid.ts')) && POINTS.length === 3);
+check('neuf points par carré : ceux de src/fineRule.ts', /export const FINE_OFFSETS = \[1 \/ 6, 1 \/ 2, 5 \/ 6\] as const;/.test(lire('src/fineRule.ts')) && POINTS.length === 3);
 check('découpage : FINE_DIVISIONS de src/config.ts', new RegExp(`export const FINE_DIVISIONS = ${DIVISIONS};`).test(lire('src/config.ts')));
 const grille = lire('src/meteoGrid.ts');
 check('cases et blocs : METEO_FACTOR et BLOCK de src/meteoGrid.ts', new RegExp(`export const METEO_FACTOR = ${FACTEUR};`).test(grille) && new RegExp(`export const BLOCK = ${BLOC};`).test(grille));

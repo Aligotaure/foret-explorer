@@ -161,8 +161,8 @@ en place.
 - **Fichiers** (`public/data/coupes/`, non versionnés) : `index.json` (grille, `depuis` et `jeune` :
   bornes des deux périodes, `dernierAn`, `genere`, `atlas`, liste des blocs) et `b/<bloc>.json`
   (blocs de 8 × 8 cases communes, comme la météo). Par case, ses 16 × 81 carrés de 500 m en trois
-  caractères chacun, soit 18 bits : les neuf points que la carte relève dans un carré (`OFFSETS` de
-  `fineGrid.ts`, sud → nord puis ouest → est), d'abord « récent » (moins de 10 ans l'année de la
+  caractères chacun, soit 18 bits : les neuf points que la carte relève dans un carré (`FINE_OFFSETS` de
+  `fineRule.ts`, sud → nord puis ouest → est), d'abord « récent » (moins de 10 ans l'année de la
   fabrication : 2017 et après), puis « jeune » (10 à 20 ans : 2007 à 2016). Une case sans point daté
   est absente. La carte refuse un index d'un autre format ou d'une autre grille.
 - **Mesuré le 25/11/2026** : 45 blocs, 7,4 Mo, 679 Ko compressés (82 Ko pour le plus gros) ;
@@ -305,7 +305,7 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
 
 | Hôte | Quoi | Téléphone | Grand écran | Limite connue |
 |---|---|---|---|---|
-| GitHub Pages (le site) | code et styles (350 ko compressés), `foret/parts.json` (236 ko), 46 fichiers météo (343 ko : toute la France à l'ouverture), archives des sols et des zones lues par morceaux, `info.json` | ≈ 1,7 Mo, 70 requêtes | ≈ 1,8 Mo, 75 requêtes | limite souple de 100 Go par mois, soit de l'ordre de 55 000 visites de ce genre par mois ; « rate limits may apply » sans chiffre (réponse 429) ; site de 1 Go au plus ; pas fait pour un service commercial |
+| GitHub Pages (le site) | code et styles (350 ko compressés), `foret/parts.json` (236 ko le jour du relevé ; 320 ko depuis le 25/11/2026), 46 fichiers météo (343 ko : toute la France à l'ouverture), archives des sols et des zones lues par morceaux, `info.json` | ≈ 1,7 Mo, 70 requêtes | ≈ 1,8 Mo, 75 requêtes | limite souple de 100 Go par mois, soit de l'ordre de 55 000 visites de ce genre par mois ; « rate limits may apply » sans chiffre (réponse 429) ; site de 1 Go au plus ; pas fait pour un service commercial |
 | IGN, Géoplateforme | fond de carte (images), BD Forêt (tuiles vectorielles, images en vue large), polices | ≈ 6,8 Mo, 65 requêtes | ≈ 13,5 Mo, 140 requêtes | aucune pour les tuiles (WMTS et TMS sont exclus des limites) |
 | IGN, Géoplateforme | altitude (bilan, carrés de 500 m), recherche de lieu | 4 + 1 requêtes | 4 + 1 requêtes | par adresse IP : 5 requêtes par seconde (altitude), 10 (recherche), blocage de 5 s au-delà |
 | Open-Meteo | rien en temps normal (la tâche `meteo.yml` fait ≈ 2 000 appels par jour, quel que soit le nombre de visiteurs) | 0 | 0 | secours seulement, depuis le navigateur du visiteur, si les fichiers météo ont plus de 3 jours |

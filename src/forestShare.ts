@@ -1,36 +1,68 @@
 /**
- * Arbres hôtes de chaque carré de 4,5 km : la part de sa surface couverte par chaque type de forêt
- * (BD Forêt), calculée une fois par `scripts/foret/parts.mjs` et versionnée (`public/foret/parts.json`).
+ * Ce que chaque carré de 4,5 km contient pour chaque champignon : combien de ses carrés de 500 m la
+ * carte dessinerait en zoomant, et ce que vaut le meilleur d'entre eux (arbres hôtes × sol). Calculé
+ * une fois pour toute la France par `scripts/foret/parts.mjs`, qui applique la règle des carrés de
+ * 500 m (fineRule.ts) aux forêts de la BD Forêt et aux sols du site, et versionné
+ * (`public/foret/parts.json`).
  *
- * Sans elle, l'indice des cases et des carrés ne regardait que la météo : un carré posé sur une
- * ville ou sur la mer affichait le même pourcentage qu'une forêt, et le bilan au clic disait tout
- * autre chose. Avec elle, un carré n'est coloré que s'il contient des arbres hôtes du champignon, et
- * son indice vaut pour la meilleure de ces forêts (voir HOST_BEST_MIN_PERCENT) : c'est là qu'on ira
- * chercher, et c'est ce que les carrés de 500 m montreront en zoomant.
+ * Tout ce qui se montre plus large que les carrés de 500 m le lit : carrés de 4,5 km, cases de 18 km,
+ * pastilles, « meilleure chance de la vue », bandeau « risque de chou blanc », moyennes de France,
+ * bilan d'un coin dont la forêt n'est pas connue. Un carré de 4,5 km est allumé dès qu'un de ses
+ * carrés de 500 m serait dessiné, et son pourcentage est celui du meilleur : en zoomant, on trouve
+ * ce que la vue large annonçait, ni plus ni moins.
+ *
+ * Avant le 25/11/2026 le fichier donnait la part de surface de chaque type de forêt, et un carré ne
+ * s'allumait qu'à 10 % d'arbres hôtes : un bois isolé, dessiné en carrés de 500 m, disparaissait un
+ * cran de zoom plus haut ; et son pourcentage ignorait le sol, que les carrés de 500 m comptent.
  */
-import { BUILT_MAX_COVER, FOREST_SHARE_URL, HOST_BEST_MIN_PERCENT, HOST_MIN_COVER } from './config';
+import { FINE_DIVISIONS, FOREST_SHARE_URL } from './config';
+import type { SquareSurvey } from './fineRule';
 import { BASE_STEP_LAT, BASE_STEP_LON, SUB_COUNT } from './meteoGrid';
 import type { Mushroom } from './mushrooms';
+
+/** Format du fichier (`v`). 1 : parts de surface par type de forêt, jusqu'au 25/11/2026. */
+export const SHARE_FORMAT = 2;
+/**
+ * Le meilleur « arbres × sol » d'un carré est écrit en millièmes, arrondi au-dessus : le carré de
+ * 4,5 km n'annonce jamais moins que son meilleur carré de 500 m (au plus 0,1 % de plus).
+ */
+const BEST_UNIT = 1000;
+const FINE_PER_SQUARE = FINE_DIVISIONS ** 2;
 
 /** Fichier des parts : par case commune, ses carrés dans l'ordre de `subBox`. */
 interface ShareFile {
   v: number;
   pasLat: number;
   pasLon: number;
-  /** Codes BD Forêt (`code_tfv`) ; les parts les désignent par leur rang. */
-  codes: string[];
-  /** Un carré : [rang du code, part en %, rang, part, …] ; null : carré sans terre française. */
-  cases: Record<string, (number[] | null)[]>;
-  /** Part bâtie de chaque carré, en %, dans le même ordre (absente d'un fichier d'avant le 14/11/2026). */
+  /** Champignons du fichier (`Mushroom.id`), dans l'ordre des paires de `fin`. */
+  champignons: string[];
+  /**
+   * Un carré : par champignon, [nombre de carrés de 500 m à dessiner, meilleur « arbres × sol » en
+   * millièmes], à la suite ; 0 : rien à dessiner pour aucun champignon ; null : pas de terre française.
+   */
+  fin: Record<string, (number[] | 0 | null)[]>;
+  /** Part bâtie de chaque carré, en %, dans le même ordre. */
   bati?: Record<string, (number | null)[]>;
+  /** Empreinte des règles qui ont servi au calcul (`rulesSignature` de fineRule.ts). */
+  regles?: string;
+}
+
+/** Un carré de 4,5 km tel que le fichier l'écrit (voir `ShareFile.fin`) ; `surveys` dans l'ordre des champignons. */
+export function packSquare(surveys: readonly SquareSurvey[]): number[] | 0 {
+  if (surveys.every((s) => !s.count)) return 0;
+  // (− 1e-9 : 0,9 × 1 000 fait 900,0000000000001, qui ne doit pas devenir 901.)
+  return surveys.flatMap((s) => (s.count ? [s.count, Math.min(BEST_UNIT, Math.ceil(s.best * BEST_UNIT - 1e-9))] : [0, 0]));
 }
 
 export interface HostCover {
-  /** Part de la surface sous des arbres hôtes du champignon (0 à 1). */
+  /**
+   * Part des carrés de 500 m du carré que la carte dessinerait pour ce champignon (0 à 1) : assez
+   * d'arbres hôtes, et en ville seulement les vrais massifs. 0 : rien à y dessiner.
+   */
   cover: number;
   /**
-   * Qualité de la meilleure forêt hôte du carré (poids de `Mushroom.hosts`, 0 à 1), parmi celles qui
-   * en couvrent au moins HOST_BEST_MIN_PERCENT ; jamais moins que la moyenne de tous ses hôtes.
+   * Ce que vaut le meilleur de ces carrés de 500 m : qualité de ses arbres hôtes × sol (0 à 1), la
+   * part de l'indice que la météo multiplie.
    */
   quality: number;
   /** Part de la surface bâtie (0 à 1 ; 0 si le fichier ne la donne pas). */
@@ -38,11 +70,12 @@ export interface HostCover {
 }
 
 /**
- * Un carré est-il allumé pour ce champignon ? Il lui faut assez d'arbres hôtes, et ne pas être
- * d'abord une ville : un bois de banlieue ne colore pas 20 km² de quartiers. Même règle pour la
- * carte (meteoLayer.ts) et pour le bilan d'un coin dont la forêt n'est pas connue (spot.ts).
+ * Un carré est-il allumé pour ce champignon ? Dès qu'un de ses carrés de 500 m serait dessiné. Même
+ * règle pour la carte (meteoLayer.ts) et pour le bilan d'un coin dont la forêt n'est pas connue
+ * (spot.ts). Les villes n'ont plus de règle à part ici : celle des carrés de 500 m (un parc isolé
+ * n'en pose pas, un massif oui) est déjà dans le compte.
  */
-export const isLit = (host: HostCover): boolean => host.cover >= HOST_MIN_COVER && host.built < BUILT_MAX_COVER;
+export const isLit = (host: HostCover): boolean => host.cover > 0;
 
 let file: ShareFile | null = null;
 let loading: Promise<boolean> | null = null;
@@ -55,8 +88,8 @@ const cache = new Map<string, (HostCover | null)[]>();
 
 /**
  * Charge le fichier (une seule fois par visite s'il arrive). Rend faux s'il manque ou n'est pas à ce
- * format : la grille se dessine alors comme avant, sans tenir compte de la forêt, et la légende le
- * dit. Un échec de réseau (fréquent en forêt) est retenté au plus toutes les 30 secondes.
+ * format : la grille se dessine alors sans tenir compte de la forêt, et la légende le dit. Un échec
+ * de réseau (fréquent en forêt) est retenté au plus toutes les 30 secondes.
  */
 export function loadForestShare(): Promise<boolean> {
   if (file) return Promise.resolve(true);
@@ -88,58 +121,43 @@ export function loadForestShare(): Promise<boolean> {
  */
 export function useForestShare(data: unknown): boolean {
   const d = data as ShareFile | null;
-  if (!d || d.v !== 1 || d.pasLat !== BASE_STEP_LAT || d.pasLon !== BASE_STEP_LON || !Array.isArray(d.codes) || !d.cases) return false;
+  if (!d || d.v !== SHARE_FORMAT || d.pasLat !== BASE_STEP_LAT || d.pasLon !== BASE_STEP_LON || !Array.isArray(d.champignons) || !d.fin) return false;
   file = d;
   cache.clear();
   return true;
 }
 
-/** Arbres hôtes des carrés d'une case, pour un champignon (null : case absente du fichier). */
+/** Les carrés d'une case pour un champignon (null : case absente du fichier, ou champignon que le fichier ne connaît pas). */
 function coversOf(cellId: string, m: Mushroom): (HostCover | null)[] | null {
   if (!file) return null;
   const key = `${m.id}|${cellId}`;
   let list = cache.get(key);
   if (!list) {
-    const squares = file.cases[cellId];
-    if (!squares) return null;
-    const weights = file.codes.map((code) => m.hosts[code] ?? 0);
+    const squares = file.fin[cellId];
+    const rank = file.champignons.indexOf(m.id);
+    if (!squares || rank < 0) return null;
     const builtOf = file.bati?.[cellId];
     list = Array.from({ length: SUB_COUNT }, (_, k) => {
-      const parts = squares[k];
-      if (!parts) return null;
-      // Sommes en pour cent entiers : 7 + 1 + 1 + 1 fait 10, alors que 0,07 + 0,01 + 0,01 + 0,01 fait
-      // 0,0999… et resterait sous un seuil de 10 % (450 carrés de France dans ce cas).
-      let cover = 0;
-      let weighted = 0;
-      let best = 0;
-      for (let n = 0; n + 1 < parts.length; n += 2) {
-        const weight = weights[parts[n] ?? -1] ?? 0;
-        if (weight <= 0) continue;
-        const percent = parts[n + 1] ?? 0;
-        cover += percent;
-        weighted += percent * weight;
-        if (percent >= HOST_BEST_MIN_PERCENT && weight > best) best = weight;
-      }
-      // Jamais moins que la moyenne de tous les hôtes : 9 % d'un hôte médiocre et 1 % d'un excellent
-      // (sous le seuil) valent mieux que le médiocre seul, et aucun carré ne baisse avec cette règle.
-      const quality = Math.max(best, cover > 0 ? weighted / cover : 0);
-      return { cover: Math.min(100, cover) / 100, quality, built: (builtOf?.[k] ?? 0) / 100 };
+      const square = squares[k];
+      if (square === null || square === undefined) return null;
+      const count = square === 0 ? 0 : (square[2 * rank] ?? 0);
+      const best = square === 0 ? 0 : (square[2 * rank + 1] ?? 0);
+      return { cover: Math.min(1, count / FINE_PER_SQUARE), quality: Math.min(1, best / BEST_UNIT), built: (builtOf?.[k] ?? 0) / 100 };
     });
     cache.set(key, list);
   }
   return list;
 }
 
-/** Arbres hôtes du carré `k` d'une case ; null : inconnu (fichier absent, carré hors du fichier). */
+/** Le carré `k` d'une case pour un champignon ; null : inconnu (fichier absent, carré hors du fichier). */
 export function hostCover(cellId: string, k: number, m: Mushroom): HostCover | null {
   return coversOf(cellId, m)?.[k] ?? null;
 }
 
 /**
- * Arbres hôtes d'une case entière : moyenne de ses carrés (ceux sans terre française ne comptent
- * pas), et numéro de son carré allumé le plus boisé en hôtes (−1 : aucun carré allumé). Il dit où
- * poser une pastille, et de quoi ne pas éteindre une case dont un seul carré est une vraie forêt.
- * null : inconnu.
+ * Une case entière : moyenne de ses carrés (ceux sans terre française ne comptent pas), et numéro de
+ * son carré allumé qui a le plus de carrés de 500 m à dessiner (−1 : aucun carré allumé). Il dit de
+ * quoi ne pas éteindre une case dont un seul carré a un bois. null : inconnu.
  */
 export function hostCoverOfCell(cellId: string, m: Mushroom): (HostCover & { best: number }) | null {
   const list = coversOf(cellId, m);

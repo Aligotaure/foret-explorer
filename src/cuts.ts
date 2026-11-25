@@ -5,7 +5,7 @@
  * le vent depuis y figure encore comme une forêt en place. L'atlas européen des perturbations
  * forestières (Landsat, pixels de 30 m, CC BY 4.0) date ces événements année par année ;
  * `scripts/coupes/construire.mjs` en tire, pour chacun des neuf points que la carte relève dans un
- * carré de 500 m (fineGrid.ts), s'il est sur une forêt touchée depuis moins de 10 ans (« récent ») ou
+ * carré de 500 m (fineRule.ts), s'il est sur une forêt touchée depuis moins de 10 ans (« récent ») ou
  * depuis 10 à 20 ans (« jeune »). Fichiers rangés comme ceux de la météo : un index, puis un fichier
  * par bloc de cases communes, lu seulement pour la vue.
  *
@@ -15,15 +15,14 @@
  * pas pour éteindre un carré. Voir docs/donnees.md.
  */
 import { CUTS_BASES, FINE_DIVISIONS } from './config';
+import { FINE_OFFSETS, FINE_POINTS } from './fineRule';
 import { BASE_STEP_LAT, BASE_STEP_LON, BLOCK, METEO_FACTOR, blockId, cellId } from './meteoGrid';
 import { track } from './metrics';
 
 /** Version du format : la carte ignore un fichier qu'elle ne connaît pas. */
 const CUTS_FORMAT = 1;
-/** Neuf points par carré (3 × 3, voir `OFFSETS` de fineGrid.ts), trois caractères par carré. */
-const POINTS = 9;
+/** Neuf points par carré (`FINE_POINTS`), deux périodes par point : trois caractères par carré. */
 const CHARS = 3;
-const OFFSETS = [1 / 6, 1 / 2, 5 / 6];
 
 interface CutsIndexFile {
   v: number;
@@ -82,8 +81,8 @@ function usable(file: CutsIndexFile): boolean {
     file.divisions === FINE_DIVISIONS &&
     file.bloc === BLOCK &&
     Array.isArray(file.points) &&
-    file.points.length === OFFSETS.length &&
-    file.points.every((p, k) => Math.abs(p - (OFFSETS[k] ?? -1)) < 0.001) &&
+    file.points.length === FINE_OFFSETS.length &&
+    file.points.every((p, k) => Math.abs(p - (FINE_OFFSETS[k] ?? -1)) < 0.001) &&
     Number.isInteger(file.depuis) &&
     Array.isArray(file.jeune) &&
     Array.isArray(file.blocs)
@@ -184,7 +183,7 @@ export function cutPoints(i: number, j: number): CutPoints | null {
   const c = VALUE[text.charCodeAt(o + 2)] ?? -1;
   if (a < 0 || b < 0 || c < 0) return NONE;
   const bits = (a << 12) | (b << 6) | c;
-  return bits ? { recent: bits & 0x1ff, young: bits >> POINTS } : NONE;
+  return bits ? { recent: bits & 0x1ff, young: bits >> FINE_POINTS } : NONE;
 }
 
 /** Même chose pour un carré désigné par son identifiant « i:j » (`FineCell.id`). */
