@@ -371,7 +371,7 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
       h(
         'p',
         {},
-        'Coupes récentes : là où un satellite a vu la forêt coupée, brûlée ou abattue par le vent depuis moins de 10 ans, les carrés de 500 m et le bilan d’un coin baissent la chance estimée (pas pour les morilles, qui poussent aussi dans les coupes) ; entre 10 et 20 ans, pour les girolles seulement. Une date sur cinq environ est fausse : la carte baisse le chiffre et le dit dans le bilan, elle n’éteint pas le carré. Source : European Forest Disturbance Atlas (CC BY 4.0).',
+        'Coupes récentes : là où un satellite a vu la forêt coupée, brûlée ou abattue par le vent depuis moins de 10 ans, les carrés de 500 m et le bilan d’un coin baissent la chance estimée (pas pour les morilles, qui poussent aussi dans les coupes) ; entre 10 et 20 ans, pour les girolles seulement. Une date sur cinq environ est fausse : la carte baisse le chiffre sans le mettre à zéro, et le bilan dit pourquoi. Source : European Forest Disturbance Atlas (CC BY 4.0).',
       ),
       h(
         'p',

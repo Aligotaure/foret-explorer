@@ -210,13 +210,16 @@ export function countPoints(bits: number): number {
   return n;
 }
 
-/** Part d'un carré en mots, d'après le nombre de ses neuf points touchés : pas de faux chiffre précis. */
+/**
+ * Part d'un carré en mots, d'après le nombre de ses neuf points touchés : pas de faux chiffre précis.
+ * Se lit devant « de ce carré » ou « du carré ».
+ */
 export function shareWords(points: number): string {
   if (points <= 2) return 'une petite partie';
   if (points <= 4) return 'environ un tiers';
   if (points === 5) return 'environ la moitié';
-  if (points <= 7) return 'environ deux tiers';
-  return 'presque tout';
+  if (points <= 7) return 'environ les deux tiers';
+  return 'presque toute la surface';
 }
 
 /** Oublie tout (tests). */
