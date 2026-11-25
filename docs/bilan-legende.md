@@ -11,7 +11,18 @@ bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
 
 - **Bilan** (`spot.ts`), dans l'ordre : alerte de zone protégée s'il y en a une (en tête, que la
   météo réponde ou non) ; terrain (Forêt, Sol, Altitude, **Statut**) ; « Champignons · chance
-  estimée » ; météo ; « Droit de cueillir : les règles », replié ; actions ; une ligne de note.
+  estimée » ; météo ; « Droit de cueillir : les règles », replié ; une ligne de note. Dans l'en-tête,
+  à côté de « Ce coin » : la voiture « Y aller ».
+- **« Y aller »** (`directions.ts`, demande de Clément du 25/11/2026) : une voiture dans l'en-tête du
+  bilan, seul bouton plein de l'en-tête pour qu'on la voie dès l'ouverture (avant : « Copier les
+  coordonnées » et « Itinéraire ↗ », Google Maps seul, tout en bas du bilan, donc après un long
+  défilement sur téléphone). Elle déplie, sous l'en-tête et dans le panneau (il rognerait une bulle
+  flottante), « Itinéraire avec » Google Maps, Waze et, sur les appareils Apple seulement, Plans
+  (l'application n'existe pas ailleurs), puis « Copier les coordonnées » pour toute autre application.
+  Une page web ne peut pas savoir quelles applications sont installées : chaque lien est celui que
+  l'éditeur documente pour un site web, qui ouvre l'application si elle est là, son site sinon
+  (adresses et sources en tête de `directions.ts`, relues le 25/11/2026). Le choix se replie par
+  Échap et à chaque nouveau coin ; ni lui ni la voiture ne sont redessinés avec le bilan.
 - **Statut** : toujours visible, un fait et ce qu'il implique (« Forêt sans doute privée : il faut
   l'accord du propriétaire », « X : forêt publique »), jamais « autorisé ». C'est le garde-fou qui
   permet de replier les règles : ne pas le déplacer sous les champignons. Un test e2e vérifie qu'il se

@@ -842,22 +842,6 @@ li.is-off .swatch {
   font-variant-numeric: tabular-nums;
 }
 
-.popup-btn {
-  padding: 4px 8px;
-  border: 1px solid var(--france);
-  border-radius: 3px;
-  background: #fff;
-  color: var(--france);
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.popup-btn:hover {
-  background: var(--france-soft);
-}
-
 /* ── Rien à mettre en avant dans la vue : bandeau « risque de chou blanc » (gridLoader.ts) ──
    Même emplacement que le champignon de chargement, jamais en même temps. L'élément couvre la
    place libre entre les panneaux (il ne prend aucun geste à la carte) ; la boîte s'y centre. */
@@ -1394,6 +1378,97 @@ li.is-off .swatch {
   font-variant-numeric: tabular-nums;
 }
 
+/* « Y aller » (directions.ts) : la voiture de l'en-tête, seul bouton plein du bilan pour qu'on la
+   voie, et le choix qu'elle déplie sous l'en-tête, dans le panneau (il rognerait une bulle). */
+.directions-btn {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.directions-btn:hover {
+  background: var(--lavender);
+}
+
+.directions-btn[aria-expanded='true'] {
+  background: #fff;
+  color: var(--france);
+}
+
+.directions {
+  flex: none;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--navy-700);
+}
+
+.directions__title {
+  margin: 0 0 8px;
+  color: var(--lavender-soft);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.directions__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.directions__btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid #fff;
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--france);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.directions__btn:hover {
+  background: var(--france-soft);
+}
+
+.directions__btn--quiet {
+  border-color: var(--lavender-soft);
+  background: transparent;
+  color: #fff;
+}
+
+.directions__btn--quiet:hover {
+  background: var(--navy-600);
+}
+
+/* Téléphone : cibles à la taille du doigt. */
+@media (max-width: 640px) {
+  .directions-btn {
+    width: 48px;
+    height: 40px;
+  }
+
+  .directions__btn {
+    min-height: 44px;
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+}
+
 .spot__body {
   padding: 4px 16px 16px;
   overflow-y: auto;
@@ -1635,13 +1710,6 @@ summary.verdict__head::before {
   font-weight: 700;
 }
 
-.spot__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding-top: 12px;
-}
-
 .spot__note {
   margin: 10px 0 0;
   color: var(--muted);
@@ -1760,7 +1828,7 @@ summary.verdict__head::before {
   transform: translateY(2px) rotate(-135deg);
 }
 
-/* Téléphone : cibles tactiles de 44 px pour ce qui se déplie et pour les deux actions du bilan. */
+/* Téléphone : cibles tactiles de 44 px pour ce qui se déplie. */
 @media (max-width: 640px) {
   .verdict__head {
     min-height: 44px;
@@ -1772,14 +1840,6 @@ summary.verdict__head::before {
 
   .spot__fold {
     min-height: 44px;
-  }
-
-  .spot__actions .popup-btn {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    padding: 8px 14px;
-    font-size: 13px;
   }
 }
 

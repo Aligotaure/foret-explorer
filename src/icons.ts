@@ -28,6 +28,10 @@ export const ICONS = {
   info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.01"/>'),
   shield: svg('<path d="M12 3 5 6v5.2c0 4.4 2.9 8.1 7 9.8 4.1-1.7 7-5.4 7-9.8V6z"/><path d="m9 12 2 2 4-4"/>'),
   alert: svg('<path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.4v.01"/>'),
+  // Voiture vue de face : « Y aller », dans l'en-tête du bilan (directions.ts).
+  car: svg(
+    '<path d="M5 11.5 6.6 7a1.5 1.5 0 0 1 1.4-1h8a1.5 1.5 0 0 1 1.4 1l1.6 4.5"/><rect x="3" y="11.5" width="18" height="6" rx="1.5"/><path d="M6 17.5v2M18 17.5v2M7 14.5h.01M17 14.5h.01"/>',
+  ),
 } as const;
 
 export type IconName = keyof typeof ICONS;

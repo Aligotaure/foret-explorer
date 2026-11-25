@@ -41,6 +41,7 @@ une section de ce dossier.
 | `metrics.ts` | Compteurs de consommation des API (en mémoire) et envoi groupé au serveur de mesure |
 | `metricsSchema.ts` | Liste des compteurs, partagée avec `worker/` (un compteur absent est refusé par le serveur) |
 | `spot.ts` | Bilan d'un coin au clic, la réponse d'abord : zone protégée, terrain (forêt, sol, altitude, statut), une ligne par champignon, bouton « ? », pluie, règles repliées |
+| `directions.ts` | « Y aller » : voiture de l'en-tête du bilan, liens vers les applications de navigation (Google Maps, Waze, Plans sur les appareils Apple), copie des coordonnées |
 | `search.ts` | Recherche de lieu (autocomplétion de la Géoplateforme) |
 | `toolbar.ts` | Boutons : légende, fond de carte, géolocalisation, plein écran, zoom |
 | `chooseHint.ts` | Bandeau « Choisissez un champignon » (`#choose-hint`), avec les puces, tant qu'aucun n'est choisi ; il a remplacé « Zoomez pour filtrer les types de forêt » |
