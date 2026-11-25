@@ -29,16 +29,21 @@ une section de ce dossier.
   l'avertissement et la présentation, bloquant comme l'avertissement (`gate.ts` : 3 s, ni Échap ni
   clic à côté), bouton « J'ai compris ». Texte de Clément, orthographe et ponctuation corrigées
   seulement : « ATTENTION : PÉRIODE DE CHASSE du … au … » en rouge et en gras (`#ff8080`, 7,3 pour 1
-  sur le fond), chasubles, danger réel, « demandez au propriétaire (s'il est sympa) ».
+  sur le fond), chasubles, danger réel, puis, depuis le 25/11/2026, « Pour **augmenter** votre sécurité, repérez
+  les panneaux « chasse en cours » au bord des routes : ils sont obligatoires pour les battues au
+  grand gibier. Sans panneau, restez prudent : les autres chasses ne sont pas signalées. » (arrêté du
+  5 octobre 2020, lu dans des extraits repris par des préfectures, pas dans le texte intégral ;
+  avant : « demandez au propriétaire (s'il est sympa) »).
   - **Dates** : Code de l'environnement, article R424-7 (en vigueur depuis le 05/05/2012, relu sur
     Légifrance le 15/11/2026). L'ouverture générale doit tenir entre le premier dimanche de septembre
     (Corse ; deuxième dimanche pour les anciennes régions du Sud, troisième pour celles du Nord) et le
     dernier jour de février ; le préfet fixe les dates de chaque département dans ces bornes. Le
     tableau ne nomme pas l'Alsace et exclut la Moselle (leur régime n'a pas été relu). L'écran affiche
     les bornes nationales, calculées pour la saison en cours (2026-2027 : du 6 septembre 2026 au
-    28 février 2027) : rien à mettre à jour chaque année, et rien de propre à une région. Une ligne
-    en petit dit d'où elles viennent, et que sanglier et chevreuil peuvent être chassés dès le
-    1er juin selon le département (article R424-8). Arrêtés 2026-2027 vus pour recoupement : Tarn,
+    28 février 2027) : rien à mettre à jour chaque année, et rien de propre à une région. La ligne
+    en petit qui disait d'où elles viennent, et que sanglier et chevreuil peuvent être chassés dès le
+    1er juin selon le département (article R424-8), a été retirée le 25/11/2026 (demande de Clément :
+    alléger). Arrêtés 2026-2027 vus pour recoupement : Tarn,
     13 septembre ; Hauts-de-Seine, 20 septembre ; clôture le 28 février dans les deux.
   - **Quand** : seulement pendant cette période (le jour est lu par `getMonth` et `getDate`, comme la
     saison des champignons : les tests figent le mois) ; au plus une fois toutes les 12 heures
