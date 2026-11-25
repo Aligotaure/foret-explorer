@@ -118,6 +118,10 @@ une section de ce dossier.
   demande une altitude).
 - Montée en charge : première limite, le trafic de GitHub Pages (voir « Montée en charge ») ; aucun
   essai de charge n'a été fait, les chiffres viennent d'une visite jouée par un script.
+- Clic sur une pastille : à la souris ou au doigt seulement (pas d'équivalent au clavier, comme le
+  bilan d'un coin) ; rien ne le dit sur téléphone tant que la légende est fermée ; « La carte en 3
+  gestes » n'en parle pas. Le carré d'arrivée n'est pas entouré : il remplit l'écran, c'est tout. Le
+  déplacement dure 2 à 3,5 s et charge des tuiles en chemin. Pas essayé sur un vrai téléphone.
 - Échelles : un carré de 4,5 km annonce son meilleur carré de 500 m à l'altitude du carré de 4,5 km.
   À partir du zoom 12 un carré de 500 m prend son altitude exacte : en montagne il peut alors monter
   ou baisser de quelques points par rapport à ce que le carré de 4,5 km et la pastille annonçaient

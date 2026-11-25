@@ -126,6 +126,27 @@ seuil de 50 % (`CHANCE_THRESHOLD`), et précise « (pastilles à partir de 70 %)
 posée ; à partir du zoom 10 elle ne regarde que les carrés dont une partie est à l'écran, et la
 source des pastilles est vidée une fois pour toutes.
 
+**Clic sur une pastille** (demande de Clément du 25/11/2026 : « au clic sur l'une d'elles ça zoome
+sur l'emplacement du carré qui concerne cette pastille » ; `MeteoLayer.hotspotAt`, `showSquare` de
+`mapView.ts`). La carte zoome sur le carré de 4,5 km dont la pastille porte le chiffre : il remplit
+la partie libre de l'écran (à droite de la légende quand elle est ouverte sur grand écran, sous la
+barre du haut, à gauche des boutons), sans dépasser le zoom 13 (`HOTSPOT_MAX_ZOOM`). Aucun bilan
+ne s'ouvre, et celui qui était ouvert se ferme (il parlait d'un autre coin, comme après une
+recherche de lieu). Ailleurs sur la carte, un clic ouvre toujours le bilan du coin.
+- **Portée** : la pastille est cherchée jusqu'à 8 px du point touché (`HOTSPOT_REACH_PX` : en vue
+  large les petites font 4,5 px de rayon) ; plusieurs à portée : la plus proche, puis la plus forte.
+  Sa position, que les tuiles de la carte arrondissent à 150 m, suffit à dire quel carré est le
+  sien.
+- **Ce qu'on trouve à l'arrivée** : les carrés de 500 m du carré, dont le meilleur affiche le
+  chiffre de la pastille (voir « Une seule règle pour toutes les échelles »). Essayé sur la vraie
+  carte le 25/11/2026, chanterelles en tube : vue France (1 142 pastilles à l'écran), pastille à 95 %
+  → zoom 12,9, meilleur carré de 500 m à 95 %, carrés dessinés 5,1 s après le clic (dont 3,3 s de
+  déplacement) ; vue régionale, 90 % → 90 %, 3,4 s ; téléphone (390 × 844), 90 % → 90 %, zoom 11,8,
+  2,5 s.
+- **Le dire** : le pointeur devient une main sur une pastille ; la légende ajoute « Touchez une
+  pastille pour zoomer sur son carré. » à l'état de la grille quand une pastille est à l'écran, et
+  « Comment c'est calculé » le dit aussi. Animations réduites : MapLibre va au carré d'un coup.
+
 **Une seule règle pour toutes les échelles** (`fineRule.ts`, `forestShare.ts`,
 `public/foret/parts.json`, mode indice ; 25/11/2026). Retours de Clément : « sur certaines forêts où
 il y a pourtant 70 % de chance […] si je dézoome d'un cran j'ai plus rien », puis : « corriger ça

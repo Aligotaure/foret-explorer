@@ -1059,17 +1059,48 @@ async function desktopTests(browser, base) {
   await page.waitForFunction(() => window.map.getZoom() < 10 && window.map.querySourceFeatures('meteo').some((f) => f.properties.sub === 0), null, { timeout: 15000 }).catch(() => {});
   await idle(page);
 
+  // Un point de la vue hors de portée de toute pastille (y cliquer zoomerait au lieu d'ouvrir le
+  // bilan) : le centre d'un carré ordinaire de la case des tests, à plus de 40 px de la pastille la
+  // plus proche.
+  const plainPoint = () =>
+    page.evaluate(
+      ({ cell, special }) => {
+        const [ci, cj] = cell.split(':').map(Number);
+        const dots = window.map.queryRenderedFeatures({ layers: ['meteo-points'] }).map((f) => window.map.project(f.geometry.coordinates));
+        const legend = document.getElementById('legend').getBoundingClientRect();
+        for (let k = 0; k < 16; k++) {
+          if (special.includes(k)) continue;
+          const at = window.map.project([(cj * 4 + (k % 4) + 0.5) * 0.056, (ci * 4 + Math.floor(k / 4) + 0.5) * 0.04]);
+          if (at.x > legend.right + 30 && at.x < innerWidth - 110 && at.y > 110 && at.y < innerHeight - 110 && dots.every((d) => Math.hypot(d.x - at.x, d.y - at.y) > 40)) return { x: at.x, y: at.y, k };
+        }
+        return null;
+      },
+      { cell: SHARE_CELL, special: [SHARE_BARE, SHARE_LONE, SHARE_OTHER, SHARE_BUILT] },
+    );
+
   // Clic sur une pastille : la carte zoome sur son carré de 4,5 km, sans ouvrir de bilan (demande de
   // Clément du 25/11/2026 : « au clic sur l'une d'elles ça zoome sur l'emplacement du carré »).
   await page.waitForFunction(() => window.map.queryRenderedFeatures({ layers: ['meteo-points'] }).length > 0, null, { timeout: 15000 }).catch(() => {});
+  // D'abord un bilan ouvert ailleurs : toucher la pastille doit le fermer (il parle d'un autre coin).
+  const elsewhere = await plainPoint();
+  // (Un bilan de plus dans le compte de la visite, vérifié plus bas avec les compteurs de mesure ;
+  // le clic sur la pastille, lui, n'en est pas un.)
+  let spotsBeforeHotspot = 0;
+  if (elsewhere) {
+    await page.mouse.click(elsewhere.x, elsewhere.y);
+    await page.waitForFunction(() => window.spot.isOpen, null, { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    spotsBeforeHotspot = 1;
+  }
   const hot = await page.evaluate(() => {
-    // Les pastilles de la partie libre de la carte (ni sous la légende, ni sous les boutons).
+    // Les pastilles de la partie libre de la carte (ni sous la légende, ni sous le bilan ou les boutons).
     const legend = document.getElementById('legend').getBoundingClientRect();
+    const panel = window.spot.isOpen ? document.getElementById('spot').getBoundingClientRect().left : innerWidth;
     const seen = new Map();
     for (const f of window.map.queryRenderedFeatures({ layers: ['meteo-points'] })) {
       const [lon, lat] = f.geometry.coordinates;
       const at = window.map.project([lon, lat]);
-      if (at.x > legend.right + 40 && at.x < innerWidth - 110 && at.y > 120 && at.y < innerHeight - 120) seen.set(`${lon.toFixed(2)},${lat.toFixed(2)}`, { x: at.x, y: at.y, lon, lat });
+      if (at.x > legend.right + 40 && at.x < Math.min(innerWidth - 110, panel - 40) && at.y > 120 && at.y < innerHeight - 120) seen.set(`${lon.toFixed(2)},${lat.toFixed(2)}`, { x: at.x, y: at.y, lon, lat });
     }
     const c = window.map.getCenter();
     return { spots: [...seen.values()], view: { center: [c.lng, c.lat], zoom: window.map.getZoom() }, hint: [...document.querySelectorAll('#legend .legend-hint')].map((p) => p.textContent).find((t) => /cases de 18 km/.test(t)) ?? '' };
@@ -1080,7 +1111,8 @@ async function desktopTests(browser, base) {
     await page.mouse.move(dot.x, dot.y);
     await page.waitForTimeout(150);
     const cursorOn = await page.evaluate(() => window.map.getCanvas().style.cursor);
-    const altitudeAsked = log.altitude.length;
+    // (Un bilan resté ouvert parlerait d'un autre coin : le clic sur une pastille doit le fermer.)
+    const spotBefore = await page.evaluate(() => window.spot.isOpen);
     await page.mouse.click(dot.x, dot.y);
     await page.waitForFunction(() => window.map.getZoom() >= 11 && !window.map.isMoving(), null, { timeout: 15000 }).catch(() => {});
     await idle(page);
@@ -1111,9 +1143,9 @@ async function desktopTests(browser, base) {
       JSON.stringify(landed),
     );
     check(
-      'clic sur une pastille : pas de bilan ouvert, aucune altitude demandée pour un bilan, la légende reste ouverte',
-      !landed.spot && landed.legend && (await page.evaluate(() => !document.querySelector('#spot .verdict'))) && log.altitude.length >= altitudeAsked,
-      JSON.stringify({ bilan: landed.spot, legende: landed.legend }),
+      'clic sur une pastille : le bilan qui était ouvert se ferme, aucun ne s’ouvre à l’arrivée, la légende reste ouverte',
+      spotBefore && !landed.spot && landed.legend,
+      JSON.stringify({ bilanAvant: spotBefore, bilanApres: landed.spot, legende: landed.legend }),
     );
     await page.screenshot({ path: `${OUT}03c-pastille-carre.png` });
     // Retour à la vue d'ensemble pour la suite.
@@ -1124,22 +1156,7 @@ async function desktopTests(browser, base) {
   }
 
   // Bilan sous le zoom 10 : la forêt y est inconnue (pas absente), l'indice ne retombe pas à zéro.
-  // (Hors de portée de toute pastille : y cliquer zoomerait. Le centre d'un carré ordinaire de la
-  // case des tests, à plus de 40 px de la pastille la plus proche.)
-  const plain = await page.evaluate(
-    ({ cell, special }) => {
-      const [ci, cj] = cell.split(':').map(Number);
-      const dots = window.map.queryRenderedFeatures({ layers: ['meteo-points'] }).map((f) => window.map.project(f.geometry.coordinates));
-      const legend = document.getElementById('legend').getBoundingClientRect();
-      for (let k = 0; k < 16; k++) {
-        if (special.includes(k)) continue;
-        const at = window.map.project([(cj * 4 + (k % 4) + 0.5) * 0.056, (ci * 4 + Math.floor(k / 4) + 0.5) * 0.04]);
-        if (at.x > legend.right + 30 && at.x < innerWidth - 110 && at.y > 110 && at.y < innerHeight - 110 && dots.every((d) => Math.hypot(d.x - at.x, d.y - at.y) > 40)) return { x: at.x, y: at.y, k };
-      }
-      return null;
-    },
-    { cell: SHARE_CELL, special: [SHARE_BARE, SHARE_LONE, SHARE_OTHER, SHARE_BUILT] },
-  );
+  const plain = await plainPoint();
   await page.mouse.click(plain?.x ?? 760, plain?.y ?? 470);
   await page.waitForSelector('#spot .verdict', { timeout: 10000 });
   const lowSpot = await page.evaluate(() => ({
@@ -1946,7 +1963,7 @@ async function desktopTests(browser, base) {
       totals['ign.altitude.points'] > 20 &&
       totals['pages.geology'] > 0 &&
       totals['pages.zones'] > 0 &&
-      totals['app.spots'] === 7 + cityClicks + conservatoireClicks,
+      totals['app.spots'] === 7 + spotsBeforeHotspot + cityClicks + conservatoireClicks,
     JSON.stringify(totals),
   );
   await page.evaluate(() => window.metrics.flush());
