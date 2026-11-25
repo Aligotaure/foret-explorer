@@ -14,11 +14,14 @@ bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
   estimée » ; météo ; « Droit de cueillir : les règles », replié ; une ligne de note. Dans l'en-tête,
   à côté de « Ce coin » : la voiture « Y aller ».
 - **« Y aller »** (`directions.ts`, demande de Clément du 25/11/2026) : une voiture dans l'en-tête du
-  bilan, seul bouton plein de l'en-tête pour qu'on la voie dès l'ouverture (avant : « Copier les
-  coordonnées » et « Itinéraire ↗ », Google Maps seul, tout en bas du bilan, donc après un long
-  défilement sur téléphone). Elle déplie, sous l'en-tête et dans le panneau (il rognerait une bulle
-  flottante), « Itinéraire avec » Google Maps, Waze et, sur les appareils Apple seulement, Plans
+  bilan, pastille ronde et pleine, la seule de l'en-tête, pour qu'on la voie dès l'ouverture (avant :
+  « Copier les coordonnées » et « Itinéraire ↗ », Google Maps seul, tout en bas du bilan, donc après
+  un long défilement sur téléphone). Elle déplie, sous l'en-tête et dans le panneau (il rognerait une
+  bulle flottante), « Itinéraire avec » Google Maps, Waze et, sur les appareils Apple seulement, Plans
   (l'application n'existe pas ailleurs), puis « Copier les coordonnées » pour toute autre application.
+  Habillage : des puces à liseré, sans fond, comme celles de « Je cherche… » (la première version,
+  de gros boutons blancs sous l'en-tête et une voiture dans un rectangle, a été refusée par Clément :
+  pas de bloc blanc ici ; un test e2e le vérifie).
   Une page web ne peut pas savoir quelles applications sont installées : chaque lien est celui que
   l'éditeur documente pour un site web, qui ouvre l'application si elle est là, son site sinon
   (adresses et sources en tête de `directions.ts`, relues le 25/11/2026). Le choix se replie par

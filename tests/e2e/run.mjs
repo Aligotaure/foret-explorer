@@ -859,8 +859,9 @@ async function desktopTests(browser, base) {
       return {
         inHeader: Boolean(button && header?.contains(button) && header.querySelector('.panel__title')?.textContent === 'Ce coin'),
         seen: Boolean(r && r.width >= 36 && r.height >= 36 && r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth),
-        // Bouton plein (les autres boutons de l'en-tête sont transparents) : c'est ce qui le fait voir.
+        // Pastille pleine et ronde (les autres boutons de l'en-tête sont transparents) : c'est ce qui la fait voir.
         filled: button ? getComputedStyle(button).backgroundColor : '',
+        round: button ? getComputedStyle(button).borderRadius : '',
         close: getComputedStyle(document.querySelector('#spot .panel__close')).backgroundColor,
         expanded: button?.getAttribute('aria-expanded'),
         hidden: document.getElementById('spot-directions')?.hidden,
@@ -869,8 +870,8 @@ async function desktopTests(browser, base) {
       };
     });
     check(
-      'bilan : voiture « Y aller » dans l’en-tête, à côté de « Ce coin », bouton plein et visible ; plus rien en bas du bilan',
-      goBefore.inHeader && goBefore.seen && goBefore.filled !== goBefore.close && goBefore.expanded === 'false' && goBefore.hidden === true && /^Y aller/.test(goBefore.label) && !goBefore.below,
+      'bilan : voiture « Y aller » dans l’en-tête, à côté de « Ce coin », pastille pleine et visible ; plus rien en bas du bilan',
+      goBefore.inHeader && goBefore.seen && goBefore.filled !== goBefore.close && goBefore.round === '50%' && goBefore.expanded === 'false' && goBefore.hidden === true && /^Y aller/.test(goBefore.label) && !goBefore.below,
       JSON.stringify(goBefore),
     );
     await page.locator('#spot .directions-btn').click();
@@ -892,14 +893,18 @@ async function desktopTests(browser, base) {
           const r = box(b);
           return r.height >= 28 && r.top >= p.top && r.bottom <= p.bottom && r.left >= p.left && r.right <= p.right;
         }),
+        // Des puces à liseré, sans fond, et une voiture qui reste colorée : pas de bloc blanc sous
+        // l'en-tête (retour de Clément sur la première version).
+        white: [document.querySelector('#spot .directions-btn'), ...panel.querySelectorAll('.directions__btn')].filter((b) => getComputedStyle(b).backgroundColor === 'rgb(255, 255, 255)').length,
+        plain: [...panel.querySelectorAll('.directions__btn')].every((b) => getComputedStyle(b).backgroundColor === 'rgba(0, 0, 0, 0)'),
       };
     });
     check(
-      'bilan : la voiture déplie Google Maps, Waze et « Copier les coordonnées », liens vers le point touché',
+      'bilan : la voiture déplie Google Maps, Waze et « Copier les coordonnées » en puces à liseré, liens vers le point touché',
       goOpen.hidden === false && goOpen.expanded === 'true' &&
-        goOpen.links.join(' | ') === `Google Maps ↗ → https://www.google.com/maps/dir/?api=1&destination=${lat}%2C${lng} _blank noopener | Waze ↗ → https://waze.com/ul?ll=${lat}%2C${lng}&navigate=yes _blank noopener` &&
-        goOpen.buttons.join() === 'Copier les coordonnées' && goOpen.inside && goOpen.aboveBody && goOpen.seen,
-      `${goOpen.links.join(' | ')} ; ${goOpen.buttons.join()} ; dans le panneau : ${goOpen.inside}, au-dessus du bilan : ${goOpen.aboveBody}`,
+        goOpen.links.join(' | ') === `Google Maps → https://www.google.com/maps/dir/?api=1&destination=${lat}%2C${lng} _blank noopener | Waze → https://waze.com/ul?ll=${lat}%2C${lng}&navigate=yes _blank noopener` &&
+        goOpen.buttons.join() === 'Copier les coordonnées' && goOpen.inside && goOpen.aboveBody && goOpen.seen && goOpen.white === 0 && goOpen.plain,
+      `${goOpen.links.join(' | ')} ; ${goOpen.buttons.join()} ; dans le panneau : ${goOpen.inside}, au-dessus du bilan : ${goOpen.aboveBody}, blocs blancs : ${goOpen.white}`,
     );
     // Copie : le presse-papiers reçoit « latitude, longitude » ; s'il refuse, elles s'affichent.
     const copied = await page.evaluate(async () => {
@@ -3233,8 +3238,8 @@ async function mobileTests(browser, base) {
     };
   });
   check(
-    'mobile : voiture « Y aller » visible dès l’ouverture du tiroir, à la taille du doigt ; son choix tient dans le tiroir, boutons de 44 px',
-    car.seen && car.width >= 44 && car.height >= 40 && choice.hidden === false && choice.labels === 'Google Maps ↗ | Waze ↗ | Copier les coordonnées' && choice.heights.every((v) => v >= 44) && choice.inside && choice.fits && choice.body > 150,
+    'mobile : voiture « Y aller » visible dès l’ouverture du tiroir, à la taille du doigt ; son choix tient dans le tiroir, puces de 40 px',
+    car.seen && car.width >= 40 && car.height >= 40 && choice.hidden === false && choice.labels === 'Google Maps | Waze | Copier les coordonnées' && choice.heights.every((v) => v >= 40) && choice.inside && choice.fits && choice.body > 150,
     `${JSON.stringify(car)} ; ${choice.labels} ; hauteurs ${choice.heights.join()} ; bilan visible sur ${choice.body} px`,
   );
   await page.screenshot({ path: `${OUT}09b-mobile-y-aller.png` });
@@ -3257,7 +3262,7 @@ async function mobileTests(browser, base) {
   check(
     'mobile : un autre coin touché replie le choix, ses liens visent le nouveau point ; sur iPhone, Plans en plus',
     next.hidden === true && next.expanded === 'false' && next.coords !== choice.coords &&
-      next.links === `Google Maps ↗ https://www.google.com/maps/dir/?api=1&destination=${nextLat}%2C${nextLng} | Waze ↗ https://waze.com/ul?ll=${nextLat}%2C${nextLng}&navigate=yes | Plans ↗ https://maps.apple.com/directions?destination=${nextLat},${nextLng}&mode=driving`,
+      next.links === `Google Maps https://www.google.com/maps/dir/?api=1&destination=${nextLat}%2C${nextLng} | Waze https://waze.com/ul?ll=${nextLat}%2C${nextLng}&navigate=yes | Plans https://maps.apple.com/directions?destination=${nextLat},${nextLng}&mode=driving`,
     `${choice.coords} → ${next.coords} ; ${next.links}`,
   );
   check('mobile : pas de défilement horizontal', !(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)));

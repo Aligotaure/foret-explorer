@@ -1378,29 +1378,38 @@ li.is-off .swatch {
   font-variant-numeric: tabular-nums;
 }
 
-/* « Y aller » (directions.ts) : la voiture de l'en-tête, seul bouton plein du bilan pour qu'on la
-   voie, et le choix qu'elle déplie sous l'en-tête, dans le panneau (il rognerait une bulle). */
+/* « Y aller » (directions.ts) : la voiture de l'en-tête, pastille pleine pour qu'on la voie, et le
+   choix qu'elle déplie sous l'en-tête, dans le panneau (il rognerait une bulle) : des puces à
+   liseré, comme celles de « Je cherche… ». Pas de bloc blanc ici (retour de Clément). */
 .directions-btn {
   display: grid;
   flex: none;
   place-items: center;
-  width: 44px;
+  width: 36px;
   height: 36px;
   padding: 0;
   border: 0;
-  border-radius: var(--radius);
+  border-radius: 50%;
   background: var(--accent);
   color: #fff;
   cursor: pointer;
+  transition:
+    background-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.directions-btn svg {
+  width: 20px;
+  height: 20px;
 }
 
 .directions-btn:hover {
-  background: var(--lavender);
+  background: #7f7ff6;
 }
 
+/* Choix déplié : un halo autour de la pastille. */
 .directions-btn[aria-expanded='true'] {
-  background: #fff;
-  color: var(--france);
+  box-shadow: 0 0 0 3px rgba(133, 133, 246, 0.4);
 }
 
 .directions {
@@ -1412,11 +1421,8 @@ li.is-off .swatch {
 
 .directions__title {
   margin: 0 0 8px;
-  color: var(--lavender-soft);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  color: var(--muted);
+  font-size: 12.5px;
 }
 
 .directions__list {
@@ -1428,43 +1434,45 @@ li.is-off .swatch {
 .directions__btn {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   min-height: 32px;
-  padding: 4px 12px;
-  border: 1px solid #fff;
-  border-radius: var(--radius);
-  background: #fff;
-  color: var(--france);
+  padding: 0 12px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lavender-soft);
   font: inherit;
   font-size: 13px;
-  font-weight: 600;
   text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
 }
 
 .directions__btn:hover {
-  background: var(--france-soft);
+  background: rgba(106, 106, 244, 0.18);
 }
 
-.directions__btn--quiet {
-  border-color: var(--lavender-soft);
-  background: transparent;
-  color: #fff;
+.directions__btn svg {
+  width: 15px;
+  height: 15px;
 }
 
-.directions__btn--quiet:hover {
-  background: var(--navy-600);
+/* Flèche « s'ouvre ailleurs », après le nom de l'application : plus discrète que lui. */
+a.directions__btn svg {
+  width: 13px;
+  height: 13px;
+  color: var(--lavender);
 }
 
 /* Téléphone : cibles à la taille du doigt. */
 @media (max-width: 640px) {
   .directions-btn {
-    width: 48px;
+    width: 40px;
     height: 40px;
   }
 
   .directions__btn {
-    min-height: 44px;
-    padding: 8px 14px;
+    min-height: 40px;
     font-size: 14px;
   }
 }

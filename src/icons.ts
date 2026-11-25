@@ -28,10 +28,13 @@ export const ICONS = {
   info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.01"/>'),
   shield: svg('<path d="M12 3 5 6v5.2c0 4.4 2.9 8.1 7 9.8 4.1-1.7 7-5.4 7-9.8V6z"/><path d="m9 12 2 2 4-4"/>'),
   alert: svg('<path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.4v.01"/>'),
-  // Voiture vue de face : « Y aller », dans l'en-tête du bilan (directions.ts).
+  // Petite voiture de profil : « Y aller », dans l'en-tête du bilan (directions.ts).
   car: svg(
-    '<path d="M5 11.5 6.6 7a1.5 1.5 0 0 1 1.4-1h8a1.5 1.5 0 0 1 1.4 1l1.6 4.5"/><rect x="3" y="11.5" width="18" height="6" rx="1.5"/><path d="M6 17.5v2M18 17.5v2M7 14.5h.01M17 14.5h.01"/>',
+    '<path d="M5 16.5H4a1 1 0 0 1-1-1v-2a1.5 1.5 0 0 1 1-1.4l2-.7 2-3.1a2 2 0 0 1 1.7-.9h4.1a2 2 0 0 1 1.6.8l2.6 3.3 2.4.7a1.5 1.5 0 0 1 1.1 1.4v1.9a1 1 0 0 1-1 1h-1"/><path d="M9 16.5h6"/><circle cx="7" cy="16.5" r="2"/><circle cx="17" cy="16.5" r="2"/>',
   ),
+  copy: svg('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>'),
+  // Flèche « s'ouvre ailleurs » (application ou autre site).
+  external: svg('<path d="M7 17 17 7M9 7h8v8"/>'),
 } as const;
 
 export type IconName = keyof typeof ICONS;

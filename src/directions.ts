@@ -12,7 +12,9 @@
  * tous, sauf Plans, qui n'existe que sur les appareils Apple.
  *
  * Le choix se déplie dans le panneau, sous l'en-tête, plutôt qu'en bulle flottante : le panneau
- * rognerait une bulle, et sur téléphone elle masquerait le bilan.
+ * rognerait une bulle, et sur téléphone elle masquerait le bilan. Habillage : une pastille ronde pour
+ * la voiture, des puces à liseré comme celles de « Je cherche… » pour le choix (retour de Clément sur
+ * la première version, 25/11/2026 : de gros rectangles blancs sous l'en-tête, « moche »).
  *
  * Avant le 25/11/2026, « Copier les coordonnées » et « Itinéraire ↗ » (Google Maps seul) étaient tout
  * en bas du bilan : sur téléphone il fallait faire défiler le tiroir pour les trouver (demande de
@@ -86,10 +88,13 @@ export class Directions {
   setPoint(lat: string, lng: string): void {
     this.lat = lat;
     this.lng = lng;
-    const copy = h('button', { class: 'directions__btn directions__btn--quiet', type: 'button' }, 'Copier les coordonnées');
+    const copy = h('button', { class: 'directions__btn', type: 'button' }, icon('copy'), 'Copier les coordonnées');
     copy.addEventListener('click', () => this.copy());
     this.list.replaceChildren(
-      ...navApps(lat, lng).map((app) => h('a', { class: 'directions__btn', 'data-app': app.id, href: app.href, target: '_blank', rel: 'noopener' }, `${app.label} ↗`)),
+      ...navApps(lat, lng).map((app) =>
+        // Lu hors de son contexte (liste des liens d'un lecteur d'écran), « Waze » seul ne dit pas ce que fait le lien.
+        h('a', { class: 'directions__btn', 'data-app': app.id, 'aria-label': `Itinéraire avec ${app.label}`, href: app.href, target: '_blank', rel: 'noopener' }, app.label, icon('external')),
+      ),
       copy,
     );
     this.toggle(false);
