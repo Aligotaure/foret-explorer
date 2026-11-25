@@ -1,7 +1,7 @@
 # Vérifie chaque jour que les services utilisés par la carte répondent : IGN (tuiles, altitude,
 # recherche, polices), Open-Meteo et le site en ligne (archives des tuiles de géologie et des zones,
-# lues par morceaux ; zones refaites il y a moins de 13 mois ; fichiers météo communs, dont le
-# dernier jour ne doit pas avoir plus de 36 heures). Une ou deux requêtes par service. En cas d'échec, l'exécution apparaît en rouge dans
+# lues par morceaux ; zones et coupes datées refaites il y a moins de 13 mois ; fichiers météo
+# communs, dont le dernier jour ne doit pas avoir plus de 36 heures). Une ou deux requêtes par service. En cas d'échec, l'exécution apparaît en rouge dans
 # l'onglet Actions et GitHub envoie un e-mail de notification (réglage par défaut des notifications
 # Actions).
 #
@@ -26,8 +26,8 @@ permissions:
 jobs:
   services:
     runs-on: ubuntu-latest
-    # Une vérification dure 100 s au plus (voir « demander ») et il y en a 16 : même si rien ne
-    # répond, la tâche va au bout (27 minutes) et dit quoi. D'ordinaire : 20 secondes.
+    # Une vérification dure 100 s au plus (voir « demander ») et il y en a 17 : même si rien ne
+    # répond, la tâche va au bout (29 minutes) et dit quoi. D'ordinaire : 20 secondes.
     timeout-minutes: 30
     steps:
       - name: Interroger les services
@@ -106,6 +106,17 @@ jobs:
             echo "OK  Zones protégées et forêts publiques refaites le ${genere%%T*}"
           fi
           archive 'Zones protégées et forêts publiques' 'https://aligotaure.github.io/foret-explorer/data/zones/zones.pmtiles'
+          verifier 'Coupes datées' 'https://aligotaure.github.io/foret-explorer/data/coupes/index.json' 'genere'
+          # Refaites une fois par an par la publication (deploy.yml), qui garde les anciens fichiers si
+          # Zenodo ne répond pas ou si l'archive de l'atlas a changé de forme : passé 13 mois, la
+          # reconstruction échoue depuis un mois. Un index sans date (écrit faute de mieux) : jamais faite.
+          genere=$(jq -r '.genere // empty' reponse 2>/dev/null)
+          if [ -z "$genere" ] || [ "$genere" \< "$limite" ]; then
+            echo "::error::Coupes datées trop anciennes : fichiers du ${genere:-jour inconnu}, la reconstruction annuelle (deploy.yml, scripts/coupes/construire.mjs) échoue sans doute."
+            echec=1
+          else
+            echo "OK  Coupes datées refaites le ${genere%%T*} (atlas $(jq -r '.atlas // "?"' reponse), jusqu'en $(jq -r '.dernierAn // "?"' reponse))"
+          fi
           verifier 'Météo commune' 'https://aligotaure.github.io/foret-explorer/data/meteo/index.json' 'dernierJour'
           # Le tour du jour se fait d'ordinaire dans la nuit, mais GitHub lance les tâches planifiées avec
           # parfois des heures de retard : alerte seulement si le dernier jour connu a plus de 36 heures

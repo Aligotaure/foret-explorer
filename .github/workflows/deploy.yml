@@ -6,9 +6,12 @@
 # 1. Reprend les tuiles « nature du sol » de toute la France (cache, refaites seulement quand les
 #    scripts de scripts/geologie/ changent : ≈ 2,7 Go de cartes du BRGM à télécharger), celles des
 #    zones protégées et forêts publiques (cache, ou à défaut le site en ligne ; refaites depuis le WFS
-#    une fois par an, ou quand leurs scripts changent) et les derniers fichiers météo communs : tout
-#    cela est servi par GitHub Pages avec le site. Si une reconstruction échoue, les tuiles
-#    précédentes restent ; sans tuiles du tout, rien n'est publié.
+#    une fois par an, ou quand leurs scripts changent), les coupes datées par carré de 500 m (cache,
+#    ou à défaut le site en ligne ; refaites une fois par an depuis l'atlas européen des perturbations
+#    forestières, 49 Mo chez Zenodo, ou quand leurs scripts changent) et les derniers fichiers météo
+#    communs : tout cela est servi par GitHub Pages avec le site. Si une reconstruction échoue, les
+#    données précédentes restent ; sans tuiles du tout, rien n'est publié (les coupes, elles, sont
+#    facultatives : sans elles la carte n'en tient pas compte).
 #    Les tuiles sont rangées dans une archive PMTiles par couche : GitHub Pages abandonne une
 #    publication au bout de 10 minutes, et des dizaines de milliers de petits fichiers n'y passent pas.
 # 2. Teste le serveur de mesure (worker/) et, si les secrets Cloudflare existent, le publie :
@@ -150,6 +153,78 @@ jobs:
         with:
           path: public/data/zones
           key: zones-tuiles-${{ hashFiles('scripts/zones/*') }}-${{ github.run_id }}-${{ github.run_attempt }}
+      # ── Coupes datées par carré de 500 m (src/cuts.ts) : même mécanique que les zones ──
+      - name: Coupes datées en cache
+        id: coupes
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: public/data/coupes
+          # Un nom par exécution, comme pour les zones : on reprend les plus récentes faites avec les
+          # scripts et la grille actuels, à défaut les plus récentes tout court (elles seront refaites).
+          key: coupes-${{ hashFiles('scripts/coupes/*', 'public/foret/parts.json') }}
+          restore-keys: |
+            coupes-${{ hashFiles('scripts/coupes/*', 'public/foret/parts.json') }}-
+            coupes-
+      - name: Coupes datées à refaire ? (une fois par an, ou quand leurs scripts changent)
+        # L'atlas sort une version par an environ. Sans fichiers en cache (cache perdu, premier
+        # passage), on reprend ceux du site en ligne, sans rien demander à Zenodo. Ils ne sont refaits
+        # que s'ils ont un an ou plus, si scripts/coupes/ ou la grille ont changé depuis, ou s'il n'y
+        # en a nulle part (un index sans bloc, écrit faute de mieux, ne compte pas).
+        id: coupes-age
+        env:
+          CLE: ${{ steps.coupes.outputs.cache-matched-key }}
+          PREFIXE: coupes-${{ hashFiles('scripts/coupes/*', 'public/foret/parts.json') }}-
+          EN_LIGNE: https://aligotaure.github.io/foret-explorer/data/coupes/
+        run: |
+          dossier=public/data/coupes
+          # Âge en jours d'après la date de fabrication (champ « genere ») ; rien si l'index manque ou n'a aucun bloc.
+          age_de() {
+            node -e 'const i = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); const g = Date.parse(i.genere); if (Array.isArray(i.blocs) && i.blocs.length && Number.isFinite(g)) console.log(Math.floor((Date.now() - g) / 864e5))' "$dossier/index.json" 2>/dev/null
+          }
+          source=cache
+          age=$(age_de) || age=
+          if [ -z "$age" ]; then
+            source=aucune
+            if node scripts/coupes/reprendre.mjs "$EN_LIGNE" "$dossier"; then
+              source=site
+              age=$(age_de) || age=
+            fi
+          fi
+          if [ "$source" = aucune ] || [ -z "$age" ]; then
+            raison="aucun fichier, ni en cache ni sur le site en ligne"
+          elif [ "$source" = cache ] && [[ "$CLE" != "$PREFIXE"* ]]; then
+            raison="scripts de scripts/coupes/ ou grille modifiés depuis les fichiers en cache"
+          elif [ "$age" -ge 365 ]; then
+            raison="fichiers de $age jours"
+          else
+            raison=
+          fi
+          if [ -n "$raison" ]; then
+            echo "Coupes datées à refaire : $raison."
+            echo "refaire=oui" >> "$GITHUB_OUTPUT"
+          elif [ "$source" = site ]; then
+            echo "Coupes datées gardées : fichiers de $age jours, repris du site en ligne."
+          else
+            echo "Coupes datées gardées : fichiers de $age jours, en cache."
+          fi
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+      - name: Refaire les coupes datées (atlas européen des perturbations forestières, Zenodo)
+        id: coupes-construire
+        if: steps.coupes-age.outputs.refaire == 'oui'
+        # Zenodo en panne, archive renommée… : les fichiers précédents restent, la publication suivante réessaie.
+        continue-on-error: true
+        run: node scripts/coupes/construire.mjs --cache "$RUNNER_TEMP/coupes"
+      - name: Garder les coupes datées
+        if: steps.coupes-construire.outcome == 'success' || steps.coupes-age.outputs.source == 'site'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: public/data/coupes
+          key: coupes-${{ hashFiles('scripts/coupes/*', 'public/foret/parts.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Coupes datées, toujours un index
+        # Sans fichiers (première construction ratée), un index sans bloc : la carte le demande dès
+        # qu'elle montre des carrés de 500 m, et un fichier absent laisserait une erreur 404 dans la
+        # console du navigateur. Jamais gardé en cache : la publication suivante réessaie.
+        run: node scripts/coupes/construire.mjs --vide
       - name: Fichiers météo communs (dernier passage de la tâche « Météo commune »)
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -179,6 +254,9 @@ jobs:
           done
           if [ ! -f public/data/meteo/index.json ]; then
             echo "::warning::Pas de fichiers météo communs, la carte interrogera Open-Meteo elle-même."
+          fi
+          if [ ! -d public/data/coupes/b ]; then
+            echo "::warning::Pas de coupes datées, la carte n'en tiendra pas compte."
           fi
           du -sh public/data/* 2>/dev/null || true
           find public/data -type f | wc -l | sed 's/$/ fichiers de données/'
@@ -218,7 +296,7 @@ jobs:
           if [ -z "$ADMIN_PASSWORD" ] || [ -z "$ADMIN_PATH" ]; then
             echo "::warning::Secrets ADMIN_PASSWORD et ADMIN_PATH manquants : la page privée reste fermée."
           fi
-      - name: Tester les scripts de données (météo commune simulée, règles des sols sur toute la France)
+      - name: Tester les scripts de données (météo commune simulée, règles des sols sur toute la France, coupes datées)
         run: npm run test:donnees
       - name: Moyennes de France par champignon (chiffre des puces)
         # À partir des fichiers météo du jour, avant la construction du site qui les recopie. Ne doit

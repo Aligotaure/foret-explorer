@@ -2,9 +2,12 @@
 // d'archive, et fabrication des fichiers, sur une image et une archive fabriquées ici. Sans réseau,
 // sans TypeScript :
 //   npm run test:coupes
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import zlib from 'node:zlib';
 import { BLOC, DIVISIONS, FACTEUR, POINTS, ecrire, fabriquer, lecteur, periodes } from '../scripts/coupes/coupes.mjs';
 import { versLaea, versLatLon } from '../scripts/coupes/projection.mjs';
@@ -388,6 +391,47 @@ for (const zip64 of [false, true]) {
   }
   check(`archive ${sorte} : un octet changé est refusé par la somme de contrôle`, intact && refuseAussi);
 }
+
+// ── Reprise depuis le site en ligne (cache de la publication perdu) ──────────
+// Un faux site, servi ici : l'index et le bloc fabriqués plus haut, puis des pannes.
+const SCRIPTS = fileURLToPath(new URL('../scripts/coupes/', import.meta.url));
+let site = {};
+const serveur = createServer((demande, reponse) => {
+  const corps = site[demande.url];
+  reponse.writeHead(corps === undefined ? 404 : 200, { 'content-type': 'application/json' });
+  reponse.end(corps ?? '');
+});
+await new Promise((pret) => serveur.listen(0, '127.0.0.1', pret));
+const adresse = `http://127.0.0.1:${serveur.address().port}/`;
+const lancer = (script, ...options) =>
+  new Promise((fini) => execFile(process.execPath, [join(SCRIPTS, script), ...options], (erreur, sortie) => fini({ ok: !erreur, sortie })));
+const enLigne = { '/index.json': JSON.stringify(index), [`/b/${bloc}.json`]: JSON.stringify({ v: 1, cases: blocs.get(bloc) }) };
+const repris = join(dossier, 'repris');
+site = enLigne;
+const reprise = await lancer('reprendre.mjs', adresse, repris);
+check(
+  'reprise : l’index et ses blocs sont recopiés tels quels',
+  reprise.ok && readFileSync(join(repris, 'index.json'), 'utf8') === enLigne['/index.json'] && readFileSync(join(repris, 'b', `${bloc}.json`), 'utf8') === enLigne[`/b/${bloc}.json`] && readdirSync(join(repris, 'b')).length === 1,
+  reprise.sortie.trim(),
+);
+const intact = () => existsSync(join(repris, 'index.json')) && readdirSync(join(repris, 'b')).length === 1;
+site = { '/index.json': JSON.stringify({ ...index, blocs: [], genere: '' }) };
+const vide = await lancer('reprendre.mjs', adresse, repris);
+site = { '/index.json': enLigne['/index.json'] };
+const troue = await lancer('reprendre.mjs', adresse, repris);
+site = {};
+const absent = await lancer('reprendre.mjs', adresse, repris);
+check('reprise : index sans bloc, bloc manquant ou site sans fichiers, le script échoue sans rien toucher', !vide.ok && !troue.ok && !absent.ok && intact(), `${vide.ok} ${troue.ok} ${absent.ok}`);
+await new Promise((ferme) => serveur.close(ferme));
+
+// ── Index sans bloc, écrit faute de mieux par la publication ─────────────────
+const faute = join(dossier, 'faute-de-mieux');
+mkdirSync(faute);
+const premier = await lancer('construire.mjs', '--vide', '--sortie', faute);
+const ecrit = existsSync(join(faute, 'index.json')) ? JSON.parse(readFileSync(join(faute, 'index.json'), 'utf8')) : null;
+check('index faute de mieux : même grille, aucun bloc, aucune date', premier.ok && ecrit?.v === 1 && ecrit.divisions === 9 && ecrit.bloc === 8 && ecrit.blocs.length === 0 && ecrit.genere === '' && ecrit.pasLat === PAS_LAT, JSON.stringify(ecrit));
+const second = await lancer('construire.mjs', '--vide', '--sortie', repris);
+check('index faute de mieux : ne remplace jamais de vrais fichiers', second.ok && intact() && readFileSync(join(repris, 'index.json'), 'utf8') === enLigne['/index.json']);
 
 rmSync(dossier, { recursive: true, force: true });
 const failed = results.filter((ok) => !ok).length;

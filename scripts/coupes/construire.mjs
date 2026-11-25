@@ -13,10 +13,12 @@
 // Usage : node scripts/coupes/construire.mjs [--sortie public/data/coupes] [--parts public/foret/parts.json]
 //         [--cache .cache/coupes] [--annee 2026]
 //         [--image latest_disturbance_france.tif]   (image déjà sur place : rien n'est téléchargé)
+//         [--vide]   (écrit seulement un index sans bloc s'il n'y a rien : la carte le demande à
+//                     chaque visite, et un fichier absent laisserait une erreur 404 dans la console)
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fabriquer, lecteur } from './coupes.mjs';
+import { BLOC, DIVISIONS, FORMAT, POINTS, fabriquer, lecteur } from './coupes.mjs';
 import { ouvrir } from './tiff.mjs';
 import { extraire, lister } from './zip.mjs';
 
@@ -35,11 +37,16 @@ const IMAGE = option('image', null);
 const DERNIERE_VERSION = 'https://zenodo.org/api/records/21722408/versions/latest';
 const ARCHIVE = 'France.zip';
 const COUCHE = /^latest_disturbance_france_v\d+\.tif$/;
+/**
+ * Zenodo refuse le nom que Node donne d'office à ses demandes (HTTP 403, « unusual traffic », vu le
+ * 25/11/2026) : un nom de client neutre suffit. Rien qui désigne le site ou son auteur.
+ */
+const CLIENT = { 'User-Agent': 'script-de-donnees/1.0' };
 async function demander(url, entetes = {}) {
   let erreur;
   for (let essai = 1; essai <= 4; essai++) {
     try {
-      const reponse = await fetch(url, { headers: entetes, signal: AbortSignal.timeout(600_000) });
+      const reponse = await fetch(url, { headers: { ...CLIENT, ...entetes }, signal: AbortSignal.timeout(600_000) });
       if (reponse.ok) return reponse;
       erreur = new Error(`HTTP ${reponse.status} pour ${url}`);
       if (reponse.status < 500 && reponse.status !== 429) break;
@@ -74,6 +81,21 @@ async function telecharger() {
     writeFileSync(chemin, await extraire(lirePlage, entree));
   }
   return { chemin, version };
+}
+
+if (process.argv.includes('--vide')) {
+  if (existsSync(join(SORTIE, 'index.json'))) {
+    console.log('Coupes datées : fichiers déjà là, rien à écrire.');
+  } else {
+    const grille = JSON.parse(readFileSync(PARTS, 'utf8'));
+    mkdirSync(SORTIE, { recursive: true });
+    writeFileSync(
+      join(SORTIE, 'index.json'),
+      JSON.stringify({ v: FORMAT, pasLat: grille.pasLat, pasLon: grille.pasLon, divisions: DIVISIONS, bloc: BLOC, points: POINTS.map((p) => +p.toFixed(4)), depuis: 0, jeune: [0, 0], dernierAn: null, genere: '', atlas: '', blocs: [] }),
+    );
+    console.log('Coupes datées : index sans bloc écrit (aucune coupe connue, la carte fait sans).');
+  }
+  process.exit(0);
 }
 
 const debut = Date.now();
