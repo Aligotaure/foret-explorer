@@ -1,5 +1,6 @@
 import maplibregl, { type LngLat, type Map as MapLibreMap, type PointLike } from 'maplibre-gl';
 import { BDFORET, BUILT_MAX_COVER, DIRECT_PAST_DAYS, FINE_MIN_ZOOM, GEOLOGY, HOST_MIN_COVER, SPOT_ALTITUDE_TIMEOUT_MS, SPOT_ALTITUDE_WAIT_MS } from './config';
+import { countPoints, cutPeriods, cutPointsAt, loadCuts, shareWords, type CutPoints } from './cuts';
 import { h, toast } from './dom';
 import { hostCover, isLit, loadForestShare } from './forestShare';
 import { forestAt, soilAt, type ForestAtPoint, type SoilAtPoint } from './geology';
@@ -17,6 +18,7 @@ import {
   noEstimate,
   offSeasonText,
   scoreMushroom,
+  type CutShares,
   type Mushroom,
   type MushroomId,
   type MushroomScore,
@@ -91,6 +93,30 @@ function patternSwatch(soil: SoilAtPoint['soil']): HTMLSpanElement {
 
 function row(label: string, ...value: (Node | string)[]): HTMLElement {
   return h('div', { class: 'spot__row' }, h('dt', {}, label), h('dd', {}, ...value));
+}
+
+/**
+ * Coupe ou dégât vu par satellite dans le carré de 500 m du point (cuts.ts) : un fait daté et ce
+ * qu'il implique, à vérifier sur place (une date sur cinq est fausse). Part du carré en mots, pas en
+ * pourcentage : elle vient de neuf points. null : rien de daté, ou périodes inconnues.
+ */
+export function cutsText(cuts: CutPoints): string | null {
+  const periods = cutPeriods();
+  const recent = countPoints(cuts.recent);
+  const young = countPoints(cuts.young);
+  if (!periods || (!recent && !young)) return null;
+  const [from, to] = periods.young;
+  const before = `entre ${from} et ${to} sur ${shareWords(young)}`;
+  if (!recent) return `coupe ou dégât vu par satellite ${before} de ce carré de 500 m : peuplement de 10 à 20 ans, à vérifier sur place`;
+  const since = `depuis ${periods.since} sur ${shareWords(recent)} de ce carré de 500 m`;
+  return `coupe ou dégât vu par satellite ${since}${young ? `, et ${before}` : ''} : peuplement jeune, à vérifier sur place`;
+}
+
+/** Les mêmes parts, pour l'indice de chaque champignon (`scoreMushroom`). */
+function cutShares(cuts: CutPoints): CutShares {
+  const recent = countPoints(cuts.recent);
+  const young = countPoints(cuts.young);
+  return { recent: recent / 9, young: young / 9, recentWords: shareWords(recent), youngWords: shareWords(young) };
 }
 
 /** De septembre à février, les battues sont fréquentes. */
@@ -220,6 +246,8 @@ interface View {
    * sont tous, rien n'est demandé : ni altitude IGN, ni météo de secours.
    */
   excluded: ReadonlyMap<MushroomId, Exclusion> | null;
+  /** Points du carré de 500 m du coin où un satellite a vu la forêt coupée ou détruite (null : inconnu). */
+  cuts: CutPoints | null;
 }
 
 /**
@@ -324,6 +352,8 @@ export class SpotPanel {
       shared: true,
       altitudePending: false,
       excluded: null,
+      // Déjà connues si la grille des carrés de 500 m les a lues ; sinon elles arrivent plus bas.
+      cuts: cutPointsAt(lngLat.lat, lngLat.lng),
     };
     const show = (changes: Partial<View>): void => {
       this.view = { ...view, ...this.view, ...changes };
@@ -332,6 +362,15 @@ export class SpotPanel {
     this.view = null;
     show({});
     this.body.scrollTop = 0;
+    // Coupes datées du carré : un petit fichier du site, que rien d'autre n'attend. Il ne sert que
+    // sous une forêt (ailleurs, aucun champignon n'est estimé).
+    if (forest && !view.cuts) {
+      void loadCuts([view.sector.cell]).then(() => {
+        if (controller.signal.aborted) return;
+        const cuts = cutPointsAt(lngLat.lat, lngLat.lng);
+        if (cuts && (cuts.recent || cuts.young)) show({ cuts });
+      });
+    }
     // Arbres hôtes et part bâtie du secteur (même fichier que la grille de la carte) : sans eux, forêt
     // inconnue voulait dire « météo seule », et le bilan annonçait « favorable » en pleine ville.
     const shares = loadForestShare();
@@ -532,7 +571,7 @@ export class SpotPanel {
         'p',
         {},
         h('strong', {}, 'Comment c’est estimé. '),
-        'Indice = saison × pluie × température × arbre hôte × sol, chacun noté de 0 à 1 selon des règles de cueilleur : un seul à zéro (hors saison, pas d’arbre hôte) et l’estimation tombe à 0 %.',
+        'Indice = saison × pluie × température × arbre hôte × sol, chacun noté de 0 à 1 selon des règles de cueilleur : un seul à zéro (hors saison, pas d’arbre hôte) et l’estimation tombe à 0 %. Une coupe récente vue par satellite le baisse aussi.',
       ),
       h(
         'p',
@@ -610,6 +649,9 @@ export class SpotPanel {
       ),
       row('Statut', statusValue(zones, forest)),
     );
+    // Sous une forêt seulement : la ligne dit ce que la BD Forêt, plus ancienne, ne sait pas.
+    const cut = forest && v.cuts ? cutsText(v.cuts) : null;
+    if (cut) terrain.insertBefore(row('Coupes', h('span', { class: 'spot__value' }, cut)), terrain.children[1] ?? null);
 
     const parts: (Node | null)[] = [zoneAlerts(zones), h('section', { class: 'spot__section' }, terrain)];
 
@@ -617,6 +659,7 @@ export class SpotPanel {
     const context: SpotContext = {
       ...(forest ? { forestCode: forest.code } : v.forestUnknown ? { forestUnknown: v.forestUnknown } : { forestCode: null }),
       soil: soil?.soil.id ?? null,
+      ...(cut && v.cuts ? { cuts: cutShares(v.cuts) } : {}),
     };
     /** Les cinq lignes : écarté sans calcul (saison, forêt, secteur), sinon l'indice du coin. */
     const verdicts = (w: WeatherSummary | null): Verdict[] =>

@@ -12,7 +12,8 @@ import type { MultiPolygon, Polygon, Position } from 'geojson';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { FINE_DIVISIONS, FINE_MAX_CELLS, FINE_MIN_HOST_SHARE, FINE_TOWN_MIN_HOST_SHARE, FINE_TOWN_MIN_NEIGHBOURS } from './config';
 import { LAYERS } from './mapStyle';
-import { scoreMushroom, soilModulation, type Level, type Mushroom } from './mushrooms';
+import type { CutPoints } from './cuts';
+import { cutModulation, cutWeight, scoreMushroom, soilModulation, type Level, type Mushroom } from './mushrooms';
 import { BASE_STEP_LAT, BASE_STEP_LON, cellId, cellOfBase } from './meteoGrid';
 import { SOIL_BY_ID, type SoilId } from './soils';
 import type { WeatherSummary } from './weather';
@@ -538,19 +539,37 @@ export interface FineScore {
  * Indice d'un carré pour un champignon : qualité moyenne des arbres hôtes présents et sol
  * moyen sous ces arbres. Null si aucun point du carré n'est sous un arbre hôte (le choix des
  * carrés à dessiner se fait avant : `fineCellsToDraw`).
+ *
+ * `cuts` : points du carré où un satellite a vu la forêt coupée ou détruite (cuts.ts ; absent ou
+ * null : inconnu, rien ne baisse). Chaque point hôte compte alors pour ce qu'il vaut encore
+ * (`cutWeight`) : un carré dont les hôtes sont tous coupés depuis peu garde un cinquième de son
+ * indice, un carré coupé seulement hors de ses hôtes le garde entier. Un carré relevé en partie
+ * (bord de l'écran) ne sait plus quel point est lequel : la part touchée du carré s'applique à tous.
  */
-export function scoreFineCell(m: Mushroom, w: WeatherSummary, month: number, samples: readonly Sample[]): FineScore | null {
+export function scoreFineCell(m: Mushroom, w: WeatherSummary, month: number, samples: readonly Sample[], cuts?: CutPoints | null): FineScore | null {
+  const touched = cuts && m.cuts && (cuts.recent || cuts.young) ? cuts : null;
+  const whole = samples.length === POINTS;
   let hosts = 0;
   let quality = 0;
   let soil = 0;
-  for (const s of samples) {
+  let standing = 0;
+  samples.forEach((s, k) => {
     const weight = s.code ? (m.hosts[s.code] ?? 0) : 0;
-    if (weight <= 0) continue;
+    if (weight <= 0) return;
     hosts++;
     quality += weight;
     soil += s.soil ? soilModulation(m.soils[s.soil]) : 1;
-  }
+    if (touched && whole) standing += cutWeight(m, Boolean((touched.recent >> k) & 1), Boolean((touched.young >> k) & 1));
+  });
   if (!hosts) return null;
-  const { score, level } = scoreMushroom(m, w, month, { hostQuality: quality / hosts, soilFactor: soil / hosts });
+  const cutFactor = !touched ? undefined : whole ? standing / hosts : cutModulation(m, bits(touched.recent) / POINTS, bits(touched.young) / POINTS);
+  const { score, level } = scoreMushroom(m, w, month, { hostQuality: quality / hosts, soilFactor: soil / hosts, ...(cutFactor === undefined ? {} : { cutFactor }) });
   return { score, level, coverage: hosts / samples.length };
+}
+
+/** Nombre de points (bits) d'un carré. */
+function bits(mask: number): number {
+  let n = 0;
+  for (let b = mask; b; b >>= 1) n += b & 1;
+  return n;
 }

@@ -76,6 +76,22 @@ export const METEO_BASE = import.meta.env.DEV
   : new URL('data/meteo/', PAGE).href;
 
 /**
+ * Coupes et dégâts datés par carré de 500 m (scripts/coupes/construire.mjs : atlas européen des
+ * perturbations forestières, refait une fois par an par `deploy.yml` et publié avec le site). En
+ * développement : ceux du dossier s'ils y sont (public/data/coupes, après un passage du script),
+ * sinon ceux du site en ligne. Absents ou d'un autre format : la carte fait sans.
+ */
+export const CUTS_BASES: readonly string[] = import.meta.env.DEV
+  ? [new URL('data/coupes/', PAGE).href, 'https://aligotaure.github.io/foret-explorer/data/coupes/']
+  : [new URL('data/coupes/', PAGE).href];
+/**
+ * Les carrés de 500 m n'attendent pas ces fichiers plus longtemps : ils sont demandés en même temps
+ * que la météo et arrivent d'ordinaire avec elle ; sur un réseau qui cale, la carte dessine sans
+ * eux, et ils comptent au dessin suivant.
+ */
+export const CUTS_WAIT_MS = 2000;
+
+/**
  * Parts de forêt de chaque carré de 4,5 km (scripts/foret/parts.mjs ; fichier versionné, servi avec le
  * site, en développement aussi). Un carré d'indice n'est coloré que si les arbres hôtes du champignon
  * y couvrent au moins HOST_MIN_COVER de la surface, et d'autant plus qu'ils en couvrent (teinte

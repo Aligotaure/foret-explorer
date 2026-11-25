@@ -31,6 +31,12 @@ export interface Mushroom {
   lag: readonly [number, number, number, number];
   /** Facteur appliqué en cas de gel récent. */
   frost: number;
+  /**
+   * Coupe, incendie ou chablis vus par satellite (cuts.ts) : ce que vaut encore, pour ce champignon,
+   * un point où la forêt a été touchée depuis moins de 10 ans (`recent`), ou depuis 10 à 20 ans
+   * (`young`). Absent : rien ne change (morilles : les coupes sont un de leurs milieux).
+   */
+  cuts?: { recent: number; young: number };
   /** Résumé pour la fiche « Je cherche… ». */
   summary: string;
   /** Arbres en clair, quand les libellés BD Forêt ne parlent pas (« autre feuillu pur »). */
@@ -54,6 +60,19 @@ const mycodb = (genus: string, species: string): Mushroom['sheet'] => ({
 export const GENERAL_CAUTION =
   'L’indice dit où chercher, pas ce qui se mange. Au moindre doute, faites contrôler la récolte par un pharmacien ou une société mycologique.';
 
+/**
+ * Après une coupe rase, presque rien pendant une dizaine d'années (guide de mycosylviculture du CRPF
+ * Rhône-Alpes, 2013, p. 10 et 47). Mais une date de l'atlas sur cinq est fausse (deux sur dix au
+ * contrôle du 25/11/2026 ; 18 % d'après ses auteurs) : un point « coupé » garde donc un cinquième de
+ * sa valeur. Choix de Clément du 25/11/2026.
+ */
+const RECENT_CUT = 0.2;
+/**
+ * Girolles : « peuplement très jeune (moins de 20 ans) » défavorable (même guide, p. 25), sans
+ * chiffre : la moitié est un choix de produit. Rien de ferme pour les autres espèces à cet âge.
+ */
+const YOUNG_STAND_GIROLLE = 0.5;
+
 /** Hôtes communs : feuillus et conifères « à cèpes ». */
 const BROADLEAF = { 'FF1G01-01': 1, 'FF1-09-09': 1, 'FF1-10-10': 1, 'FF1-00-00': 0.85, 'FF1-00': 0.5, FO1: 0.4 };
 const CONIFER = { 'FF2G61-61': 1, 'FF2-52-52': 0.75, 'FF2-00-00': 0.8, 'FF2-80-80': 0.6, 'FF2-81-81': 0.5, 'FF2-00': 0.5, FO2: 0.4 };
@@ -72,6 +91,7 @@ export const MUSHROOMS: readonly Mushroom[] = [
     tempRamp: 5,
     lag: [4, 7, 14, 21],
     frost: 0.35,
+    cuts: { recent: RECENT_CUT, young: 1 },
     summary:
       'Sous chênes, hêtres, châtaigniers, sapins et épicéas adultes, plutôt sur sol acide et drainant. ' +
       'Pousse 1 à 2 semaines après une grosse pluie, par temps doux.',
@@ -90,6 +110,7 @@ export const MUSHROOMS: readonly Mushroom[] = [
     tempRamp: 5,
     lag: [5, 9, 18, 25],
     frost: 0.35,
+    cuts: { recent: RECENT_CUT, young: YOUNG_STAND_GIROLLE },
     summary:
       'Dans la mousse sous feuillus et sapins, surtout sur sol acide. Plus lente que le cèpe : ' +
       '1 à 3 semaines après la pluie, et la pousse dure longtemps.',
@@ -109,6 +130,7 @@ export const MUSHROOMS: readonly Mushroom[] = [
     tempRamp: 5,
     lag: [6, 10, 20, 28],
     frost: 0.6,
+    cuts: { recent: RECENT_CUT, young: 1 },
     summary:
       'Trompettes de la mort, en troupes sous les hêtres et les chênes, sur sol calcaire ou argileux ' +
       'riche. Champignon d’arrière-saison, après des pluies répétées.',
@@ -126,6 +148,7 @@ export const MUSHROOMS: readonly Mushroom[] = [
     tempRamp: 4,
     lag: [5, 8, 18, 26],
     frost: 0.9,
+    cuts: { recent: RECENT_CUT, young: 1 },
     summary:
       'Chanterelles grises, en masse dans les sapinières et pessières moussues sur sol acide et frais. ' +
       'Les plus tardives : supportent le froid et les petites gelées.',
@@ -316,6 +339,21 @@ export interface SpotContext {
    */
   hostQuality?: number;
   soilFactor?: number;
+  /**
+   * Coupes et dégâts datés par satellite (cuts.ts). Carré de la grille fine : facteur déjà moyenné
+   * sur ses points hôtes (`cutFactor`), sans phrase. Bilan d'un coin : part du carré de 500 m du
+   * point touchée (`cuts`), avec une phrase par période qui pèse sur ce champignon.
+   */
+  cutFactor?: number;
+  cuts?: CutShares;
+}
+
+/** Part des neuf points d'un carré de 500 m touchés (0 à 1), et sa part en mots (« environ un tiers »). */
+export interface CutShares {
+  recent: number;
+  young: number;
+  recentWords: string;
+  youngWords: string;
 }
 
 const clamp = (x: number, lo = 0, hi = 1): number => Math.min(hi, Math.max(lo, x));
@@ -443,10 +481,24 @@ export function scoreMushroom(m: Mushroom, w: WeatherSummary, month: number, ctx
   }
   if (ctx.hostQuality !== undefined) score *= ctx.hostQuality;
   if (ctx.soilFactor !== undefined) score *= ctx.soilFactor;
+  if (ctx.cutFactor !== undefined) score *= ctx.cutFactor;
+  if (ctx.cuts && m.cuts) {
+    const { recent, young, recentWords, youngWords } = ctx.cuts;
+    if (recent > 0 && m.cuts.recent < 1) reasons.push(`Coupe ou dégât récent sur ${recentWords} du carré : presque rien n’y pousse pendant une dizaine d’années.`);
+    if (young > 0 && m.cuts.young < 1) reasons.push(`Peuplement de 10 à 20 ans sur ${youngWords} du carré : encore jeune pour ${m.singular}.`);
+    score *= cutModulation(m, recent, young);
+  }
 
   score = clamp(score);
   return { id: m.id, score, chance: chanceOf(score), level: levelOf(score), reasons, ...(blocker ? { blocker } : {}) };
 }
+
+/** Ce que vaut un point pour ce champignon : coupé depuis peu, depuis 10 à 20 ans, ou ni l'un ni l'autre. */
+export const cutWeight = (m: Mushroom, recent: boolean, young: boolean): number => (recent ? (m.cuts?.recent ?? 1) : young ? (m.cuts?.young ?? 1) : 1);
+
+/** Facteur d'un carré dont une part est touchée : chaque part compte pour ce qu'elle vaut encore. */
+export const cutModulation = (m: Mushroom, recent: number, young: number): number =>
+  clamp(1 - recent * (1 - (m.cuts?.recent ?? 1)) - young * (1 - (m.cuts?.young ?? 1)));
 
 /** Le sol module sans exclure : la géologie n'est qu'une tendance. */
 export const soilModulation = (pref: number): number => 0.4 + 0.6 * pref;
