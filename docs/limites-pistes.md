@@ -155,6 +155,12 @@ une section de ce dossier.
   publie pas son identité, alors que la vue Analytics porte un lien vers son profil LinkedIn ; et
   Open-Meteo réserve son API gratuite aux usages non commerciaux (ses conditions rangent les
   « promotional activities » parmi les usages commerciaux). À trancher par l'éditeur.
+- « Y aller » (bilan) : les liens suivent la documentation de Google Maps, de Waze et d'Apple, mais
+  l'ouverture des applications n'a pas été essayée sur un vrai téléphone (25/11/2026). Plans : forme
+  documentée pour iOS 18.4 et plus, rien n'est dit des versions plus anciennes. Le lien `geo:`, qui
+  laisserait Android proposer ses autres applications, n'est pas utilisé : aucune source officielle
+  trouvée sur ce qu'en font les navigateurs, et pas de téléphone pour l'essayer ; « Copier les
+  coordonnées » en tient lieu.
 
 ## Pistes pour la suite
 

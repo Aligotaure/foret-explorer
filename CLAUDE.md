@@ -139,6 +139,7 @@ Une ligne par fichier ; rôle détaillé, couches de la carte et scripts : `docs
 | `chooseHint.ts` | Bandeau « Choisissez un champignon » |
 | `franceStats.ts` | Moyenne de France par champignon (chiffre des puces) |
 | `spot.ts` | Bilan d'un coin au clic |
+| `directions.ts` | « Y aller » du bilan : applications de navigation, copie des coordonnées |
 | `legend.ts`, `legendExtras.ts` | Panneau « Légendes » et ses sections |
 | `ui.ts`, `dom.ts`, `icons.ts` | Éléments partagés : section repliable, interrupteur, `h()`, `toast()`, icônes |
 | `search.ts`, `toolbar.ts`, `counts.ts` | Recherche de lieu, boutons de la carte, comptage des forêts |

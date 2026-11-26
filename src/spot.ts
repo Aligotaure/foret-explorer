@@ -1,7 +1,8 @@
 import maplibregl, { type LngLat, type Map as MapLibreMap, type PointLike } from 'maplibre-gl';
 import { BDFORET, BUILT_MAX_COVER, DIRECT_PAST_DAYS, FINE_MIN_ZOOM, GEOLOGY, SPOT_ALTITUDE_TIMEOUT_MS, SPOT_ALTITUDE_WAIT_MS } from './config';
 import { countPoints, cutPeriods, cutPointsAt, loadCuts, shareWords, type CutPoints } from './cuts';
-import { h, toast } from './dom';
+import { Directions } from './directions';
+import { h } from './dom';
 import { hostCover, isLit, loadForestShare } from './forestShare';
 import { forestAt, soilAt, type ForestAtPoint, type SoilAtPoint } from './geology';
 import { icon } from './icons';
@@ -263,13 +264,15 @@ export function reasonItem(text: string): HTMLLIElement {
 /**
  * Bilan d'un coin, la réponse d'abord : zone protégée s'il y en a une, terrain (forêt, sol, altitude,
  * statut), puis une ligne par champignon du plus probable au moins probable, la pluie des 30 derniers
- * jours, et les règles de cueillette repliées. Panneau à droite sur grand écran, tiroir bas sur mobile.
+ * jours, et les règles de cueillette repliées. Dans l'en-tête, à côté de « Ce coin », la voiture
+ * « Y aller » (directions.ts). Panneau à droite sur grand écran, tiroir bas sur mobile.
  */
 export class SpotPanel {
   private controller: AbortController | null = null;
   private marker: maplibregl.Marker | null = null;
   private readonly body = h('div', { class: 'spot__body' });
   private readonly coords = h('p', { class: 'spot__coords' });
+  private readonly directions = new Directions();
   private view: View | null = null;
   // Ce que le visiteur a déplié : gardé d'un dessin à l'autre (le bilan est redessiné jusqu'à trois
   // fois par clic, à mesure que l'altitude et la météo arrivent), remis à zéro à chaque nouveau coin.
@@ -291,8 +294,12 @@ export class SpotPanel {
         { class: 'panel__header' },
         h('span', { class: 'panel__icon' }, icon('target')),
         h('div', { class: 'spot__heading' }, h('h2', { class: 'panel__title' }, 'Ce coin'), this.coords),
+        // La croix avant « Y aller » dans le code (le style la remet à droite) : au clavier et au
+        // lecteur d'écran, ce que « Y aller » déplie vient ainsi juste après lui.
         close,
+        this.directions.button,
       ),
+      this.directions.panel,
       this.body,
     );
     root.hidden = true;
@@ -305,6 +312,7 @@ export class SpotPanel {
   close(): void {
     this.controller?.abort();
     this.root.hidden = true;
+    this.directions.close();
     this.marker?.remove();
     setHighlight(this.map, null);
   }
@@ -331,6 +339,7 @@ export class SpotPanel {
     const lat = lngLat.lat.toFixed(5);
     const lng = lngLat.lng.toFixed(5);
     this.coords.textContent = `${lat}, ${lng}`;
+    this.directions.setPoint(lat, lng);
     this.root.hidden = false;
     this.cards.clear();
     this.rulesOpen = false;
@@ -717,28 +726,8 @@ export class SpotPanel {
       );
     }
 
-    parts.push(this.rulesSection(zones, forest));
-
-    const lat = this.coords.textContent?.split(', ')[0] ?? '';
-    const lng = this.coords.textContent?.split(', ')[1] ?? '';
-    const copy = h('button', { type: 'button', class: 'popup-btn', 'data-focus': 'copy' }, 'Copier les coordonnées');
-    copy.addEventListener('click', () => {
-      navigator.clipboard
-        .writeText(`${lat}, ${lng}`)
-        .then(() => toast('Coordonnées copiées'))
-        .catch(() => toast(`${lat}, ${lng}`));
-    });
     parts.push(
-      h(
-        'div',
-        { class: 'spot__actions' },
-        copy,
-        h(
-          'a',
-          { class: 'popup-btn', 'data-focus': 'route', href: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, target: '_blank', rel: 'noopener' },
-          'Itinéraire ↗',
-        ),
-      ),
+      this.rulesSection(zones, forest),
       h(
         'p',
         { class: 'spot__note' },

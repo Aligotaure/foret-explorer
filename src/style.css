@@ -842,22 +842,6 @@ li.is-off .swatch {
   font-variant-numeric: tabular-nums;
 }
 
-.popup-btn {
-  padding: 4px 8px;
-  border: 1px solid var(--france);
-  border-radius: 3px;
-  background: #fff;
-  color: var(--france);
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.popup-btn:hover {
-  background: var(--france-soft);
-}
-
 /* ── Rien à mettre en avant dans la vue : bandeau « risque de chou blanc » (gridLoader.ts) ──
    Même emplacement que le champignon de chargement, jamais en même temps. L'élément couvre la
    place libre entre les panneaux (il ne prend aucun geste à la carte) ; la boîte s'y centre. */
@@ -1394,6 +1378,130 @@ li.is-off .swatch {
   font-variant-numeric: tabular-nums;
 }
 
+/* « Y aller » (directions.ts) : dans l'en-tête, une puce à liseré avec une voiture, et le choix
+   qu'elle déplie sous l'en-tête, dans le panneau (il rognerait une bulle). Tout est en puces à
+   liseré, comme « Je cherche… » : ni bloc blanc, ni icône dans un rond (refusés par Clément). */
+.directions-btn {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lavender-soft);
+  font: inherit;
+  font-size: 13.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.directions-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.directions-btn:hover {
+  background: rgba(106, 106, 244, 0.18);
+}
+
+/* Choix déplié : puce pleine. Texte foncé sur lavande (contraste 5,6 ; du blanc sur la couleur
+   d'accent n'atteint que 4,2, sous le seuil de lisibilité de 4,5 pour un texte de cette taille). */
+.directions-btn[aria-expanded='true'] {
+  border-color: var(--lavender);
+  background: var(--lavender);
+  color: var(--navy-900);
+}
+
+/* Dans le code, la croix précède « Y aller » (spot.ts : ordre du clavier) ; à l'écran elle reste à droite. */
+.panel--spot .panel__close {
+  order: 1;
+}
+
+.directions {
+  flex: none;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--navy-700);
+}
+
+.directions__title {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.directions__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.directions__btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lavender-soft);
+  font: inherit;
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.directions__btn:hover {
+  background: rgba(106, 106, 244, 0.18);
+}
+
+.directions__btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Flèche « s'ouvre ailleurs », après le nom de l'application : plus discrète que lui. */
+a.directions__btn svg {
+  width: 13px;
+  height: 13px;
+  color: var(--lavender);
+}
+
+/* Téléphone : les puces restent fines (36 et 40 px), leur zone tactile fait 44 px de haut, comme les
+   deux boutons qu'elles remplacent (même moyen que le « ? » : un pseudo-élément qui déborde). */
+@media (max-width: 640px) {
+  .directions-btn {
+    min-height: 36px;
+  }
+
+  .directions__btn {
+    min-height: 40px;
+    font-size: 14px;
+  }
+
+  .directions-btn::after,
+  .directions__btn::after {
+    position: absolute;
+    content: '';
+  }
+
+  /* (Le pseudo-élément part de l'intérieur du liseré : 34 + 2 × 5 et 38 + 2 × 3 font 44 px.) */
+  .directions-btn::after {
+    inset: -5px 0;
+  }
+
+  .directions__btn::after {
+    inset: -3px 0;
+  }
+}
+
 .spot__body {
   padding: 4px 16px 16px;
   overflow-y: auto;
@@ -1635,13 +1743,6 @@ summary.verdict__head::before {
   font-weight: 700;
 }
 
-.spot__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding-top: 12px;
-}
-
 .spot__note {
   margin: 10px 0 0;
   color: var(--muted);
@@ -1760,7 +1861,7 @@ summary.verdict__head::before {
   transform: translateY(2px) rotate(-135deg);
 }
 
-/* Téléphone : cibles tactiles de 44 px pour ce qui se déplie et pour les deux actions du bilan. */
+/* Téléphone : cibles tactiles de 44 px pour ce qui se déplie. */
 @media (max-width: 640px) {
   .verdict__head {
     min-height: 44px;
@@ -1772,14 +1873,6 @@ summary.verdict__head::before {
 
   .spot__fold {
     min-height: 44px;
-  }
-
-  .spot__actions .popup-btn {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    padding: 8px 14px;
-    font-size: 13px;
   }
 }
 
