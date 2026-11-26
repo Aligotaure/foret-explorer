@@ -847,6 +847,144 @@ async function desktopTests(browser, base) {
     );
     check('bilan : Échap replie l’explication et rend le clavier au bouton « ? »', helpClosed.hidden === true && helpClosed.focus === 'help-btn' && helpClosed.spot, JSON.stringify(helpClosed));
     check('surbrillance du polygone cliqué', spot.highlight === JSON.stringify(['==', ['get', 'id'], target.id]), spot.highlight);
+
+    // « Y aller » : la puce à la voiture de l'en-tête, à côté de « Ce coin », déplie les applications
+    // de navigation et « Copier les coordonnées » (avant le 25/11/2026 : deux boutons tout en bas du bilan).
+    const coords = (await page.locator('#spot .spot__coords').textContent()) ?? '';
+    const [lat, lng] = coords.split(', ');
+    // Plans n'est proposé que sur un appareil Apple : sur un Mac, le navigateur des tests en est un
+    // (les contrôles ne doivent pas dépendre de la machine qui les joue).
+    const appleHost = await page.evaluate(async () => (await import('/src/directions.ts')).isAppleDevice());
+    const goBefore = await page.evaluate(() => {
+      const button = document.querySelector('#spot .directions-btn');
+      const header = document.querySelector('#spot .panel__header');
+      const r = button?.getBoundingClientRect();
+      return {
+        inHeader: Boolean(button && header?.contains(button) && header.querySelector('.panel__title')?.textContent === 'Ce coin'),
+        seen: Boolean(r && r.height >= 30 && r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth),
+        // Une puce à liseré, voiture et texte, comme celles de « Je cherche… » : ni icône dans un
+        // rond, ni bloc plein (les deux ont été refusés par Clément).
+        text: button?.textContent ?? '',
+        car: Boolean(button?.querySelector('svg')),
+        pill: Boolean(r && r.width > 2 * r.height),
+        border: button ? getComputedStyle(button).borderTopWidth : '',
+        background: button ? getComputedStyle(button).backgroundColor : '',
+        expanded: button?.getAttribute('aria-expanded'),
+        hidden: document.getElementById('spot-directions')?.hidden,
+        label: button?.getAttribute('aria-label') ?? '',
+        below: /Itinéraire|Copier les coordonnées/.test(document.querySelector('#spot .spot__body')?.textContent ?? ''),
+      };
+    });
+    check(
+      'bilan : puce « Y aller » (voiture et texte) dans l’en-tête, à côté de « Ce coin », à liseré, visible ; plus rien en bas du bilan',
+      goBefore.inHeader && goBefore.seen && goBefore.text === 'Y aller' && goBefore.car && goBefore.pill && goBefore.border === '1px' && goBefore.background === 'rgba(0, 0, 0, 0)' &&
+        goBefore.expanded === 'false' && goBefore.hidden === true && /^Y aller/.test(goBefore.label) && !goBefore.below,
+      JSON.stringify(goBefore),
+    );
+    await page.locator('#spot .directions-btn').click();
+    const goOpen = await page.evaluate(() => {
+      const panel = document.getElementById('spot-directions');
+      const box = (el) => el.getBoundingClientRect();
+      const spot = box(document.getElementById('spot'));
+      const body = box(document.querySelector('#spot .spot__body'));
+      const p = box(panel);
+      return {
+        hidden: panel.hidden,
+        expanded: document.querySelector('#spot .directions-btn').getAttribute('aria-expanded'),
+        // Libellé visible d'un lien : son texte sans la mention réservée aux lecteurs d'écran.
+        links: [...panel.querySelectorAll('a')].map((a) => `${a.firstChild.textContent} → ${a.getAttribute('href')} ${a.target} ${a.rel}`),
+        // Ce qu'un lecteur d'écran entend : ce que fait le lien, et qu'il s'ouvre ailleurs.
+        spoken: [...panel.querySelectorAll('a')].map((a) => a.textContent),
+        buttons: [...panel.querySelectorAll('button')].map((b) => b.textContent),
+        // La croix reste à droite de « Y aller », bien qu'elle le précède dans le code.
+        crossRight: box(document.querySelector('#spot .panel__close')).left >= box(document.querySelector('#spot .directions-btn')).right,
+        // Déplié dans le panneau, sous l'en-tête : rien n'est rogné, le bilan reste dessous.
+        inside: p.top >= spot.top && p.bottom <= spot.bottom + 1 && p.left >= spot.left && p.right <= spot.right + 1,
+        aboveBody: p.bottom <= body.top + 1 && body.height > 100,
+        seen: [...panel.querySelectorAll('.directions__btn')].every((b) => {
+          const r = box(b);
+          return r.height >= 28 && r.top >= p.top && r.bottom <= p.bottom && r.left >= p.left && r.right <= p.right;
+        }),
+        // Des puces à liseré, sans fond, et une puce « Y aller » qui reste colorée : pas de bloc
+        // blanc sous l'en-tête (retour de Clément sur la première version).
+        white: [document.querySelector('#spot .directions-btn'), ...panel.querySelectorAll('.directions__btn')].filter((b) => getComputedStyle(b).backgroundColor === 'rgb(255, 255, 255)').length,
+        plain: [...panel.querySelectorAll('.directions__btn')].every((b) => getComputedStyle(b).backgroundColor === 'rgba(0, 0, 0, 0)'),
+      };
+    });
+    check(
+      'bilan : « Y aller » déplie Google Maps, Waze et « Copier les coordonnées » en puces à liseré, liens vers le point touché',
+      goOpen.hidden === false && goOpen.expanded === 'true' &&
+        goOpen.links.join(' | ') ===
+          [
+            `Google Maps → https://www.google.com/maps/dir/?api=1&destination=${lat}%2C${lng} _blank noopener noreferrer`,
+            `Waze → https://waze.com/ul?ll=${lat}%2C${lng}&navigate=yes _blank noopener noreferrer`,
+            ...(appleHost ? [`Plans → https://maps.apple.com/directions?destination=${lat},${lng}&mode=driving _blank noopener noreferrer`] : []),
+          ].join(' | ') &&
+        goOpen.spoken.every((t) => / : itinéraire \(nouvel onglet\)$/.test(t)) &&
+        goOpen.buttons.join() === 'Copier les coordonnées' && goOpen.inside && goOpen.aboveBody && goOpen.seen && goOpen.white === 0 && goOpen.plain && goOpen.crossRight,
+      `${goOpen.links.join(' | ')} ; lu : ${goOpen.spoken[0]} ; ${goOpen.buttons.join()} ; dans le panneau : ${goOpen.inside}, au-dessus du bilan : ${goOpen.aboveBody}, blocs blancs : ${goOpen.white}`,
+    );
+    // Copie : le presse-papiers reçoit « latitude, longitude » ; s'il refuse, elles s'affichent.
+    const copied = await page.evaluate(async () => {
+      const written = [];
+      const button = document.querySelector('#spot-directions button');
+      const shown = () => (document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent);
+      const tick = () => new Promise((resolve) => setTimeout(resolve, 60));
+      navigator.clipboard.writeText = (text) => {
+        written.push(text);
+        return Promise.resolve();
+      };
+      button.click();
+      await tick();
+      const ok = shown();
+      navigator.clipboard.writeText = () => Promise.reject(new Error('refusé'));
+      button.click();
+      await tick();
+      const refused = shown();
+      delete navigator.clipboard.writeText;
+      return { written, ok, refused };
+    });
+    check(
+      'bilan : « Copier les coordonnées » copie « latitude, longitude » ; presse-papiers refusé, elles s’affichent',
+      copied.written.join('|') === coords && copied.ok === 'Coordonnées copiées' && copied.refused === coords,
+      JSON.stringify(copied),
+    );
+    // Au clavier, ce que « Y aller » déplie vient juste après lui : Tab mène au premier lien, pas à
+    // la croix (elle le précède dans le code, voir spot.ts).
+    await page.locator('#spot .directions-btn').focus();
+    await page.keyboard.press('Tab');
+    const tabbed = await page.evaluate(() => ({ app: document.activeElement?.dataset?.app ?? '', tag: document.activeElement?.tagName, label: document.activeElement?.getAttribute('aria-label') ?? '' }));
+    check('bilan : au clavier, Tab passe de « Y aller » au premier lien de son choix, pas à la croix', tabbed.tag === 'A' && tabbed.app === 'google', JSON.stringify(tabbed));
+    await page.keyboard.press('Escape');
+    const goClosed = await page.evaluate(() => ({
+      hidden: document.getElementById('spot-directions').hidden,
+      expanded: document.querySelector('#spot .directions-btn').getAttribute('aria-expanded'),
+      focus: document.activeElement?.className,
+      spot: !document.getElementById('spot').hidden,
+    }));
+    check('bilan : Échap replie le choix et rend le clavier à « Y aller »', goClosed.hidden === true && goClosed.expanded === 'false' && goClosed.focus === 'directions-btn' && goClosed.spot, JSON.stringify(goClosed));
+    // Plans n'existe que sur les appareils Apple (un iPad se présente comme un Mac) ; à l'ouest de
+    // Greenwich la longitude est négative.
+    const apps = await page.evaluate(async () => {
+      const { isAppleDevice, navApps } = await import('/src/directions.ts');
+      const agents = {
+        iphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1',
+        ipad: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15',
+        android: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36',
+        windows: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+      };
+      return {
+        apple: Object.entries(agents).filter(([, agent]) => isAppleDevice(agent)).map(([name]) => name).join(),
+        withPlans: navApps('48.10000', '-3.50000', true).map((a) => `${a.label} ${a.href}`).join(' | '),
+        without: navApps('48.10000', '-3.50000', false).map((a) => a.label).join(),
+      };
+    });
+    check(
+      'Y aller : Plans proposé sur les appareils Apple seulement, liens de chaque application',
+      apps.apple === 'iphone,ipad' && apps.without === 'Google Maps,Waze' &&
+        apps.withPlans === 'Google Maps https://www.google.com/maps/dir/?api=1&destination=48.10000%2C-3.50000 | Waze https://waze.com/ul?ll=48.10000%2C-3.50000&navigate=yes | Plans https://maps.apple.com/directions?destination=48.10000,-3.50000&mode=driving',
+      `Apple : ${apps.apple} ; ${apps.withPlans}`,
+    );
     await page.screenshot({ path: `${OUT}03-bureau-bilan.png` });
     await page.locator('#spot .panel__close').click();
     const cleared = await page.evaluate(() => ({ hidden: document.getElementById('spot').hidden, f: JSON.stringify(window.map.getFilter('bdforet-highlight')) }));
@@ -3101,6 +3239,60 @@ async function mobileTests(browser, base) {
   });
   check('mobile : bilan en tiroir bas', sheet.bottom >= 840 && sheet.width === 390 && sheet.legendHidden, JSON.stringify(sheet));
   await page.screenshot({ path: `${OUT}09-mobile-bilan.png` });
+  // « Y aller » : la puce se voit dès l'ouverture du tiroir (avant le 25/11/2026 : « Itinéraire »
+  // tout en bas, après un long défilement), à la taille du doigt ; son choix tient dans le tiroir.
+  const appleHost = await page.evaluate(async () => (await import('/src/directions.ts')).isAppleDevice());
+  // Zone tactile d'une puce : la puce elle-même, agrandie par son pseudo-élément (style.css).
+  const car = await page.evaluate(() => {
+    const button = document.querySelector('#spot .directions-btn');
+    const r = button.getBoundingClientRect();
+    return { width: Math.round(r.width), height: Math.round(r.height), touch: Math.round(parseFloat(getComputedStyle(button, '::after').height)), seen: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth };
+  });
+  await page.locator('#spot .directions-btn').tap();
+  const choice = await page.evaluate(() => {
+    const panel = document.getElementById('spot-directions');
+    const spot = document.getElementById('spot').getBoundingClientRect();
+    const p = panel.getBoundingClientRect();
+    return {
+      hidden: panel.hidden,
+      labels: [...panel.querySelectorAll('.directions__btn')].map((b) => (b.tagName === 'A' ? b.firstChild.textContent : b.textContent)).join(' | '),
+      heights: [...panel.querySelectorAll('.directions__btn')].map((b) => Math.round(b.getBoundingClientRect().height)),
+      touch: [...panel.querySelectorAll('.directions__btn')].map((b) => Math.round(parseFloat(getComputedStyle(b, '::after').height))),
+      inside: p.top >= spot.top && p.bottom <= innerHeight && p.left >= 0 && p.right <= innerWidth,
+      fits: [...panel.querySelectorAll('.directions__btn')].every((b) => b.getBoundingClientRect().right <= innerWidth - 8),
+      body: Math.round(document.querySelector('#spot .spot__body').getBoundingClientRect().height),
+      coords: document.querySelector('#spot .spot__coords').textContent,
+    };
+  });
+  check(
+    'mobile : puce « Y aller » visible dès l’ouverture du tiroir ; son choix tient dans le tiroir ; zones tactiles de 44 px, comme les deux boutons remplacés',
+    car.seen && car.width >= 80 && car.touch >= 44 && choice.hidden === false && choice.labels === ['Google Maps', 'Waze', ...(appleHost ? ['Plans'] : []), 'Copier les coordonnées'].join(' | ') &&
+      choice.touch.length > 0 && choice.touch.every((v) => v >= 44) && choice.inside && choice.fits && choice.body > 150,
+    `${JSON.stringify(car)} ; ${choice.labels} ; hauteurs ${choice.heights.join()}, zones tactiles ${choice.touch.join()} ; bilan visible sur ${choice.body} px`,
+  );
+  await page.screenshot({ path: `${OUT}09b-mobile-y-aller.png` });
+  // Un autre coin touché : le choix se replie et ses liens visent le nouveau point. Sur iPhone
+  // (navigateur présenté comme tel le temps de ce contrôle), Plans s'ajoute.
+  await page.evaluate(() => Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1' }));
+  await page.touchscreen.tap(150, 215);
+  await page.waitForFunction((old) => document.querySelector('#spot .spot__coords').textContent !== old, choice.coords, { timeout: 10000 }).catch(() => {});
+  const next = await page.evaluate(() => {
+    const panel = document.getElementById('spot-directions');
+    return {
+      hidden: panel.hidden,
+      expanded: document.querySelector('#spot .directions-btn').getAttribute('aria-expanded'),
+      coords: document.querySelector('#spot .spot__coords').textContent,
+      links: [...panel.querySelectorAll('a')].map((a) => `${a.firstChild.textContent} ${a.getAttribute('href')}`).join(' | '),
+    };
+  });
+  await page.evaluate(() => delete navigator.userAgent);
+  const [nextLat, nextLng] = next.coords.split(', ');
+  check(
+    'mobile : un autre coin touché replie le choix, ses liens visent le nouveau point ; sur iPhone, Plans en plus',
+    next.hidden === true && next.expanded === 'false' && next.coords !== choice.coords &&
+      next.links === `Google Maps https://www.google.com/maps/dir/?api=1&destination=${nextLat}%2C${nextLng} | Waze https://waze.com/ul?ll=${nextLat}%2C${nextLng}&navigate=yes | Plans https://maps.apple.com/directions?destination=${nextLat},${nextLng}&mode=driving`,
+    `${choice.coords} → ${next.coords} ; ${next.links}`,
+  );
   check('mobile : pas de défilement horizontal', !(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)));
   await context.close();
 }
