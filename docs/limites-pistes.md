@@ -6,7 +6,19 @@ une section de ce dossier.
 
 ## Limites connues
 
-- BD Forêt photo-interprétée de 2007 à 2018 selon les départements : coupes et scolytes récents absents.
+- BD Forêt photo-interprétée de 2007 à 2018 selon les départements : coupes et scolytes récents
+  absents de ses polygones. Depuis le 25/11/2026 les carrés de 500 m et le bilan en tiennent compte
+  par les coupes datées de l'atlas européen (voir « Coupes datées »), pas les carrés de 4,5 km ni
+  les cases de 18 km, ni les forêts dessinées sur la carte.
+- Coupes datées : une date sur cinq environ est fausse et une coupe sur cinq manque (chiffres des
+  auteurs ; deux fausses alertes sur dix au contrôle du 25/11/2026) ; l'atlas s'arrête deux ans
+  avant l'année en cours ; une date n'est pas toujours une coupe rase (tempête, scolytes, incendie,
+  forêt dépérissante restée debout). Seul un cinquième de la forêt porte une date : le reste est
+  « plus de 40 ans, ou inconnu », et les bois poussés sur d'anciens champs depuis 1985 passent pour
+  vieux. Le facteur est lu en neuf points par carré de 500 m : un carré coupé au tiers peut en
+  montrer deux ou quatre. Un carré faible peut passer sous 35 % et disparaître ; le bilan, lui, dit
+  toujours pourquoi. Coefficients (0,2 ; 0,5 pour les girolles) : règles d'un guide régional et
+  choix de produit, pas des mesures. Non essayé sur un vrai téléphone.
 - Pas de filtrage des forêts sous le zoom 10 ; sol connu à partir du zoom 10 dans le bilan.
 - Géologie : elle donne la tendance du sol, pas le sol exact (moraines décalcifiées, placages, limons
   minces…) ; 1 % du pays reste sans sol (formations nommées sans leur roche). Elle dépend d'un miroir
@@ -190,3 +202,15 @@ une section de ce dossier.
 18. Altitude du meilleur carré de 500 m de chaque carré de 4,5 km dans le fichier des parts (une
     demande d'altitude par carré, à faire une fois) : la pastille et le carré de 500 m
     concorderaient alors aussi en montagne à partir du zoom 12.
+19. Âge des arbres, suite (25/11/2026, étapes 2 et 3 du plan arrêté avec Clément). Hauteur du
+    couvert mesurée au laser par l'IGN (MNH du LiDAR HD, WMS de la Géoplateforme, flottants de
+    32 bits) : aux dix points du contrôle des coupes elle donne la bonne réponse (0 à 2,9 m sur les
+    huit coupes réelles, 7,4 m comme alentour sur la forêt restée debout, 0 m sur la prairie).
+    D'abord mesurer, sur quelques centaines de points de forêt sans date, la part qui est basse ;
+    puis, si elle le justifie, un tour de France (20 815 carrés de 4,5 km boisés, une demande par
+    carré à 20 m par pixel, 4,2 Go, en tranches comme la météo : le serveur répond par à-coups, 11
+    échecs sur 23 demandes le 25/11/2026). Licence et dates de survol à vérifier. Autre source, non
+    essayée : carte d'âge des forêts françaises à 30 m (LSCE et IGN, Zenodo, article en relecture),
+    à comparer d'abord aux coupes datées.
+20. Coupes datées dans les carrés de 4,5 km (part de la forêt hôte coupée, à ajouter au fichier des
+    parts) et sur la carte elle-même (un motif sur les coupes récentes).

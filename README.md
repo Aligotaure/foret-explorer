@@ -160,8 +160,8 @@ Pour tester une version locale depuis un téléphone sur le même Wi-Fi : `npm r
 ## Mise en ligne
 
 Chaque push sur `main` déclenche `.github/workflows/deploy.yml` : tuiles de géologie (gardées en
-cache tant que leurs scripts ne changent pas), tuiles des zones (refaites une fois par an), fichiers
-météo, tests et publication du serveur de mesure (s'il est configuré), vérification TypeScript,
+cache tant que leurs scripts ne changent pas), tuiles des zones et coupes datées (refaites une fois
+par an), fichiers météo, tests et publication du serveur de mesure (s'il est configuré), vérification TypeScript,
 build Vite, publication sur GitHub Pages. Les dépendances sont installées avec `npm ci
 --ignore-scripts` : versions figées par les `package-lock.json`, sans script d'installation. Les
 actions GitHub sont épinglées sur leur identifiant de commit.
@@ -181,6 +181,14 @@ une fois par `node scripts/foret/parts.mjs`, qui applique la règle des carrés 
 tuiles vectorielles de la BD Forêt, aux sols du site et au Plan IGN ; à relancer quand les arbres
 hôtes, les sols ou les seuils d'un champignon changent, ou la grille, ou la BD Forêt
 (`npm run test:france` le réclame).
+
+Les coupes et dégâts datés par carré de 500 m (`public/data/coupes/`, non versionnés) sont écrits
+par `node scripts/coupes/construire.mjs`, sans dépendance : il lit l'année de la dernière coupe,
+tempête ou incendie dans l'atlas européen des perturbations forestières (Zenodo, CC BY 4.0 ; 49 Mo
+téléchargés, une demi-minute). Là où la forêt a été coupée ou détruite depuis moins de 10 ans, les
+carrés de 500 m et le bilan d'un coin baissent la chance estimée. En développement, la carte lit
+ces fichiers s'ils sont dans le dossier, sinon ceux du site en ligne. Détails et mesures :
+`docs/donnees.md`, « Coupes datées ».
 
 ### Météo commune
 

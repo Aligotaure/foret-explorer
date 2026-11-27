@@ -51,6 +51,22 @@ une section de ce dossier.
   gel ≤ −1 °C) × arbre hôte × sol (le sol module : 0,4 + 0,6 × préférence). Niveaux : ≥ 0,5 favorable,
   ≥ 0,28 possible, ≥ 0,12 peu probable. Règles de cueilleur, pas un modèle validé : à recaler avec les
   retours de terrain.
+- **Coupes récentes** (`mushrooms.ts`, `scoreFineCell` de `fineGrid.ts`, 25/11/2026 ; données : voir
+  « Coupes datées »). Aux carrés de 500 m, chaque point hôte où l'atlas voit la forêt coupée ou
+  détruite depuis moins de 10 ans ne compte plus que pour 0,2 (cèpes, girolles, trompettes,
+  chanterelles en tube) ; entre 10 et 20 ans, pour 0,5, girolles seulement ; rien ne change pour les
+  morilles (les coupes sont un de leurs milieux : `FF0`). L'indice du carré est multiplié par la
+  moyenne de ces valeurs sur ses points hôtes : une coupe à côté des arbres hôtes ne baisse rien.
+  Un carré relevé en partie (bord de l'écran) prend la part touchée du carré entier. Bilan d'un
+  coin : même facteur, sur la part des neuf points du carré de 500 m du point, avec une raison par
+  champignon concerné. Carrés de 4,5 km, cases de 18 km et moyenne de France : inchangés.
+  D'où viennent les chiffres : guide de mycosylviculture du CRPF Rhône-Alpes (2013, valable pour
+  cinq départements) : presque rien pendant une dizaine d'années après une coupe rase (p. 10 et 47),
+  girolles défavorisées dans un « peuplement très jeune (moins de 20 ans) » (p. 25). Une date de
+  l'atlas sur cinq étant fausse, un point « coupé » garde un cinquième de sa valeur ; la moitié pour
+  les girolles est un choix de produit (le guide dit « défavorable », sans chiffre). Rien entre 20
+  et 40 ans : aucune règle ferme. Choix arrêtés avec Clément le 25/11/2026.
+  Un carré déjà faible peut ainsi passer sous 35 % et ne plus être dessiné (voir « Sans carré »).
 - Chance estimée en % (`chanceOf`, choix du 12/11/2026) : l'indice ramené sur une échelle calée sur
   les niveaux (0,12 → 35 %, 0,28 → 50 %, 0,5 → 70 %, 1 → 95 %, linéaire entre deux). Seuil
   `CHANCE_THRESHOLD` = 50 % : en dessous, rien n'est mis en avant (pas d'étiquette, teinte pâle) ;

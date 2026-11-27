@@ -11,9 +11,10 @@
 import type { MultiPolygon, Polygon, Position } from 'geojson';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { FINE_DIVISIONS, FINE_MAX_CELLS } from './config';
-import { FINE_OFFSETS, fineFactors, type Sample } from './fineRule';
+import type { CutPoints } from './cuts';
+import { FINE_OFFSETS, FINE_POINTS, fineFactors, type Sample } from './fineRule';
 import { LAYERS, surveyForest } from './mapStyle';
-import { scoreMushroom, type Level, type Mushroom } from './mushrooms';
+import { cutModulation, cutWeight, scoreMushroom, type Level, type Mushroom } from './mushrooms';
 import { BASE_STEP_LAT, BASE_STEP_LON, cellId, cellOfBase } from './meteoGrid';
 import { SOIL_BY_ID, type SoilId } from './soils';
 import type { WeatherSummary } from './weather';
@@ -496,10 +497,41 @@ export interface FineScore {
  * Indice d'un carré pour un champignon : qualité moyenne des arbres hôtes présents et sol
  * moyen sous ces arbres (`fineFactors`). Null si aucun point du carré n'est sous un arbre hôte (le
  * choix des carrés à dessiner se fait avant : `fineCellsToDraw`).
+ *
+ * `cuts` : points du carré où un satellite a vu la forêt coupée ou détruite (cuts.ts ; absent ou
+ * null : inconnu, rien ne baisse). Les coupes baissent l'indice du carré de 500 m, ici seulement :
+ * fineRule.ts n'en sait rien, donc ni le choix des carrés (`fineCellsToDraw`) ni ce que les carrés
+ * de 4,5 km annoncent n'en tiennent compte.
  */
-export function scoreFineCell(m: Mushroom, w: WeatherSummary, month: number, samples: readonly Sample[]): FineScore | null {
+export function scoreFineCell(m: Mushroom, w: WeatherSummary, month: number, samples: readonly Sample[], cuts?: CutPoints | null): FineScore | null {
   const f = fineFactors(m, samples);
   if (!f) return null;
-  const { score, level } = scoreMushroom(m, w, month, { hostQuality: f.quality, soilFactor: f.soil });
+  const cutFactor = cutFactorOf(m, samples, f.hosts, cuts);
+  const { score, level } = scoreMushroom(m, w, month, { hostQuality: f.quality, soilFactor: f.soil, ...(cutFactor === undefined ? {} : { cutFactor }) });
   return { score, level, coverage: f.hosts / samples.length };
+}
+
+/**
+ * Ce qui reste de l'indice d'un carré une fois ses coupes comptées (undefined : rien n'est connu, ou
+ * le champignon n'y est pas sensible). Chaque point hôte compte pour ce qu'il vaut encore
+ * (`cutWeight`) : un carré dont les hôtes sont tous coupés depuis peu garde un cinquième de son
+ * indice, un carré coupé seulement hors de ses hôtes le garde entier. Un carré relevé en partie
+ * (bord de l'écran) ne sait plus quel point est lequel : la part touchée du carré s'applique à tous.
+ */
+function cutFactorOf(m: Mushroom, samples: readonly Sample[], hosts: number, cuts: CutPoints | null | undefined): number | undefined {
+  if (!cuts || !m.cuts || !(cuts.recent || cuts.young)) return undefined;
+  if (samples.length !== FINE_POINTS) return cutModulation(m, bits(cuts.recent) / FINE_POINTS, bits(cuts.young) / FINE_POINTS);
+  let standing = 0;
+  samples.forEach((s, k) => {
+    if (!s.code || (m.hosts[s.code] ?? 0) <= 0) return;
+    standing += cutWeight(m, Boolean((cuts.recent >> k) & 1), Boolean((cuts.young >> k) & 1));
+  });
+  return standing / hosts;
+}
+
+/** Nombre de points (bits) d'un carré. */
+function bits(mask: number): number {
+  let n = 0;
+  for (let b = mask; b; b >>= 1) n += b & 1;
+  return n;
 }

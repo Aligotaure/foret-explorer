@@ -374,6 +374,11 @@ export function weatherSection(store: Store, meteo: MeteoLayer): { el: HTMLEleme
       h(
         'p',
         {},
+        'Coupes récentes : là où un satellite a vu la forêt coupée, brûlée ou abattue par le vent depuis moins de 10 ans, les carrés de 500 m et le bilan d’un coin baissent la chance estimée (pas pour les morilles, qui poussent aussi dans les coupes) ; entre 10 et 20 ans, pour les girolles seulement. Une date sur cinq environ est fausse : la carte baisse le chiffre sans le mettre à zéro, et le bilan dit pourquoi. Source : European Forest Disturbance Atlas (CC BY 4.0).',
+      ),
+      h(
+        'p',
+        {},
         `En dessous de 35 %, la carte ne dessine pas de carré. En dessous de ${CHANCE_THRESHOLD} %, peu d’espoir sans connaître un coin précis : elle n’étiquette que les carrés au-dessus, et si la vue n’en a aucun, un bandeau le dit et propose le champignon de saison qui y a la meilleure chance estimée. En vue d’ensemble, une pastille marque chaque secteur à ${HOTSPOT_MIN_CHANCE} % et plus (les plus grandes : les meilleurs de la vue ; les petites grandissent en zoomant) : son chiffre est celui du meilleur carré de 4,5 km de la case, et la toucher zoome sur ce carré. Pour un point précis, touchez la carte. Météo : Open-Meteo (modèles, pas de pluviomètres).`,
       ),
       h(

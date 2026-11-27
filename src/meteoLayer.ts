@@ -2,6 +2,7 @@ import type { Feature, Polygon } from 'geojson';
 import type { GeoJSONSource, Map as MapLibreMap } from 'maplibre-gl';
 import {
   BUILT_MAX_COVER,
+  CUTS_WAIT_MS,
   FINE_ALTITUDE_MIN_ZOOM,
   FINE_MIN_ZOOM,
   FRANCE_BOUNDS,
@@ -31,6 +32,7 @@ import {
   type FineCell,
   type Sample,
 } from './fineGrid';
+import { cutPointsOf, loadCuts } from './cuts';
 import { hostCover, hostCoverOfCell, isLit, loadForestShare } from './forestShare';
 import { track } from './metrics';
 import { BASE_STEP_LAT, BASE_STEP_LON, CELL_KM, subBox, subIndexAt } from './meteoGrid';
@@ -768,14 +770,21 @@ export class MeteoLayer {
       // plaines sans arbres hôtes). Les fichiers communs, eux, se lisent par blocs entiers.
       const shown = this.shown();
       const lit = hosts && shown ? (c: GridCell): boolean => (hostCoverOfCell(c.id, shown)?.best ?? 0) >= 0 : undefined;
+      // Coupes datées des carrés de 500 m : demandées en même temps que la météo, pour ne rien
+      // ajouter à l'attente (elles ne servent qu'à l'échelle de ces carrés, en mode indice).
+      const index = this.store.state.weatherMode === 'indice';
+      const cuts = index && this.map.getZoom() >= FINE_MIN_ZOOM ? loadCuts(cells.map((c) => c.id)) : null;
       const weather = await weatherForCells(cells, controller.signal, lit);
       if (controller.signal.aborted) return;
       if (weather.tooMany) return this.clearGrid({ state: 'many' });
       this.data = { cells, series: weather.series, shared: weather.shared, hosts, view };
-      const index = this.store.state.weatherMode === 'indice';
       this.drawGrid(index ? { state: 'loading' } : { state: 'off' });
-      if (index) await this.updateFine(weather.series, controller.signal, drawn);
-      else this.dropFine();
+      if (index) {
+        // Sur un réseau qui cale, on dessine sans elles : elles compteront au dessin suivant.
+        if (cuts) await Promise.race([cuts, new Promise((resolve) => window.setTimeout(resolve, CUTS_WAIT_MS))]);
+        if (controller.signal.aborted) return;
+        await this.updateFine(weather.series, controller.signal, drawn);
+      } else this.dropFine();
     } catch (error) {
       if (controller.signal.aborted || isAbort(error)) return;
       this.setStatus({ state: 'error', message: error instanceof Error ? error.message : String(error) });
@@ -1089,7 +1098,7 @@ export class MeteoLayer {
       // Case dont la saison et la pluie plafonnent l'indice sous le niveau montré : rien à calculer.
       if (!reach(c.parentId)) continue;
       const z = altitudes.get(c.id) ?? parent.subAltitudes?.[subIndexAt(c.lat, c.lon)] ?? null;
-      const s = scoreFineCell(shown, summarize(atAltitude(parent, z), today), month, sample);
+      const s = scoreFineCell(shown, summarize(atAltitude(parent, z), today), month, sample, cutPointsOf(c.id));
       // Défavorable (moins de 35 %) : pas dessiné. Avant le 14/11/2026 il l'était en contour seul,
       // des « carrés vides » que personne ne savait lire.
       if (!s || s.level === 0) continue;
@@ -1202,7 +1211,7 @@ export class MeteoLayer {
             const z = altitudes.get(c.id) ?? parent.subAltitudes?.[subIndexAt(c.lat, c.lon)] ?? null;
             squareWeather.set(c.id, (w = summarize(atAltitude(parent, z), today)));
           }
-          score = Math.max(score, scoreFineCell(m, w, month, sample)?.score ?? 0);
+          score = Math.max(score, scoreFineCell(m, w, month, sample, cutPointsOf(c.id))?.score ?? 0);
         }
       } else {
         const { view } = data;

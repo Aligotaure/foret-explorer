@@ -374,12 +374,40 @@ function forestShare() {
 }
 
 /**
+ * Fichiers des coupes datées (src/cuts.ts, scripts/coupes/coupes.mjs) pour des carrés de 500 m donnés :
+ * `carres` = { 'I:J' (indices de la grille fine) : [points récents, points jeunes] }, un bit par point.
+ * Rend l'index et les blocs, comme le script les écrit.
+ */
+export function cutsFiles(carres) {
+  const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  const mod = (a, n) => ((a % n) + n) % n;
+  const cases = new Map();
+  for (const [id, [recent, young]] of Object.entries(carres)) {
+    const [i, j] = id.split(':').map(Number);
+    const bi = Math.floor(i / 9);
+    const bj = Math.floor(j / 9);
+    const cle = `${Math.floor(bi / 4)}:${Math.floor(bj / 4)}`;
+    if (!cases.has(cle)) cases.set(cle, new Array(16 * 81).fill('AAA'));
+    const valeur = (recent & 0x1ff) | ((young & 0x1ff) << 9);
+    cases.get(cle)[(mod(bi, 4) * 4 + mod(bj, 4)) * 81 + mod(i, 9) * 9 + mod(j, 9)] = ALPHABET[(valeur >> 12) & 63] + ALPHABET[(valeur >> 6) & 63] + ALPHABET[valeur & 63];
+  }
+  const blocs = {};
+  for (const [cle, textes] of cases) {
+    const [ci, cj] = cle.split(':').map(Number);
+    const bloc = `${Math.floor(ci / 8)}_${Math.floor(cj / 8)}`;
+    (blocs[bloc] ??= { v: 1, cases: {} }).cases[cle] = textes.join('');
+  }
+  const index = { v: 1, pasLat: 0.04, pasLon: 0.056, divisions: 9, bloc: 8, points: [0.1667, 0.5, 0.8333], depuis: 2017, jeune: [2007, 2016], dernierAn: 2024, genere: '2026-11-25T00:00:00.000Z', atlas: 'essai', blocs: Object.keys(blocs) };
+  return { index, blocs };
+}
+
+/**
  * Intercepte les requêtes vers les services externes et les consigne dans `log`.
  * `meteoCommune: false` : fichiers météo communs injoignables ; `'ancienne'` : en retard de 6 jours
  * (dans les deux cas, la carte se rabat sur Open-Meteo) ; `'provisoire'` : le passage du jour n'a
  * pas encore eu lieu, hier n'est connu que par l'estimation de la veille.
  */
-export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0, foret = true, mois = 10, delaiForet = () => 0, panneForet = () => false, sec = false, delaiFond = () => 0, france = null } = {}) {
+export async function installMocks(page, log, { meteoCommune = true, altitudeLente = 0, foret = true, mois = 10, delaiForet = () => 0, panneForet = () => false, sec = false, delaiFond = () => 0, france = null, coupes = {} } = {}) {
   log.meteo ??= [];
   log.foret ??= [];
   // Mois figé (octobre par défaut) dans toutes les pages des tests : la saison des champignons en
@@ -397,6 +425,21 @@ export async function installMocks(page, log, { meteoCommune = true, altitudeLen
     if (foret === 'suspendu') return undefined;
     if (!foret) return route.fulfill({ status: 404, body: '' });
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(forestShare()) });
+  });
+  // Coupes datées (data/coupes/, sur le serveur de développement puis sur le site en ligne) : par
+  // défaut un index sans aucun bloc, donc aucune coupe nulle part et rien de changé dans les autres
+  // tests. `coupes` : { 'I:J' : [points récents, points jeunes] } (voir `cutsFiles`) ; `false` :
+  // fichiers absents (404), comme avant la première publication.
+  log.coupes ??= [];
+  await page.route('**/data/coupes/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    log.coupes.push(path);
+    if (coupes === false) return route.fulfill({ status: 404, headers: CORS, body: '' });
+    const { index, blocs } = cutsFiles(coupes);
+    if (path.endsWith('/index.json')) return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(index) });
+    const bloc = blocs[path.match(/\/b\/([^/]+)\.json$/)?.[1] ?? ''];
+    if (!bloc) return route.fulfill({ status: 404, headers: CORS, body: '' });
+    return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(bloc) });
   });
   log.meteoCommune ??= [];
   log.geologie ??= [];

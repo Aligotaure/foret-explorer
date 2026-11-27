@@ -2811,6 +2811,193 @@ async function chooseTests(browser, base) {
   );
 }
 
+/**
+ * Coupes et dégâts datés par satellite (src/cuts.ts) : là où la forêt a été coupée ou détruite depuis
+ * moins de 10 ans, les carrés de 500 m et le bilan baissent la chance estimée (un point hôte coupé
+ * garde un cinquième de sa valeur) ; entre 10 et 20 ans, pour les girolles seulement ; jamais pour
+ * les morilles. Sans les fichiers, la carte fait sans.
+ */
+async function cutsTests(browser, base) {
+  const FOREST = '13.2/45.92/6.19';
+  const errorsOf = (page) => {
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+    page.on('console', (m) => m.type() === 'error' && errors.push(`console.error: ${m.text()}`));
+    return errors;
+  };
+  /** Ouvre la forêt des tests, cèpes choisis, et attend la fin du relevé des carrés de 500 m. */
+  const visit = async (coupes) => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    await preAccept(context);
+    const page = await context.newPage();
+    const errors = errorsOf(page);
+    const log = { tms: [], wmts: [], geocode: [], other: [] };
+    await installMocks(page, log, { coupes });
+    await page.goto(`${base}#carte=${FOREST}`);
+    await waitForMap(page);
+    await page.evaluate(() => window.store.update({ mushroom: 'cepe', weatherMode: 'indice' }));
+    await page.waitForFunction(() => [...document.querySelectorAll('#legend .legend-hint')].some((p) => /500 m avec/.test(p.textContent)), null, { timeout: 20000 });
+    await idle(page);
+    return { context, page, errors, log };
+  };
+  /** Chance estimée de chaque carré de 500 m dessiné, pour un champignon. */
+  const chances = async (page, mushroom) => {
+    await page.evaluate((m) => window.store.update({ mushroom: m }), mushroom);
+    await page.waitForTimeout(300);
+    return page.evaluate(async () => Object.fromEntries(((await window.map.getSource('meteo-fin').getData()).features ?? []).map((f) => [f.id, f.properties.p])));
+  };
+  /** Ouvre le bilan au centre d'un carré de 500 m, et rend son texte. */
+  const spotAt = async (page, id) => {
+    const at = await page.evaluate((cellId) => {
+      const c = window.meteo.fineData.cells.find((x) => x.id === cellId);
+      const p = window.map.project([c.lon, c.lat]);
+      const box = window.map.getCanvas().getBoundingClientRect();
+      return { x: box.left + p.x, y: box.top + p.y };
+    }, id);
+    await page.mouse.click(at.x, at.y);
+    await page.waitForSelector('#spot .verdict', { timeout: 15000 });
+    // Le bilan est redessiné quand l'altitude exacte arrive : on lit sa dernière version.
+    await page.waitForFunction(() => !/en cours/.test(document.querySelector('#spot .spot__facts')?.textContent ?? ''), null, { timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(400);
+    return page.evaluate(() => ({
+      rows: [...document.querySelectorAll('.spot__facts .spot__row')].map((r) => `${r.querySelector('dt').textContent} : ${r.querySelector('dd').textContent}`),
+      cepe: [...document.querySelectorAll('.verdicts > li')].map((li) => li.textContent.replace(/\s+/g, ' ')).find((t) => /^Cèpes/.test(t)) ?? '',
+      morille: [...document.querySelectorAll('.verdicts > li')].map((li) => li.textContent.replace(/\s+/g, ' ')).find((t) => /^Morilles/.test(t)) ?? '',
+    }));
+  };
+
+  // ── Référence : aucune coupe (index sans bloc, comme partout ailleurs dans les tests) ──
+  const ref = await visit({});
+  const calc = await ref.page.evaluate(async () => {
+    const { MUSHROOM_BY_ID } = await import('/src/mushrooms.ts');
+    const { scoreFineCell } = await import('/src/fineGrid.ts');
+    const { summarize } = await import('/src/weather.ts');
+    const w = summarize([...window.meteo.fineData.series.values()][0]);
+    const beech = { code: 'FF1-09-09', soil: null };
+    const none = { code: null, soil: null };
+    const all = Array.from({ length: 9 }, () => beech);
+    const mixed = [beech, beech, beech, beech, beech, beech, none, none, none];
+    const score = (id, month, samples, cuts) => scoreFineCell(MUSHROOM_BY_ID.get(id), w, month, samples, cuts)?.score ?? -1;
+    const ratio = (id, month, samples, cuts) => +(score(id, month, samples, cuts) / score(id, month, samples, null)).toFixed(4);
+    return {
+      base: score('cepe', 10, all, null),
+      recentAll: ratio('cepe', 10, all, { recent: 0x1ff, young: 0 }),
+      recentThird: ratio('cepe', 10, all, { recent: 0b111, young: 0 }),
+      youngCepe: ratio('cepe', 10, all, { recent: 0, young: 0x1ff }),
+      youngGirolle: ratio('girolle', 10, all, { recent: 0, young: 0x1ff }),
+      both: ratio('girolle', 10, all, { recent: 0b1, young: 0b1 }), // même point récent et jeune : récent l'emporte
+      offHosts: ratio('cepe', 10, mixed, { recent: 0b111000000, young: 0 }), // coupes hors des points hôtes
+      onHosts: ratio('cepe', 10, mixed, { recent: 0b000000111, young: 0 }), // 3 des 6 points hôtes
+      partial: ratio('cepe', 10, all.slice(0, 5), { recent: 0b111, young: 0 }), // carré du bord de l'écran : part du carré
+      none: ratio('cepe', 10, all, { recent: 0, young: 0 }),
+      unknown: score('cepe', 10, all, undefined) === score('cepe', 10, all, null),
+      morilleBase: score('morille', 4, all, null),
+      morille: ratio('morille', 4, all, { recent: 0x1ff, young: 0x1ff }),
+    };
+  });
+  check(
+    'coupes, calcul : un point hôte coupé depuis peu garde un cinquième de sa valeur (tous coupés : × 0,2 ; un tiers : × 0,7333)',
+    calc.base > 0 && calc.recentAll === 0.2 && calc.recentThird === 0.7333 && calc.both === +((8 + 0.2) / 9).toFixed(4),
+    JSON.stringify(calc),
+  );
+  check('coupes, calcul : entre 10 et 20 ans, les girolles comptent pour moitié, les cèpes ne changent pas', calc.youngGirolle === 0.5 && calc.youngCepe === 1, `${calc.youngGirolle} et ${calc.youngCepe}`);
+  check('coupes, calcul : seuls les points hôtes comptent (coupe à côté : rien ; 3 hôtes sur 6 : × 0,6)', calc.offHosts === 1 && calc.onHosts === 0.6, `${calc.offHosts} et ${calc.onHosts}`);
+  check('coupes, calcul : carré relevé en partie, la part touchée du carré s’applique (3 points sur 9 : × 0,7333)', calc.partial === 0.7333, String(calc.partial));
+  check('coupes, calcul : rien de daté ou fichiers inconnus, rien ne change ; morilles jamais', calc.none === 1 && calc.unknown && calc.morilleBase > 0 && calc.morille === 1, `${calc.none}, ${calc.unknown}, morilles ${calc.morilleBase} × ${calc.morille}`);
+
+  const refCepe = await chances(ref.page, 'cepe');
+  const refGirolle = await chances(ref.page, 'girolle');
+  // Deux carrés dessinés, tout en arbres hôtes des deux champignons et bien au-dessus de 35 %, loin l'un de l'autre.
+  const targets = await ref.page.evaluate(
+    ([cepe, girolle]) => {
+      // … et dans la partie libre de la carte (ni sous la légende, ni sous le bilan qui s'ouvrira).
+      const free = (id) => {
+        const c = window.meteo.fineData.cells.find((x) => x.id === id);
+        const at = c ? window.map.project([c.lon, c.lat]) : { x: 0, y: 0 };
+        return at.x > 430 && at.x < 800 && at.y > 110 && at.y < 690;
+      };
+      const full = [...window.meteo.fineData.samples].filter(([id, s]) => s.length === 9 && s.every((x) => x.code) && cepe[id] >= 55 && girolle[id] >= 55 && free(id)).map(([id]) => id);
+      const far = (a, b) => Math.abs(a.split(':')[0] - b.split(':')[0]) + Math.abs(a.split(':')[1] - b.split(':')[1]) >= 3;
+      // Le bilan s'ouvrira au centre du premier : il y faut aussi une forêt à l'écran. Le relevé lit
+      // les tuiles du zoom 11, le bilan celles du zoom affiché, et les tuiles simulées ne dessinent
+      // pas la même forêt d'un zoom à l'autre (sur la vraie carte, c'est la même).
+      const wooded = (id) => {
+        const c = window.meteo.fineData.cells.find((x) => x.id === id);
+        const at = window.map.project([c.lon, c.lat]);
+        return window.map.queryRenderedFeatures([at.x, at.y], { layers: ['bdforet-hit'] }).length > 0;
+      };
+      const first = full.find(wooded);
+      return { first, second: full.find((id) => first && far(id, first)), count: full.length };
+    },
+    [refCepe, refGirolle],
+  );
+  await chances(ref.page, 'cepe');
+  const refSpot = targets.first ? await spotAt(ref.page, targets.first) : { rows: [], cepe: '', morille: '' };
+  check(
+    'coupes : sans coupe datée, pas de ligne « Coupes » dans le bilan, et une seule demande (l’index)',
+    targets.first && targets.second && !refSpot.rows.some((r) => /^Coupes/.test(r)) && ref.log.coupes.length === 1 && /index\.json$/.test(ref.log.coupes[0]) && ref.errors.length === 0,
+    `${targets.count} carrés candidats ; ${ref.log.coupes.join(', ')} ; ${ref.errors.join(' | ')}`,
+  );
+  await ref.context.close();
+  if (!targets.first || !targets.second) return;
+
+  // ── Avec des coupes : le premier carré coupé depuis peu sur ses neuf points, le second il y a 10 à 20 ans ──
+  const cut = await visit({ [targets.first]: [0x1ff, 0], [targets.second]: [0, 0x1ff] });
+  const cutCepe = await chances(cut.page, 'cepe');
+  const cutGirolle = await chances(cut.page, 'girolle');
+  const others = (a, b) => Object.keys(a).filter((id) => id !== targets.first && id !== targets.second && a[id] !== b[id]);
+  const lower = (value, before) => value === undefined || value < before; // sous 35 %, le carré n'est plus dessiné
+  check(
+    'coupes, carte : le carré coupé depuis peu baisse pour les cèpes comme pour les girolles',
+    lower(cutCepe[targets.first], refCepe[targets.first]) && lower(cutGirolle[targets.first], refGirolle[targets.first]),
+    `cèpes ${refCepe[targets.first]} → ${cutCepe[targets.first] ?? 'plus dessiné'}, girolles ${refGirolle[targets.first]} → ${cutGirolle[targets.first] ?? 'plus dessiné'}`,
+  );
+  check(
+    'coupes, carte : le carré coupé il y a 10 à 20 ans ne baisse que pour les girolles',
+    cutCepe[targets.second] === refCepe[targets.second] && lower(cutGirolle[targets.second], refGirolle[targets.second]),
+    `cèpes ${refCepe[targets.second]} → ${cutCepe[targets.second]}, girolles ${refGirolle[targets.second]} → ${cutGirolle[targets.second] ?? 'plus dessiné'}`,
+  );
+  check('coupes, carte : aucun autre carré ne change', others(refCepe, cutCepe).length === 0 && others(refGirolle, cutGirolle).length === 0 && Object.keys(cutCepe).length >= Object.keys(refCepe).length - 1, `${others(refCepe, cutCepe).length} et ${others(refGirolle, cutGirolle).length} carrés changés`);
+  check('coupes, carte : deux demandes en tout (l’index, puis le bloc de la vue), aucune erreur', cut.log.coupes.length === 2 && /\/b\/[-\d]+_[-\d]+\.json$/.test(cut.log.coupes[1]) && cut.errors.length === 0, `${cut.log.coupes.join(', ')} ; ${cut.errors.join(' | ')}`);
+  await chances(cut.page, 'cepe');
+  const cutSpot = await spotAt(cut.page, targets.first);
+  const percent = (text) => Number(text.match(/≈ (\d+) %/)?.[1] ?? -1);
+  check(
+    'coupes, bilan : ligne « Coupes » sous la forêt (un fait daté, la part du carré en mots, « à vérifier sur place »), statut toujours là',
+    /^Forêt/.test(cutSpot.rows[0] ?? '') &&
+      cutSpot.rows[1] === 'Coupes : coupe ou dégât vu par satellite depuis 2017 sur presque toute la surface de ce carré de 500 m : peuplement jeune, à vérifier sur place' &&
+      cutSpot.rows.some((r) => /^Statut/.test(r)),
+    cutSpot.rows.join(' | '),
+  );
+  check(
+    'coupes, bilan : la chance estimée des cèpes baisse, et sa raison le dit',
+    percent(cutSpot.cepe) >= 0 && percent(cutSpot.cepe) < percent(refSpot.cepe) && /Coupe ou dégât récent sur presque toute la surface du carré : presque rien n’y pousse pendant une dizaine d’années\./.test(cutSpot.cepe),
+    `${percent(refSpot.cepe)} % → ${percent(cutSpot.cepe)} % ; ${cutSpot.cepe.slice(0, 260)}`,
+  );
+  const words = await cut.page.evaluate(async () => {
+    const { shareWords } = await import('/src/cuts.ts');
+    return Array.from({ length: 9 }, (_, k) => shareWords(k + 1)).join(' | ');
+  });
+  check(
+    'coupes, bilan : la part du carré en mots, de un à neuf points',
+    words === 'une petite partie | une petite partie | environ un tiers | environ un tiers | environ la moitié | environ les deux tiers | environ les deux tiers | presque toute la surface | presque toute la surface',
+    words,
+  );
+  await cut.page.screenshot({ path: `${OUT}23-coupes-bilan.png` });
+  await cut.context.close();
+
+  // ── Fichiers absents (avant la première publication, ou en panne) : la carte fait sans ──
+  const absent = await visit(false);
+  const absentCepe = await chances(absent.page, 'cepe');
+  const quiet = absent.errors.filter((e) => !/Failed to load resource/.test(e));
+  check(
+    'coupes : fichiers absents, mêmes carrés qu’en référence et aucune erreur de la page',
+    JSON.stringify(absentCepe) === JSON.stringify(refCepe) && quiet.length === 0 && absent.log.coupes.length >= 1,
+    `${Object.keys(absentCepe).length} carrés ; ${absent.log.coupes.length} demande(s) ; ${quiet.join(' | ')}`,
+  );
+  await absent.context.close();
+}
+
 /** Fichiers météo communs injoignables : la carte interroge Open-Meteo elle-même, avec mesure. */
 async function fallbackTests(browser, base) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -3338,6 +3525,7 @@ try {
   await group('localisation', () => locateTests(browser, server.url));
   await group('cache', () => surveyCacheTests(browser, server.url));
   await group('vide', () => emptyViewTests(browser, server.url));
+  await group('coupes', () => cutsTests(browser, server.url));
   await group('choix', () => chooseTests(browser, server.url));
   await group('telephone', () => mobileTests(browser, server.url));
   // Îlot et vue Analytics : réservés aux liens « vitrine » (?analytics, src/legal.ts). Les autres

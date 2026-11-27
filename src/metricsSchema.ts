@@ -27,7 +27,7 @@ export const SERVICES: Readonly<Record<ServiceId, { label: string; note: string 
   ignAltitude: { label: 'IGN · altitude', note: 'Limite : 5 requêtes par seconde et par adresse IP (erreur 429 au-delà).' },
   ignGeocoding: { label: 'IGN · recherche de lieu', note: 'Limite : 10 requêtes par seconde et par adresse IP pour l’autocomplétion.' },
   ignTiles: { label: 'IGN · tuiles et polices', note: 'Tuiles WMTS et vectorielles : pas de limite annoncée par la Géoplateforme.' },
-  pages: { label: 'GitHub Pages · fichiers du site', note: 'Tuiles et fichiers météo communs. Limite souple : 100 Go de trafic par mois pour tout le site.' },
+  pages: { label: 'GitHub Pages · fichiers du site', note: 'Tuiles, fichiers météo communs et coupes datées. Limite souple : 100 Go de trafic par mois pour tout le site.' },
 };
 
 export const METRICS = {
@@ -62,6 +62,8 @@ export const METRICS = {
   'pages.zones.errors': { label: 'Erreurs des zones', service: 'pages', max: 100_000, error: true },
   'pages.meteo': { label: 'Fichiers météo communs', service: 'pages', max: 20_000 },
   'pages.meteo.errors': { label: 'Erreurs de la météo commune', service: 'pages', max: 20_000, error: true },
+  'pages.coupes': { label: 'Fichiers des coupes datées', service: 'pages', max: 20_000 },
+  'pages.coupes.errors': { label: 'Erreurs des coupes datées', service: 'pages', max: 20_000, error: true },
 } as const satisfies Record<string, MetricDef>;
 
 export type MetricName = keyof typeof METRICS;

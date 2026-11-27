@@ -40,6 +40,15 @@ bilan ; légende de 61 contrôles dont 39 cases, météo en 5ᵉ position).
   que le Conservatoire possède (type `cdl`) ; sur un terrain qu'il gère sans le posséder
   (`cdl_gestion`, contrats de gestion : Vaccarès, îles Chausey…), « Propriétaire non identifié : accord
   à demander », comme dans les autres zones protégées (test e2e pour les deux).
+- **Coupes** (25/11/2026, `cutsText` de `spot.ts`) : sous une forêt seulement, juste après la ligne
+  « Forêt », quand l'atlas date une coupe ou un dégât dans le carré de 500 m du point : « coupe ou
+  dégât vu par satellite depuis 2017 sur environ un tiers de ce carré de 500 m : peuplement jeune, à
+  vérifier sur place » (et « entre 2007 et 2016 sur … » pour la tranche de 10 à 20 ans). Un fait
+  daté et ce qu'il implique, comme le statut ; la part du carré en mots (`shareWords` : elle vient de
+  neuf points, un pourcentage mentirait) ; « à vérifier sur place » parce qu'une date sur cinq est
+  fausse. Chaque champignon concerné reçoit une raison (« Coupe ou dégât récent sur … du carré :
+  presque rien n'y pousse pendant une dizaine d'années. »), et le « ? » le dit en une phrase.
+  Légende : un paragraphe « Coupes récentes » dans « Comment c'est calculé ».
 - **Champignons** : du plus probable au moins probable (tri sur l'indice, sans exception parmi les
   champignons de saison ; ceux qui sont hors saison de plus d'un mois viennent ensuite, grisés et sans
   pourcentage, voir « Hors saison ») ; le

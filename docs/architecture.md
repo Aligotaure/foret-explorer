@@ -32,6 +32,7 @@ une section de ce dossier.
 | `fineRule.ts` | La règle des carrés de 500 m, sans rien de la carte ni du navigateur : points relevés, carrés à dessiner (`fineCellsToDraw`, règle de ville), ce que valent les arbres et le sol d'un carré (`fineFactors`) ; la même règle appliquée à un carré de 4,5 km (`surveySquare`) ; empreinte des règles (`rulesSignature`) |
 | `partsBuild.ts` | Ce que `scripts/foret/parts.mjs` lit du code de la carte (Vite en fait une version pour Node) ; le site ne le charge pas |
 | `forestShare.ts` | Ce que chaque carré de 4,5 km contient pour chaque champignon, lu dans `public/foret/parts.json` : part de ses carrés de 500 m à dessiner, ce que vaut le meilleur (arbres hôtes × sol), part bâtie ; règle d'allumage d'un carré (`isLit`) |
+| `cuts.ts` | Coupes et dégâts datés par satellite, par carré de 500 m : fichiers de `public/data/coupes/` (index, blocs de la vue), points touchés d'un carré (`cutPointsOf`, `cutPointsAt`), part en mots (`shareWords`) ; absents : la carte fait sans |
 | `soils.ts` | 8 natures de sol, champignons associés, motifs dessinés au canevas |
 | `geology.ts` | Motifs fournis à MapLibre (`styleimagemissing`), forêt et sol sous un point |
 | `meteoGrid.ts` | Grille météo commune (cases de 0,16° × 0,224°, blocs de 8 × 8, 16 carrés de 4,5 km par case : `subBox`, `subIndexAt`), format des fichiers, dates ; lu aussi par Node (scripts) : aucun import |
