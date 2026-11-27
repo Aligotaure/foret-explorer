@@ -55,7 +55,8 @@ https://claude.ai/artifact/ScNwBDt9TN7k2DhJ347QdK
   « vitrine », plus l'adresse ordinaire sans îlot). Première fois :
   `npx playwright install chromium`. Captures dans `tests/e2e/shots/`. La suite entière prend une
   dizaine de minutes ; pour mettre un test au point, `E2E_SEULS=cache,vide npm run test:e2e` ne joue
-  que ces groupes (`avertissement`, `bureau`, `secours`, `cache`, `vide`, `telephone`, `vues`).
+  que ces groupes (`avertissement`, `bureau`, `secours`, `localisation`, `cache`, `vide`, `choix`,
+  `telephone`, `vues`, `mesure`).
 - `cd worker && npm ci && npm test` : serveur de mesure (26 vérifications, Durable Object simulé sur
   `node:sqlite`, Node ≥ 22.18 qui lit le TypeScript directement) ; aperçus HTML dans `worker/test/apercus/`.
   `npm run typecheck` (types Cloudflare), `npm run dev` (wrangler, secrets dans `worker/.dev.vars`).
@@ -144,6 +145,7 @@ Une ligne par fichier ; rôle détaillé, couches de la carte et scripts : `docs
 | `ui.ts`, `dom.ts`, `icons.ts` | Éléments partagés : section repliable, interrupteur, `h()`, `toast()`, icônes |
 | `search.ts`, `toolbar.ts`, `counts.ts` | Recherche de lieu, boutons de la carte, comptage des forêts |
 | `metrics.ts`, `metricsSchema.ts` | Compteurs de consommation des API ; liste partagée avec `worker/` |
+| `tracking.ts` | Mesure d'usage (PostHog, cloud UE, sans cookie) : plan de tracking, `capture()` ; endormie sans clé |
 
 Ailleurs : `scripts/geologie/` (tuiles des sols), `scripts/meteo/` (fichiers météo communs, moyennes
 de France), `scripts/foret/` (parts de forêt par carré), `scripts/zones/` (zones protégées et forêts
@@ -166,12 +168,14 @@ vérification dans `tests/e2e/run.mjs`.
 - Mobile : légende et bilan en tiroirs bas sous 640 px (un seul ouvert à la fois), boutons de 46 px.
 - En développement, `window.map`, `window.store`, `window.spot`, `window.meteo` (la grille) et
   `window.metrics` (totaux de la visite, `flush()`) sont exposés (console, tests e2e) une fois la vue Carte chargée (avant, `window.map`
-  désigne la balise `<div id="map">`) ; `window.analytics` (`data`, `check()`, `render(contenu)`) une
-  fois la vue Analytics chargée.
+  désigne la balise `<div id="map">`), avec `window.tracking()` (état de la mesure d'usage) ;
+  `window.analytics` (`data`, `check()`, `render(contenu)`) une fois la vue Analytics chargée.
 - Mesure : seulement des totaux par jour, jamais d'identifiant de visiteur ni de cookie ; envoi coupé
   si le navigateur signale « Global Privacy Control ». Le bilan lit la case météo commune (rien n'est
   envoyé à Open-Meteo) ; en secours seulement, coordonnées arrondies à 0,01° (vie privée). L'altitude
   IGN garde le point exact.
+- Mesure d'usage (PostHog) : un événement ne part que par `capture()` (`src/tracking.ts`), une fois
+  ajouté à `TrackedEvents` ; jamais de coordonnées, de texte de recherche ni de partie « # » de l'adresse.
 - Toute nouvelle clé `localStorage` commence par `foret-explorer:` (« Effacer mes données ») et prend
   un libellé dans `src/apropos.ts`.
 - Actions GitHub épinglées sur leur identifiant de commit (`# vX.Y.Z` en commentaire), mises à jour par
@@ -234,7 +238,7 @@ vérification dans `tests/e2e/run.mjs`.
 | Fluidité (mesures, règles), pause du zoom et champignon de chargement, relevés gardés, « sans carré » et bandeau « risque de chou blanc », bandeau « Choisissez un champignon » et moyenne de France, carrés de 500 m dès l'échelle 2 km | `docs/fluidite.md` |
 | Bilan d'un coin, légende, fiche d'un champignon, grille fine (carrés de 500 m) | `docs/bilan-legende.md` |
 | Îlot, vue Analytics, lien « vitrine », adresse et historique | `docs/vues.md` |
-| Services extérieurs (IGN, Open-Meteo, BRGM, WFS des zones, archives PMTiles), météo commune (`meteo.yml`), serveur de mesure (`worker/`), montée en charge | `docs/donnees.md` |
+| Services extérieurs (IGN, Open-Meteo, BRGM, WFS des zones, archives PMTiles), météo commune (`meteo.yml`), serveur de mesure (`worker/`), mesure d'usage (PostHog, `src/tracking.ts`), montée en charge | `docs/donnees.md` |
 | Avertissement, rappel « période de chasse », « La carte en 3 gestes », conditions, droit de cueillir | `docs/accueil.md` |
 | Indice et pourcentages, saisons et hors saison, natures de sol, nomenclature des forêts | `docs/indice.md` |
 | Limites connues et pistes pour la suite (à lire avant de proposer un chantier) | `docs/limites-pistes.md` |
