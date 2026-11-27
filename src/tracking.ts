@@ -98,8 +98,23 @@ function stripHashes(bag: Record<string, unknown> | undefined, depth = 0): void 
   }
 }
 
-/** Dernier passage avant l'envoi, pour tout événement : adresses sans « # », et la marque « vitrine ». */
+/**
+ * Propriétés qu'un envoi peut porter, hors celles de la bibliothèque (leur nom commence par « $ » :
+ * appareil, navigateur, adresse de la page) : la clé, l'identifiant vide du mode sans cookie, le titre
+ * de la page, et celles du plan de tracking. Les campagnes `utm_` passent aussi (`clean`).
+ */
+const KEPT: ReadonlySet<string> = new Set(['token', 'distinct_id', 'title', 'champignon', 'hors_saison', 'niveau', 'appli']);
+
+/**
+ * Dernier passage avant l'envoi, pour tout événement : adresses sans « # », rien d'autre que les
+ * propriétés attendues, et la marque « vitrine ». La bibliothèque relève d'elle-même les
+ * identifiants de clic des régies publicitaires présents dans l'adresse (`fbclid`, `gclid`…) : ils
+ * suivent une personne d'un site à l'autre, ils ne partent pas.
+ */
 export function clean(result: CaptureResult): CaptureResult {
+  for (const name of Object.keys(result.properties)) {
+    if (!name.startsWith('$') && !name.startsWith('utm_') && !KEPT.has(name)) delete result.properties[name];
+  }
   stripHashes(result.properties);
   stripHashes(result.$set);
   stripHashes(result.$set_once);
@@ -173,8 +188,9 @@ export function startTracking(): void {
       });
       client = posthog;
       state = 'ready';
-      // L'ouverture de la page d'abord, à son heure : les gestes en attente l'ont suivie.
-      posthog.capture('$pageview', undefined, { timestamp: openedAt });
+      // L'ouverture de la page d'abord, à son heure : les gestes en attente l'ont suivie. Envoyée
+      // sans attendre le lot suivant, comme le fait la bibliothèque quand elle la relève elle-même.
+      posthog.capture('$pageview', undefined, { timestamp: openedAt, send_instantly: true });
       for (const item of waiting.splice(0)) send(posthog, item);
     })
     .catch((error: unknown) => {

@@ -1,7 +1,8 @@
 // Vérifie le découpage du site construit (dist/), que les tests de bout en bout ne voient pas (ils
 // tournent sur le serveur de développement) :
 //  - la page d'entrée et la vue Analytics n'embarquent pas le code de la carte (MapLibre) ;
-//  - l'en-tête de la page précharge bien le fichier de la carte quand elle s'ouvre sur la carte.
+//  - l'en-tête de la page précharge bien le fichier de la carte quand elle s'ouvre sur la carte ;
+//  - la bibliothèque de mesure d'usage (PostHog) n'est chargée qu'à la demande.
 // Il relit aussi le contenu de la vue Analytics (src/analyticsData.ts) : c'est `npm run check` que la
 // publication lance, pas les tests de bout en bout.
 //
@@ -67,6 +68,18 @@ check(
   analyticsFile ? [...analytics].join(', ') : 'aucun fichier analyticsView-*.js',
 );
 check(`vue Analytics : moins de ${kilo(MAX_EAGER_BYTES)} de code`, analytics.size > 0 && size(analytics) < MAX_EAGER_BYTES, kilo(size(analytics)));
+
+// Mesure d'usage (src/tracking.ts) : la bibliothèque de PostHog n'arrive qu'à la demande, une fois
+// la vue affichée. Aucun fichier chargé d'office (page d'entrée, carte, vue Analytics) ne la contient.
+const POSTHOG = '$posthog_cookieless'; // identifiant du mode sans cookie, écrit dans son code
+const posthogFiles = assets.filter((name) => name.endsWith('.js') && read(`assets/${name}`).includes(POSTHOG));
+const withMap = mapFile ? eagerFiles(`assets/${mapFile}`) : new Set();
+const eagerPosthog = [...new Set([...eager, ...analytics, ...withMap])].filter((file) => posthogFiles.includes(file.replace('assets/', '')));
+check(
+  'mesure d’usage : la bibliothèque PostHog est un fichier à part, chargé à la demande (ni avec la page d’entrée, ni avec la carte, ni avec la vue Analytics)',
+  posthogFiles.length === 1 && eagerPosthog.length === 0,
+  `${posthogFiles.join(', ') || 'aucun fichier'}${eagerPosthog.length ? ` ; chargée d’office par ${eagerPosthog.join(', ')}` : ''}`,
+);
 
 // En-tête : la vue Analytics est décidée avant le premier affichage, sinon la carte est préchargée.
 // Le script est exécuté pour de bon, adresse par adresse (le lire ne prouverait rien : un simple
