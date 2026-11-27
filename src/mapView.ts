@@ -26,6 +26,7 @@ import {
 } from './mapStyle';
 import { MeteoLayer, type Box } from './meteoLayer';
 import { flush, sessionTotals, startMetrics, track, trackMapRequest } from './metrics';
+import { startTracking, trackingState } from './tracking';
 import { initSearch } from './search';
 import { SpotPanel } from './spot';
 import { Store, loadInitialState, persistState, type AppState } from './state';
@@ -102,6 +103,8 @@ if (!wideScreen) {
 }
 registerSoilPatterns(map);
 registerZonePattern(map);
+// Mesure d'usage (src/tracking.ts) : sa bibliothèque n'est téléchargée qu'une fois la carte dessinée.
+map.once('idle', startTracking);
 
 // ── Vue Analytics : la carte reste chargée, masquée (position, légende et bilan intacts) ──
 // En la quittant par l'îlot, un déplacement en cours s'arrête : sa position d'arrivée est alors écrite
@@ -265,5 +268,5 @@ map.on('error', (event) => {
   }
 });
 
-// En développement, `map`, `store`, `spot`, `meteo` et `metrics.totals()` sont accessibles depuis la console.
-if (import.meta.env.DEV) Object.assign(window, { map, store, spot, meteo, metrics: { totals: sessionTotals, flush } });
+// En développement, `map`, `store`, `spot`, `meteo`, `metrics.totals()` et `tracking()` sont accessibles depuis la console.
+if (import.meta.env.DEV) Object.assign(window, { map, store, spot, meteo, metrics: { totals: sessionTotals, flush }, tracking: trackingState });

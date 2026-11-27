@@ -50,6 +50,9 @@ export function navApps(lat: string, lng: string, apple: boolean = isAppleDevice
   return apps;
 }
 
+/** Ce qu'un visiteur fait de « Y aller » : le déplier, choisir une application, copier les coordonnées. */
+export type DirectionsUse = 'open' | 'copy' | NavApp['id'];
+
 const PANEL_ID = 'spot-directions';
 
 /**
@@ -73,8 +76,13 @@ export class Directions {
   private lat = '';
   private lng = '';
 
-  constructor() {
-    this.button.addEventListener('click', () => this.toggle(this.panel.hidden));
+  /** `onUse` : ce que le visiteur vient de faire (mesure d'usage, src/tracking.ts). Aucune coordonnée n'y passe. */
+  constructor(private readonly onUse: (use: DirectionsUse) => void = () => {}) {
+    this.button.addEventListener('click', () => {
+      const open = this.panel.hidden;
+      this.toggle(open);
+      if (open) this.onUse('open');
+    });
     // Échap replie le choix et rend le clavier au bouton, sans rien fermer d'autre.
     const onEscape = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape' || this.panel.hidden) return;
@@ -91,10 +99,13 @@ export class Directions {
     this.lat = lat;
     this.lng = lng;
     const copy = h('button', { class: 'directions__btn', type: 'button' }, icon('copy'), 'Copier les coordonnées');
-    copy.addEventListener('click', () => this.copy());
+    copy.addEventListener('click', () => {
+      this.copy();
+      this.onUse('copy');
+    });
     this.list.replaceChildren(
-      ...navApps(lat, lng).map((app) =>
-        h(
+      ...navApps(lat, lng).map((app) => {
+        const link = h(
           'a',
           { class: 'directions__btn', 'data-app': app.id, href: app.href, target: '_blank', rel: 'noopener noreferrer' },
           app.label,
@@ -102,8 +113,10 @@ export class Directions {
           // qu'il s'ouvre ailleurs (même mention que les autres liens du site, legendExtras.ts).
           h('span', { class: 'visually-hidden' }, ' : itinéraire (nouvel onglet)'),
           icon('external'),
-        ),
-      ),
+        );
+        link.addEventListener('click', () => this.onUse(app.id));
+        return link;
+      }),
       copy,
     );
     this.toggle(false);

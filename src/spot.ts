@@ -27,6 +27,7 @@ import { SOURCES, setHighlight } from './mapStyle';
 import { CELL_KM, KEPT_DAYS, cellAt, cellId, subIndexAt } from './meteoGrid';
 import { patternImageId, drawPattern } from './soils';
 import type { Store } from './state';
+import { SPOT_LEVELS, capture, type SpotLevel } from './tracking';
 import { fetchAltitude, summarize, weatherAt, type WeatherSummary } from './weather';
 import { zonesAt, type ZonesAtPoint } from './zones';
 
@@ -189,6 +190,13 @@ interface Exclusion {
 /** Une ligne du bilan : un indice calculé, ou un champignon écarté sans calcul (`bare` : sans pourcentage). */
 type Verdict = MushroomScore & { dormant?: boolean; bare?: boolean };
 
+/** Niveau de chance qu'un bilan montre (mesure d'usage) : celui du champignon recherché, sinon le meilleur. */
+function shownLevel(scores: readonly Verdict[], chosen: MushroomId | null): SpotLevel {
+  const mine = scores.find((s) => s.id === chosen);
+  const level = mine ? mine.level : Math.max(-1, ...scores.map((s) => s.level));
+  return SPOT_LEVELS[level] ?? 'inconnu';
+}
+
 const URBAN = 'secteur urbanisé';
 
 /** Le relevé des carrés de 500 m de la carte, vu du bilan (voir `MeteoLayer.townSquareKept`). */
@@ -244,13 +252,21 @@ export class SpotPanel {
   private marker: maplibregl.Marker | null = null;
   private readonly body = h('div', { class: 'spot__body' });
   private readonly coords = h('p', { class: 'spot__coords' });
-  private readonly directions = new Directions();
+  private readonly directions = new Directions((use) => {
+    if (use === 'open') capture('y_aller_ouvert');
+    else if (use === 'copy') capture('coordonnees_copiees');
+    else capture('navigation_choisie', { appli: use, niveau: this.level });
+  });
   private view: View | null = null;
   // Ce que le visiteur a déplié : gardé d'un dessin à l'autre (le bilan est redessiné jusqu'à trois
   // fois par clic, à mesure que l'altitude et la météo arrivent), remis à zéro à chaque nouveau coin.
   private readonly cards = new Map<MushroomId, boolean>();
   private rulesOpen = false;
   private helpOpen = false;
+  // Mesure d'usage (src/tracking.ts) : le niveau de chance que ce bilan montre, et l'heure du clic
+  // tant que son ouverture n'a pas été notée (elle attend ce niveau, donc la météo).
+  private level: SpotLevel = 'inconnu';
+  private unreported: Date | null = null;
 
   constructor(
     private readonly root: HTMLElement,
@@ -281,7 +297,15 @@ export class SpotPanel {
     return !this.root.hidden;
   }
 
+  /** Note l'ouverture du bilan, une fois par coin, avec le niveau connu à cet instant. */
+  private report(): void {
+    if (!this.unreported) return;
+    capture('bilan_ouvert', { niveau: this.level }, this.unreported);
+    this.unreported = null;
+  }
+
   close(): void {
+    this.report(); // fermé avant que la météo soit lue : niveau « inconnu »
     this.controller?.abort();
     this.root.hidden = true;
     this.directions.close();
@@ -297,6 +321,9 @@ export class SpotPanel {
   /** Ouvre le bilan du point cliqué. */
   async open(lngLat: LngLat, point: PointLike): Promise<void> {
     track('app.spots');
+    this.report(); // le coin précédent, quitté avant que sa météo soit lue
+    this.level = 'inconnu';
+    this.unreported = new Date();
     this.controller?.abort();
     const controller = new AbortController();
     this.controller = controller;
@@ -648,8 +675,13 @@ export class SpotPanel {
       parts.push(h('p', { class: 'spot__status' }, 'Lecture de la météo des derniers jours…'));
     } else if (!weather && !nothing) {
       parts.push(h('p', { class: 'spot__status' }, 'Météo indisponible pour le moment (réseau ?).'));
+      this.report();
     } else {
-      parts.push(this.mushroomSection(verdicts(weather), urban));
+      const scores = verdicts(weather);
+      // Le bilan est redessiné (altitude exacte, autre champignon recherché) : le niveau suit, l'ouverture n'est notée qu'une fois.
+      this.level = shownLevel(scores, this.store.state.mushroom);
+      this.report();
+      parts.push(this.mushroomSection(scores, urban));
     }
     if (status !== 'loading' && weather) {
       const last = weather.events[0];

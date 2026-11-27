@@ -13,6 +13,7 @@ import { checkAnalytics, isCalendarDate } from './analyticsCheck';
 import { ANALYTICS } from './analyticsData';
 import type { AnalyticsData, Analysis, Bet, Chart, Outcome, SettledBet } from './analyticsTypes';
 import { byId, h } from './dom';
+import { capture, startTracking } from './tracking';
 
 const OUTCOMES: Readonly<Record<Outcome, { label: string; sign: string }>> = {
   validated: { label: 'Validé', sign: '✓' },
@@ -72,6 +73,7 @@ function header(data: AnalyticsData): HTMLElement {
           h('span', { class: 'visually-hidden' }, ' (nouvel onglet)'),
         )
       : null;
+  link?.addEventListener('click', () => capture('contact_clique'));
   return h(
     'header',
     { class: 'analytics__header' },
@@ -212,6 +214,8 @@ try {
     ),
   );
 }
+// La vue est dessinée : la mesure d'usage peut se charger (src/tracking.ts).
+startTracking();
 
 // En développement, `analytics` est accessible depuis la console et les tests e2e : le contenu du
 // fichier (`data`), sa relecture (`check`) et de quoi redessiner la vue avec un autre contenu (`render`).

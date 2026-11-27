@@ -9,6 +9,7 @@
  */
 import { METRICS_URL } from './config';
 import type { MetricName } from './metricsSchema';
+import { privacySignal } from './tracking';
 
 const pending = new Map<MetricName, number>();
 /** Totaux depuis l'ouverture de la page (console de développement, tests). */
@@ -52,8 +53,6 @@ export function flush(closing = false): void {
     /* serveur injoignable : ces compteurs sont perdus, la carte continue */
   });
 }
-
-const privacySignal = (): boolean => (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true;
 
 /** Compte la visite et programme les envois. */
 export function startMetrics(mobile: boolean): void {
