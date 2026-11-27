@@ -26,6 +26,7 @@ import {
 import { SOIL_CLASSES, drawPattern } from './soils';
 import { loadFranceStats } from './franceStats';
 import type { AppState, Store } from './state';
+import { capture } from './tracking';
 import { collapsible, sectionTitle, switchInput } from './ui';
 import { onZonesInfo, zonesInfo } from './zones';
 
@@ -60,7 +61,9 @@ export function pickMushroom(store: Store, m: Mushroom, toggle = false): void {
     if (toggle) store.update({ mushroom: null });
     return;
   }
-  if (noEstimate(m, currentMonth())) store.update({ mushroom: m.id, selected: new Set(hostCodes(m)) });
+  const offSeason = noEstimate(m, currentMonth());
+  capture('champignon_choisi', { champignon: m.id, hors_saison: offSeason });
+  if (offSeason) store.update({ mushroom: m.id, selected: new Set(hostCodes(m)) });
   else store.update({ mushroom: m.id, selected: new Set(hostCodes(m)), weatherMode: 'indice' });
 }
 

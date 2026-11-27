@@ -236,6 +236,83 @@ secret au dépôt, et le code en ligne ne contient aucune adresse de collecte) :
 aucun compteur. Avant de le brancher, voir « Montée en charge » : chaque envoi écrit une ligne par
 compteur, et l'offre gratuite de Cloudflare plafonne les lignes écrites par jour.
 
+## Mesure d'usage (PostHog, `src/tracking.ts`)
+
+Demande de Clément du 15/11/2026 : mesurer l'usage du site avec PostHog et le montrer dans la vue
+Analytics, qui lui sert de vitrine. Codée le 27/11/2026, **pas en service** : `deploy.yml` ne fournit
+pas `VITE_POSTHOG_KEY`, donc le site en ligne ne télécharge pas la bibliothèque et n'envoie rien. La
+mise en service demande, ensemble : le texte « Confidentialité » d'`a-propos.html` (donc une nouvelle
+`TERMS_VERSION`), un interrupteur de refus, et la clé passée au build.
+
+Choix :
+- **Cloud UE** de PostHog (Francfort) : envois vers `https://eu.i.posthog.com`, adresse écrite dans
+  le code, pas réglable. PostHog, Inc. et son hébergeur sont américains : dire « hébergé dans
+  l'UE », pas « souverain ».
+- **Mode sans cookie** (`cookieless_mode: 'always'`) : rien n'est écrit dans le navigateur, rien n'y
+  est lu pour la mesure. D'après la documentation de PostHog, ses serveurs reconnaissent une visite
+  par une empreinte qui change chaque jour : pas de visiteur reconnu d'un jour à l'autre, donc pas de
+  rétention. Elle viendrait avec un choix accepter / refuser (seconde étape, pas codée).
+- **La bibliothèque `posthog-js`**, pas un envoi écrit à la main : le mode sans cookie n'est
+  documenté que pour elle (constaté pendant le cadrage, en novembre 2026). Variante `dist/module.no-external` : elle ne
+  télécharge jamais de code depuis PostHog. Dépendance ajoutée avec l'accord de Clément le
+  27/11/2026 ; ≈ 132 ko compressés, dans un fichier à part.
+- **Chargée à la demande** (`startTracking`) : au premier repos de la carte, ou quand la vue
+  Analytics est dessinée, ou au bout de 8 s si la vue tarde (`src/main.ts`). Les gestes faits avant
+  attendent en mémoire (50 au plus) avec leur heure ; l'ouverture de la page est envoyée à la main,
+  datée du moment où elle a eu lieu, pour que l'ordre des étapes d'un entonnoir reste le bon. Une
+  visite quittée avant l'arrivée de la bibliothèque n'est pas comptée.
+- **Coupé** : tout ce que la bibliothèque relève d'elle-même (clics, erreurs, performances,
+  enregistrement d'écran, sondages, drapeaux), et les profils de personnes (`person_profiles: 'never'`).
+
+Plan de tracking (type `TrackedEvents`, validé par Clément le 27/11/2026) :
+
+| Événement | Geste | Propriétés |
+|---|---|---|
+| `$pageview` | ouverture de la page | adresse sans sa partie « # », page d'origine, `utm_*` |
+| `avertissement_accepte` | « J'ai compris et j'accepte » | |
+| `champignon_choisi` | puce d'un champignon (légende, bandeau, suggestion) | `champignon`, `hors_saison` |
+| `bilan_ouvert` | clic sur la carte | `niveau` : celui du champignon recherché, sinon le meilleur ; `inconnu` si le bilan est quitté avant la météo |
+| `y_aller_ouvert` | « Y aller » déplié | |
+| `navigation_choisie` | Google Maps, Waze ou Plans : l'activation | `appli`, `niveau` |
+| `coordonnees_copiees` | « Copier les coordonnées » | |
+| `contact_clique` | lien de contact de la vue Analytics | |
+
+Chaque envoi porte `vitrine` (visite ouverte par un lien `?analytics`) : à exclure des analyses des
+cueilleurs. `avertissement_accepte` n'existe que pour qui voit l'avertissement (premier accord, ou
+nouvelle version des conditions) : rien n'est lu dans le navigateur pour distinguer les autres.
+
+Ce qui ne part jamais, et comment :
+- la position de la carte (`#carte=zoom/lat/lon`) : option `disable_capture_url_hashes`, puis `clean`
+  (`before_send`), qui coupe au « # » toute adresse d'un envoi ;
+- les coordonnées d'un coin, le texte d'une recherche : aucun événement ne les porte ;
+- les identifiants de clic des régies publicitaires (`fbclid`, `gclid`…), que la bibliothèque relève
+  d'elle-même dans l'adresse : `clean` ne laisse passer que les propriétés de la bibliothèque (nom en
+  « $ »), les `utm_*` et celles du plan (liste `KEPT`) ;
+- rien du tout sous « Global Privacy Control » (`privacySignal`, la règle de `src/metrics.ts`) : la
+  bibliothèque n'est même pas téléchargée.
+
+Ce que la bibliothèque ajoute à chaque envoi (relevé le 27/11/2026 dans Chromium, version 1.453.1) :
+système, navigateur et sa version, type d'appareil, fuseau horaire, langue, taille de l'écran et de
+la fenêtre, chaîne complète du navigateur (`$raw_user_agent`), hôte, chemin, adresse sans « # »,
+page d'origine, titre de la page. À décrire dans « Confidentialité » à la mise en service.
+
+Pour ajouter un événement : une ligne dans `TrackedEvents`, ses propriétés dans `KEPT`, `capture()`
+au bon endroit, une vérification dans `tests/e2e/tracking.mjs` (qui refuse toute propriété hors du
+plan), et sa description dans « À propos » une fois la mesure en service.
+
+Tests : groupe e2e `mesure` (`tests/e2e/tracking.mjs`), sur un second serveur Vite construit avec une
+clé fictive (`startTrackingServer`, cache `node_modules/.vite-mesure`) ; tout envoi vers posthog.com
+est intercepté, rien ne sort de la machine. La bibliothèque jette les événements d'un navigateur
+piloté par un programme (adresse du navigateur, marque « HeadlessChrome », `navigator.webdriver`) :
+le groupe masque les trois. Les autres groupes tournent sans clé, comme le site en ligne.
+`tests/build.mjs` vérifie que la bibliothèque reste un fichier chargé à la demande.
+
+Pas vérifié au 27/11/2026 : que PostHog accepte ces envois (aucun projet UE n'existe encore ;
+Clément le crée, c'est invérifiable depuis la machine). Dans ce projet, activer « Enable cookieless
+tracking » (Settings > Project > Web analytics) : la documentation de PostHog dit que, sans ce
+réglage, les événements sans cookie sont jetés. Faits et sources du cadrage (hébergement, offre
+gratuite, CNIL) : relevés le 15/11/2026, à revérifier avant de les citer à un client.
+
 ## Montée en charge : qui appelle quoi
 
 Le site n'a pas de serveur à lui : chaque navigateur va chercher des fichiers et des tuiles, rien
@@ -251,6 +328,7 @@ joué par un script : ouvrir la France, choisir un champignon, chercher un lieu,
 | IGN, Géoplateforme | altitude (bilan, carrés de 500 m), recherche de lieu | 4 + 1 requêtes | 4 + 1 requêtes | par adresse IP : 5 requêtes par seconde (altitude), 10 (recherche), blocage de 5 s au-delà |
 | Open-Meteo | rien en temps normal (la tâche `meteo.yml` fait ≈ 2 000 appels par jour, quel que soit le nombre de visiteurs) | 0 | 0 | secours seulement, depuis le navigateur du visiteur, si les fichiers météo ont plus de 3 jours |
 | Cloudflare (mesure) | pas branché (voir « Serveur de mesure ») | 0 | 0 | offre gratuite : 100 000 requêtes par jour, 100 000 lignes écrites par jour, remise à zéro à minuit UTC |
+| PostHog (mesure d'usage) | pas en service (voir « Mesure d'usage ») | 0 | 0 | offre gratuite : 1 000 000 d'événements par mois (page de tarifs de PostHog, lue le 15/11/2026) |
 
 À retenir :
 - Le nombre de visiteurs ne charge aucun serveur du projet. La première limite est le trafic de

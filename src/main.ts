@@ -13,6 +13,7 @@ import { showDisclaimer, withdrawDisclaimer } from './disclaimer';
 import { byId, h } from './dom';
 import { showHunting, withdrawHunting } from './hunting';
 import { showTour, withdrawTour } from './tour';
+import { TRACKING_FALLBACK_MS, startTracking } from './tracking';
 import { currentView, initViewSwitch, onViewChange, type ViewId } from './view';
 
 const loaders: Readonly<Record<ViewId, () => Promise<unknown>>> = {
@@ -94,3 +95,7 @@ byId<HTMLFormElement>('search').addEventListener('submit', (event) => event.prev
 initViewSwitch();
 onViewChange(show);
 show(currentView());
+
+// Mesure d'usage (src/tracking.ts) : la vue ouverte la lance dès qu'elle est affichée. Si elle tarde
+// (réseau lent, code de la vue injoignable), la visite est comptée quand même.
+window.setTimeout(startTracking, TRACKING_FALLBACK_MS);

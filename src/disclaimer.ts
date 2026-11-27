@@ -14,6 +14,7 @@ import { h } from './dom';
 import { GATE_WAIT_SECONDS, openGate, waitLabel } from './gate';
 import { icon } from './icons';
 import { ABOUT_URL, STORAGE_PREFIX, TERMS_DATE_LABEL, TERMS_VERSION, TOUR_SINCE } from './legal';
+import { capture } from './tracking';
 
 export const DISCLAIMER_KEY = `${STORAGE_PREFIX}avertissement`;
 const MAX_AGE_MS = 30 * 24 * 3600 * 1000;
@@ -175,6 +176,7 @@ export function showDisclaimer(force = false): Promise<boolean> {
         // Premier accord sur cet appareil (ou premier depuis la refonte) : lu avant de l'enregistrer.
         const before = savedVersion();
         acceptedThisVisit = true;
+        capture('avertissement_accepte');
         // Sans stockage, on ne saurait jamais que la présentation a été vue : elle reviendrait à chaque
         // visite. Elle n'est donc montrée d'office que si l'accord a pu être gardé (elle reste dans la légende).
         const kept = remember();

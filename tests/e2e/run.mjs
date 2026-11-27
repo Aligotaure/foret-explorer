@@ -10,6 +10,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { SHARE_BARE, SHARE_BUILT, SHARE_CELL, SHARE_LONE, SHARE_OTHER, installMocks } from './mocks.mjs';
+import { trackingTests } from './tracking.mjs';
 import { viewTests } from './views.mjs';
 
 const OUT = fileURLToPath(new URL('./shots/', import.meta.url));
@@ -91,11 +92,33 @@ async function startServer() {
   if (process.env.BASE_URL) return { url: process.env.BASE_URL, close: async () => {} };
   // Serveur de mesure fictif (intercepté par mocks.mjs) : on vérifie les envois sans rien publier.
   process.env.VITE_METRICS_URL ??= 'https://mesures.test';
+  // Pas de clé PostHog ici, quoi que porte l'environnement : la mesure d'usage a son propre serveur (groupe « mesure »).
+  delete process.env.VITE_POSTHOG_KEY;
   const { createServer } = await import('vite');
   const server = await createServer({ server: { port: 5199, strictPort: false, open: false }, logLevel: 'error' });
   await server.listen();
   const url = server.resolvedUrls?.local[0] ?? 'http://localhost:5199/';
   return { url, close: () => server.close() };
+}
+
+/** Clé PostHog fictive du second serveur : aucun envoi ne sort de la machine (tracking.mjs les intercepte). */
+const TRACKING_KEY = 'phc_cle_fictive_des_tests';
+
+/**
+ * Second serveur, construit avec une clé PostHog : la mesure d'usage (src/tracking.ts) n'est en
+ * service que là. Le serveur des autres groupes n'en a pas, comme le site en ligne tant que la
+ * publication n'en fournit pas. Dossier de cache à part : deux serveurs ne partagent pas le leur.
+ */
+async function startTrackingServer() {
+  process.env.VITE_POSTHOG_KEY = TRACKING_KEY;
+  try {
+    const { createServer } = await import('vite');
+    const server = await createServer({ server: { port: 5198, strictPort: false, open: false }, cacheDir: 'node_modules/.vite-mesure', logLevel: 'error' });
+    await server.listen();
+    return { url: server.resolvedUrls?.local[0] ?? 'http://localhost:5198/', close: () => server.close() };
+  } finally {
+    delete process.env.VITE_POSTHOG_KEY;
+  }
 }
 
 /** Avertissement bloquant à l'ouverture, page « À propos » et effacement des données. */
@@ -3320,6 +3343,17 @@ try {
   // Îlot et vue Analytics : réservés aux liens « vitrine » (?analytics, src/legal.ts). Les autres
   // groupes ouvrent l'adresse ordinaire, donc la carte sans îlot.
   await group('vues', () => viewTests({ browser, base: `${server.url}?analytics`, plainBase: server.url, OUT, check, preAccept, installMocks, waitForMap, idle, viewOf, closeTour, passHunting }));
+  // Mesure d'usage : ce qui part vers PostHog avec une clé, et le silence sans elle. Avec BASE_URL
+  // (serveur déjà lancé, dont on ne connaît pas la clé), le groupe n'est pas joué.
+  await group('mesure', async () => {
+    if (process.env.BASE_URL) return console.log('(groupe « mesure » sauté : BASE_URL est donné)');
+    const tracked = await startTrackingServer();
+    try {
+      await trackingTests({ browser, base: tracked.url, plainBase: server.url, key: TRACKING_KEY, check, preAccept, installMocks, waitForMap, idle, closeTour, passHunting });
+    } finally {
+      await tracked.close();
+    }
+  });
 } finally {
   await browser.close();
   await server.close();
